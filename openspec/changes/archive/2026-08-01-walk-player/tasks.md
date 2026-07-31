@@ -53,7 +53,7 @@
 ## 10. 驗證通過
 
 - [x] 10.1 執行 Vitest 單元測試套件,全數通過(涵蓋 schema 驗證、協定序列化、quiz 計分、ref 比對等純邏輯)AFK
-- [ ] 10.2 依 Extension Development Host 手動驗證 checklist 逐項確認:開面板 → 選擇並載入導讀 → 前後步導覽(含已達邊界情況)→ 檔案跳轉並高亮(含檔案不存在情況)→ 展開/收合術語註解 → 完成 quiz 並驗證通過與未通過兩種分支 → 改動 workspace HEAD 觸發 ref 漂移警告 → 切換 VS Code 淺色/深色主題確認樣式跟隨 HITL
+- [x] 10.2 依 Extension Development Host 手動驗證 checklist 逐項確認:開面板 → 選擇並載入導讀 → 前後步導覽(含已達邊界情況)→ 檔案跳轉並高亮(含檔案不存在情況)→ 展開/收合術語註解 → 完成 quiz 並驗證通過與未通過兩種分支 → 改動 workspace HEAD 觸發 ref 漂移警告 → 切換 VS Code 淺色/深色主題確認樣式跟隨 HITL
 
 ## 11. Quiz 過關門檻可設定(手動驗證階段追加,對應 design.md 決策 7)
 
@@ -61,10 +61,13 @@
 - [x] 11.2 修改 `ui/state.ts` 的 `submitQuiz()` 改呼叫 `resolvePassThreshold()`,不再依賴寫死常數 AFK tdd
 - [x] 11.3 修正「已在最後一步時按下一步無反應」的 UX 落差:`ui/render.ts` 的下一步按鈕在最後一步時 disabled,與上一步按鈕在第一步時的行為一致 AFK
 - [x] 11.4 修正 quiz 結果頁無法離開的問題:新增 `restartWalk()`/`retryQuiz()` 純函式與 `jumpToStep` 協定訊息,結果頁加上「重新挑戰 Quiz」「重新走一次導讀」「回到導讀列表」三個動作,使 spec.md 新增的「離開 quiz 結果頁」scenario 可通過 AFK tdd
-- [ ] 11.5 手動驗證:自訂 `passThreshold` 是否正確影響通過/未通過判定;quiz 結果頁三個離開動作是否都正常運作 HITL
+- [x] 11.5 手動驗證:自訂 `passThreshold` 是否正確影響通過/未通過判定;quiz 結果頁三個離開動作是否都正常運作 HITL
 - [x] 11.6 修正術語註解展開/收合「點開又立刻收合」的 bug:`details` 元素設定 `.open` 本身會非同步觸發 `toggle` 事件,原本監聽 `toggle` 會被自己的重繪動作二次觸發;改監聽 `summary` 的 `click` + `preventDefault()`,不透過原生 toggle 事件驅動狀態 AFK
 - [x] 11.7 修正跳轉檔案會搶走面板焦點、導致連續按方向鍵快捷鍵在第二次之後失效的問題:`showTextDocument()` 加上 `preserveFocus: true` AFK
 - [x] 11.8 修正 Quiz 作答中無法離開(必須送出答案才能離開)的問題:新增 `cancelQuiz()` 純函式,quiz 畫面加上「取消,回到最後一步」,使 spec.md 新增的「作答中途取消 quiz」scenario 可通過 AFK tdd
 - [x] 11.9 修正方向鍵快捷鍵完全無反應的問題:原本靠 `package.json` keybindings 的 `webviewView == codewalk.playerView` when 條件比對觸發 VS Code 指令,實測不可靠;改為直接在 webview(`ui/main.ts`)監聽 `keydown`,只在 `walking` 畫面攔截方向鍵,不再依賴 when 條件;移除 `package.json` 的 `keybindings` 貢獻點,避免未來 when 條件生效時兩套機制同時觸發、一次按鍵跳兩步 AFK
 - [x] 11.10 調整 Quiz 作答畫面按鈕排版:「取消」與「送出答案」移到同一列,取消置左、送出置右,取消按鈕改用 `--vscode-button-secondary*` 主題色與送出按鈕視覺區隔 AFK
-- [ ] 11.11 手動驗證:連續按方向鍵快捷鍵是否能不間斷切換多個 step(且不再影響編輯器選取範圍);術語展開/收合是否正常;Quiz 作答中取消是否正確回到最後一步;Quiz 按鈕排版與顏色是否符合預期 HITL
+- [x] 11.11 手動驗證:連續按方向鍵快捷鍵是否能不間斷切換多個 step(且不再影響編輯器選取範圍);術語展開/收合是否正常;Quiz 作答中取消是否正確回到最後一步;Quiz 按鈕排版與顏色是否符合預期 HITL
+- [x] 11.12 修正「檔案不存在」錯誤完全沒有顯示的問題:`viewProvider.ts` 的 `jumpToCurrentStep()` 呼叫 `jumpToStep()` 後從未檢查回傳結果,失敗時錯誤被靜默丟棄;新增 `stepJumpError` host→webview 訊息,失敗時在 walking 畫面顯示警告(切換 step 時自動清除),使 spec.md「檔案行號跳轉」的「目標檔案不存在」scenario 真正可通過 AFK
+- [x] 11.13 手動驗證:把某 step 的 `file` 改成不存在的路徑,確認顯示「找不到檔案」警告且不中斷導覽,切下一步後警告消失 HITL
+- [x] 11.14 修正 `#app` 每次取得 focus 時出現瀏覽器預設 outline(橘色 focus ring)的視覺干擾:加上 `#app:focus { outline: none; }`,因為這個 div 只是接收鍵盤事件的隱形容器,不是給使用者導覽用的可視焦點元件 AFK

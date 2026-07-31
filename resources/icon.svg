@@ -1,3 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
-  <path fill="currentColor" d="M2 2h5v3H2V2zm7 0h5v2H9V2zM2 6.5h9v3H2v-3zm10.5 0H14V9h-1.5V6.5zM2 11h5v3H2v-3zm7 0h5v3H9v-3z"/>
+  <g fill="currentColor" transform="rotate(-16 3.9 11.7)">
+    <ellipse cx="3.9" cy="11.8" rx="2.05" ry="1.8"/>
+    <ellipse cx="3.35" cy="14.85" rx="1.4" ry="1.6"/>
+    <circle cx="2.3" cy="9.15" r="0.34"/>
+    <circle cx="3.15" cy="8.7" r="0.4"/>
+    <circle cx="4.0" cy="8.55" r="0.46"/>
+    <circle cx="4.8" cy="8.7" r="0.53"/>
+    <circle cx="5.5" cy="9.15" r="0.6"/>
+  </g>
+  <g fill="currentColor" transform="rotate(16 11.6 4.3)">
+    <ellipse cx="11.6" cy="4.4" rx="2.3" ry="2"/>
+    <ellipse cx="10.95" cy="7.95" rx="1.55" ry="1.75"/>
+    <circle cx="9.9" cy="1.55" r="0.66"/>
+    <circle cx="10.85" cy="1.0" r="0.58"/>
+    <circle cx="11.8" cy="0.85" r="0.5"/>
+    <circle cx="12.7" cy="1.0" r="0.44"/>
+    <circle cx="13.5" cy="1.55" r="0.37"/>
+  </g>
 </svg>

@@ -12,6 +12,13 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+function icon(name: string, extraClass?: string): HTMLSpanElement {
+  const span = document.createElement('span');
+  span.className = `codicon codicon-${name}${extraClass ? ` ${extraClass}` : ''}`;
+  span.setAttribute('aria-hidden', 'true');
+  return span;
+}
+
 export function renderFileList(files: WalkFileSummary[], onSelect: (path: string) => void): HTMLElement {
   const container = el('div', 'codewalk-file-list');
   container.appendChild(el('h2', undefined, '選擇導讀'));
@@ -22,7 +29,9 @@ export function renderFileList(files: WalkFileSummary[], onSelect: (path: string
   const list = el('ul');
   for (const file of files) {
     const item = el('li');
-    const button = el('button', 'codewalk-file-item', file.title);
+    const button = el('button', 'codewalk-file-item');
+    button.appendChild(icon('book'));
+    button.appendChild(el('span', 'codewalk-file-item-title', file.title));
     button.addEventListener('click', () => onSelect(file.path));
     item.appendChild(button);
     list.appendChild(item);
@@ -33,6 +42,7 @@ export function renderFileList(files: WalkFileSummary[], onSelect: (path: string
 
 export function renderError(message: string): HTMLElement {
   const container = el('div', 'codewalk-error');
+  container.appendChild(icon('error'));
   container.appendChild(el('p', undefined, message));
   return container;
 }
@@ -44,30 +54,64 @@ export interface WalkingHandlers {
   onEnterQuiz: () => void;
 }
 
-export function renderWalking(state: WalkingState, handlers: WalkingHandlers): HTMLElement {
+function createStepDots(current: number, total: number): HTMLElement {
+  const dots = el('div', 'codewalk-step-dots');
+  dots.setAttribute('role', 'img');
+  dots.setAttribute('aria-label', `第 ${current + 1} / ${total} 步`);
+  for (let i = 0; i < total; i++) {
+    const classes = ['codewalk-step-dot'];
+    if (i === current) classes.push('is-current');
+    else if (i < current) classes.push('is-done');
+    const dot = el('span', classes.join(' '));
+    dot.title = `第 ${i + 1} 步`;
+    dots.appendChild(dot);
+  }
+  return dots;
+}
+
+export function renderWalking(
+  state: WalkingState,
+  handlers: WalkingHandlers,
+  jumpError: string | null = null,
+  animateStepChange = true,
+): HTMLElement {
   const step = state.walk.steps[state.stepIndex];
-  const container = el('div', 'codewalk-walking');
+  const container = el('div', `codewalk-walking${animateStepChange ? ' is-step-transition' : ''}`);
 
   if (state.refDrifted) {
-    container.appendChild(
-      el('div', 'codewalk-warning', '⚠ 目前 commit 與導讀釘住的版本不同,行號可能漂移'),
-    );
+    const warning = el('div', 'codewalk-warning');
+    warning.appendChild(icon('warning'));
+    warning.appendChild(el('span', undefined, '目前 commit 與導讀釘住的版本不同,行號可能漂移'));
+    container.appendChild(warning);
+  }
+
+  if (jumpError) {
+    const warning = el('div', 'codewalk-warning');
+    warning.appendChild(icon('warning'));
+    warning.appendChild(el('span', undefined, jumpError));
+    container.appendChild(warning);
   }
 
   container.appendChild(el('h2', undefined, state.walk.title));
   container.appendChild(
     el('p', 'codewalk-progress', `第 ${state.stepIndex + 1} / ${state.walk.steps.length} 步`),
   );
+  container.appendChild(createStepDots(state.stepIndex, state.walk.steps.length));
   container.appendChild(el('h3', undefined, step.title));
   container.appendChild(el('p', 'codewalk-file-ref', `${step.file}:${step.startLine}-${step.endLine}`));
+
   container.appendChild(el('p', 'codewalk-narration', step.narration));
 
   if (step.terms && step.terms.length > 0) {
     const termsContainer = el('div', 'codewalk-terms');
     for (const term of step.terms) {
       const details = document.createElement('details');
+      details.className = 'codewalk-term';
       details.open = state.expandedTerms.has(term.term);
-      const summary = el('summary', undefined, term.term);
+      const summary = document.createElement('summary');
+      summary.appendChild(icon('symbol-keyword', 'codewalk-term-icon'));
+      summary.appendChild(el('span', 'codewalk-term-label', term.term));
+      summary.appendChild(icon('chevron-right', 'codewalk-term-chevron'));
       // 用 click + preventDefault 取代監聽 'toggle':設定 details.open 本身就會非同步觸發
       // 'toggle' 事件,若同時監聽 'toggle' 會在下一輪重繪時被自己觸發的事件二次呼叫,
       // 造成「點開又立刻收合」的無窮迴圈。
@@ -83,10 +127,14 @@ export function renderWalking(state: WalkingState, handlers: WalkingHandlers): H
   }
 
   const nav = el('div', 'codewalk-nav');
-  const prevButton = el('button', 'codewalk-nav-prev', '← 上一步');
+  const prevButton = el('button', 'codewalk-nav-prev');
+  prevButton.appendChild(icon('chevron-left'));
+  prevButton.appendChild(el('span', undefined, '上一步'));
   prevButton.disabled = state.stepIndex === 0;
   prevButton.addEventListener('click', handlers.onPrev);
-  const nextButton = el('button', 'codewalk-nav-next', '下一步 →');
+  const nextButton = el('button', 'codewalk-nav-next');
+  nextButton.appendChild(el('span', undefined, '下一步'));
+  nextButton.appendChild(icon('chevron-right'));
   nextButton.disabled = isAtLastStep(state);
   nextButton.addEventListener('click', handlers.onNext);
   nav.appendChild(prevButton);
@@ -94,10 +142,13 @@ export function renderWalking(state: WalkingState, handlers: WalkingHandlers): H
   container.appendChild(nav);
 
   if (isAtLastStep(state)) {
-    container.appendChild(el('p', 'codewalk-hint', '已到達最後一步,可以開始自測'));
+    const completeBanner = el('div', 'codewalk-walk-complete');
+    completeBanner.appendChild(icon('rocket'));
+    completeBanner.appendChild(el('p', 'codewalk-hint', '已到達最後一步,可以開始自測'));
     const quizButton = el('button', 'codewalk-enter-quiz', '開始 Quiz 自測');
     quizButton.addEventListener('click', handlers.onEnterQuiz);
-    container.appendChild(quizButton);
+    completeBanner.appendChild(quizButton);
+    container.appendChild(completeBanner);
   }
 
   return container;
@@ -113,20 +164,43 @@ export function renderQuiz(state: QuizState, handlers: QuizHandlers): HTMLElemen
   const container = el('div', 'codewalk-quiz');
   container.appendChild(el('h2', undefined, 'Quiz 自測'));
 
+  const answeredCount = state.answers.filter((a) => a !== null).length;
+  container.appendChild(
+    el('p', 'codewalk-quiz-progress', `已作答 ${answeredCount} / ${state.walk.quiz.length} 題`),
+  );
+  const progressDots = el('div', 'codewalk-step-dots');
+  progressDots.setAttribute('role', 'img');
+  progressDots.setAttribute('aria-label', `已作答 ${answeredCount} / ${state.walk.quiz.length} 題`);
+  state.answers.forEach((answer, i) => {
+    const dot = el('span', `codewalk-step-dot${answer !== null ? ' is-done' : ''}`);
+    dot.title = `第 ${i + 1} 題${answer !== null ? '(已作答)' : ''}`;
+    progressDots.appendChild(dot);
+  });
+  container.appendChild(progressDots);
+
   state.walk.quiz.forEach((question, qIndex) => {
     const block = el('div', 'codewalk-quiz-question');
-    block.appendChild(el('p', undefined, `${qIndex + 1}. ${question.question}`));
-    const optionsList = el('ul');
+    const header = el('div', 'codewalk-quiz-question-header');
+    header.appendChild(el('span', 'codewalk-quiz-question-number', String(qIndex + 1)));
+    header.appendChild(el('p', 'codewalk-quiz-question-title', question.question));
+    block.appendChild(header);
+    const optionsList = el('ul', 'codewalk-quiz-options');
     question.options.forEach((option, optIndex) => {
       const item = el('li');
-      const label = el('label');
+      const isSelected = state.answers[qIndex] === optIndex;
+      const label = el('label', `codewalk-quiz-option${isSelected ? ' is-selected' : ''}`);
       const radio = document.createElement('input');
       radio.type = 'radio';
+      radio.className = 'codewalk-quiz-option-input';
       radio.name = `codewalk-quiz-q${qIndex}`;
-      radio.checked = state.answers[qIndex] === optIndex;
+      radio.checked = isSelected;
       radio.addEventListener('change', () => handlers.onSelectAnswer(qIndex, optIndex));
+      const indicator = el('span', 'codewalk-quiz-option-indicator');
+      indicator.appendChild(icon('check'));
+      const text = el('span', 'codewalk-quiz-option-text', option);
       label.appendChild(radio);
-      label.appendChild(document.createTextNode(option));
+      label.appendChild(indicator);
+      label.appendChild(text);
       item.appendChild(label);
       optionsList.appendChild(item);
     });
@@ -135,11 +209,15 @@ export function renderQuiz(state: QuizState, handlers: QuizHandlers): HTMLElemen
   });
 
   const actions = el('div', 'codewalk-quiz-actions');
-  const cancelButton = el('button', 'codewalk-quiz-cancel', '← 取消,回到最後一步');
+  const cancelButton = el('button', 'codewalk-quiz-cancel');
+  cancelButton.appendChild(icon('chevron-left'));
+  cancelButton.appendChild(el('span', undefined, '取消,回到最後一步'));
   cancelButton.addEventListener('click', handlers.onCancelQuiz);
 
   const allAnswered = state.answers.every((a) => a !== null);
-  const submitButton = el('button', 'codewalk-quiz-submit', '送出答案');
+  const submitButton = el('button', 'codewalk-quiz-submit');
+  submitButton.appendChild(icon('check'));
+  submitButton.appendChild(el('span', undefined, '送出答案'));
   submitButton.disabled = !allAnswered;
   submitButton.addEventListener('click', handlers.onSubmitQuiz);
 
@@ -148,6 +226,72 @@ export function renderQuiz(state: QuizState, handlers: QuizHandlers): HTMLElemen
   container.appendChild(actions);
 
   return container;
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function createScoreRing(score: number, total: number, passed: boolean): HTMLElement {
+  const size = 96;
+  const strokeWidth = 8;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const ratio = total === 0 ? 0 : score / total;
+  const offset = circumference * (1 - ratio);
+
+  const wrapper = el('div', 'codewalk-score-ring');
+  wrapper.setAttribute('role', 'img');
+  wrapper.setAttribute('aria-label', `得分 ${score} / ${total} 題,${passed ? '通過' : '未通過'}`);
+
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.classList.add('codewalk-score-ring-svg');
+
+  const track = document.createElementNS(SVG_NS, 'circle');
+  track.setAttribute('cx', String(size / 2));
+  track.setAttribute('cy', String(size / 2));
+  track.setAttribute('r', String(radius));
+  track.setAttribute('stroke-width', String(strokeWidth));
+  track.classList.add('codewalk-score-ring-track');
+
+  const progress = document.createElementNS(SVG_NS, 'circle');
+  progress.setAttribute('cx', String(size / 2));
+  progress.setAttribute('cy', String(size / 2));
+  progress.setAttribute('r', String(radius));
+  progress.setAttribute('stroke-width', String(strokeWidth));
+  progress.setAttribute('stroke-dasharray', String(circumference));
+  progress.setAttribute('stroke-dashoffset', String(offset));
+  progress.classList.add('codewalk-score-ring-progress', passed ? 'is-passed' : 'is-failed');
+
+  svg.appendChild(track);
+  svg.appendChild(progress);
+  wrapper.appendChild(svg);
+  wrapper.appendChild(el('span', 'codewalk-score-ring-label', `${score}/${total}`));
+
+  return wrapper;
+}
+
+function createQuizBreakdown(state: QuizResult): HTMLElement {
+  const breakdown = el('div', 'codewalk-quiz-breakdown');
+  state.walk.quiz.forEach((question, qIndex) => {
+    const userAnswer = state.answers[qIndex];
+    const isCorrect = userAnswer === question.correctIndex;
+    const item = el('div', `codewalk-quiz-breakdown-item ${isCorrect ? 'is-correct' : 'is-incorrect'}`);
+    const questionRow = el('p', 'codewalk-quiz-breakdown-question');
+    questionRow.appendChild(icon(isCorrect ? 'pass' : 'error', 'codewalk-quiz-breakdown-icon'));
+    questionRow.appendChild(document.createTextNode(`${qIndex + 1}. ${question.question}`));
+    item.appendChild(questionRow);
+    const yourAnswerText = userAnswer !== null ? question.options[userAnswer] : '(未作答)';
+    item.appendChild(el('p', 'codewalk-quiz-breakdown-your-answer', `你的答案:${yourAnswerText}`));
+    if (!isCorrect) {
+      item.appendChild(
+        el('p', 'codewalk-quiz-breakdown-correct-answer', `正確答案:${question.options[question.correctIndex]}`),
+      );
+    }
+    breakdown.appendChild(item);
+  });
+  return breakdown;
 }
 
 export interface QuizResultHandlers {
@@ -159,21 +303,30 @@ export interface QuizResultHandlers {
 export function renderQuizResult(state: QuizResult, handlers: QuizResultHandlers): HTMLElement {
   const container = el('div', 'codewalk-quiz-result');
   container.appendChild(el('h2', undefined, 'Quiz 結果'));
-  container.appendChild(
-    el('p', 'codewalk-score', `答對 ${state.score} / ${state.walk.quiz.length} 題`),
-  );
+  container.appendChild(createScoreRing(state.score, state.walk.quiz.length, state.passed));
+  const status = el('p', `codewalk-score-status ${state.passed ? 'is-passed' : 'is-failed'}`);
+  status.appendChild(icon(state.passed ? 'pass' : 'error'));
+  status.appendChild(document.createTextNode(state.passed ? '通過' : '未通過'));
+  container.appendChild(status);
   if (!state.passed) {
     container.appendChild(
       el('p', 'codewalk-suggestion', '建議重走本導讀,或選擇更詳細版本的導讀再試一次'),
     );
   }
+  container.appendChild(createQuizBreakdown(state));
 
   const actions = el('div', 'codewalk-quiz-result-actions');
-  const retryButton = el('button', undefined, '重新挑戰 Quiz');
+  const retryButton = el('button');
+  retryButton.appendChild(icon('refresh'));
+  retryButton.appendChild(el('span', undefined, '重新挑戰 Quiz'));
   retryButton.addEventListener('click', handlers.onRetryQuiz);
-  const restartButton = el('button', undefined, '重新走一次導讀');
+  const restartButton = el('button');
+  restartButton.appendChild(icon('history'));
+  restartButton.appendChild(el('span', undefined, '重新走一次導讀'));
   restartButton.addEventListener('click', handlers.onRestartWalk);
-  const backButton = el('button', undefined, '回到導讀列表');
+  const backButton = el('button');
+  backButton.appendChild(icon('list-unordered'));
+  backButton.appendChild(el('span', undefined, '回到導讀列表'));
   backButton.addEventListener('click', handlers.onBackToList);
   actions.appendChild(retryButton);
   actions.appendChild(restartButton);

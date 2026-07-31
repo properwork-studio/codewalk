@@ -1,6 +1,6 @@
 {
   "title": "CodeWalk 自我導覽:walk-player 是怎麼組起來的",
-  "ref": "PENDING-FIRST-COMMIT",
+  "ref": "16ee69935eaec4873b67d33cf7ad316526b70f71",
   "steps": [
     {
       "title": "第一步:extension 怎麼在側邊欄佔一個位置",
@@ -9,8 +9,14 @@
       "endLine": 33,
       "narration": "VS Code extension 要出現在活動列,靠的是 package.json 的 contributes.viewsContainers 與 contributes.views 宣告,不是程式碼註冊。這裡宣告了一個叫 codewalk 的活動列圖示,底下掛一個 id 為 codewalk.playerView 的 webview view。",
       "terms": [
-        { "term": "viewsContainers", "explanation": "VS Code 讓 extension 在活動列 / 側邊欄佔位的宣告式設定,不需要程式碼呼叫。" },
-        { "term": "webview view", "explanation": "嵌在側邊欄面板裡的網頁畫面,與一般全螢幕 webview panel 不同,是常駐面板。" }
+        {
+          "term": "viewsContainers",
+          "explanation": "VS Code 讓 extension 在活動列 / 側邊欄佔位的宣告式設定,不需要程式碼呼叫。"
+        },
+        {
+          "term": "webview view",
+          "explanation": "嵌在側邊欄面板裡的網頁畫面,與一般全螢幕 webview panel 不同,是常駐面板。"
+        }
       ]
     },
     {
@@ -20,7 +26,10 @@
       "endLine": 15,
       "narration": "extension 啟動時,activate() 建立唯一一個 WalkPlayerViewProvider 實例,註冊給 package.json 宣告的 view id,同時註冊三個指令(開啟導讀、下一步、上一步)。方向鍵快捷鍵(package.json 的 keybindings)最終呼叫的就是 codewalk.nextStep / codewalk.prevStep 這兩個指令。",
       "terms": [
-        { "term": "context.subscriptions", "explanation": "extension 停用時要一併釋放的資源清單,VS Code 會自動呼叫每個項目的 dispose()。" }
+        {
+          "term": "context.subscriptions",
+          "explanation": "extension 停用時要一併釋放的資源清單,VS Code 會自動呼叫每個項目的 dispose()。"
+        }
       ]
     },
     {
@@ -30,7 +39,10 @@
       "endLine": 87,
       "narration": "選定一份 .codewalk.json 後,loadWalk() 先驗證格式,再比對目前 workspace 的 git HEAD 跟檔案裡釘住的 ref。只要兩者不同,refDrifted 就是 true,面板會顯示「行號可能漂移」警告——但仍然可以繼續往下走,不會擋住閱讀。",
       "terms": [
-        { "term": "ref 漂移", "explanation": "導讀產生當下釘住的 commit,跟讀者現在打開的版本不一致,導致行號指向的內容可能已經變了。" }
+        {
+          "term": "ref 漂移",
+          "explanation": "導讀產生當下釘住的 commit,跟讀者現在打開的版本不一致,導致行號指向的內容可能已經變了。"
+        }
       ]
     },
     {
@@ -40,7 +52,10 @@
       "endLine": 38,
       "narration": "webview 裡的上一步/下一步是兩個不碰 DOM 的純函式,把 stepIndex 限制在 [0, 最後一步] 範圍內——這就是「已在最後一步時按下一步不會報錯,只是留在原地」這個行為的實際實作,也是這個檔案裡少數完全用 Vitest TDD 覆蓋的邏輯。",
       "terms": [
-        { "term": "純函式", "explanation": "輸出只由輸入決定、不碰外部狀態(這裡指不碰 DOM/vscode API)的函式,容易單獨測試。" }
+        {
+          "term": "純函式",
+          "explanation": "輸出只由輸入決定、不碰外部狀態(這裡指不碰 DOM/vscode API)的函式,容易單獨測試。"
+        }
       ]
     },
     {
@@ -50,14 +65,21 @@
       "endLine": 22,
       "narration": "這份格式是 extension 與任何產生器之間的合約:step 用 startLine/endLine(單行時兩者相等,保留未來多行反白的擴充空間),quiz 固定 5 題,答對門檻是 QUIZ_PASS_THRESHOLD(3 題)。你現在正在讀的這份導讀本身,就是照這個格式寫的。",
       "terms": [
-        { "term": "startLine/endLine", "explanation": "MVP 只用單行(兩者相等),但用範圍表示是為了未來多行反白不必做破壞性 schema 變更。" }
+        {
+          "term": "startLine/endLine",
+          "explanation": "MVP 只用單行(兩者相等),但用範圍表示是為了未來多行反白不必做破壞性 schema 變更。"
+        }
       ]
     }
   ],
+  "passThreshold": 4,
   "quiz": [
     {
       "question": "webview 要出現在 VS Code 活動列側邊欄,是靠什麼機制?",
-      "options": ["package.json 的 contributes 宣告", "在 activate() 裡手動畫一個側邊欄"],
+      "options": [
+        "package.json 的 contributes 宣告",
+        "在 activate() 裡手動畫一個側邊欄"
+      ],
       "correctIndex": 0
     },
     {

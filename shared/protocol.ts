@@ -9,7 +9,8 @@ export type HostToWebviewMessage =
   | { type: 'walkFileList'; files: WalkFileSummary[] }
   | { type: 'walkLoaded'; walk: CodewalkFile; stepIndex: number; refDrifted: boolean }
   | { type: 'stepChanged'; stepIndex: number }
-  | { type: 'loadError'; message: string };
+  | { type: 'loadError'; message: string }
+  | { type: 'stepJumpError'; message: string };
 
 export type WebviewToHostMessage =
   | { type: 'webviewReady' }

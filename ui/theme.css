@@ -6,6 +6,23 @@ body {
   padding: 0.5rem;
 }
 
+/* #app 只是用來接收鍵盤事件的隱形焦點容器,不是給使用者導覽用的可視元件,
+   所以不需要瀏覽器預設的 focus outline。 */
+#app:focus {
+  outline: none;
+}
+
+@keyframes codewalk-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 button {
   font-family: inherit;
   font-size: inherit;
@@ -15,6 +32,9 @@ button {
   border-radius: 2px;
   padding: 0.35rem 0.75rem;
   cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    transform 0.15s ease;
 }
 
 button:hover:not(:disabled) {
@@ -26,17 +46,39 @@ button:disabled {
   cursor: default;
 }
 
+.codewalk-walking.is-step-transition {
+  animation: codewalk-fade-in 0.18s ease;
+}
+
 .codewalk-nav {
   display: flex;
   justify-content: space-between;
   margin-top: 0.75rem;
 }
 
+.codewalk-nav-prev,
+.codewalk-nav-next {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.codewalk-nav-prev:hover:not(:disabled) {
+  transform: translateX(-2px);
+}
+
+.codewalk-nav-next:hover:not(:disabled) {
+  transform: translateX(2px);
+}
+
 .codewalk-warning {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   color: var(--vscode-editorWarning-foreground);
   border: 1px solid var(--vscode-editorWarning-foreground);
   border-radius: 2px;
-  padding: 0.35rem;
+  padding: 0.35rem 0.5rem;
   margin-bottom: 0.5rem;
 }
 
@@ -67,30 +109,431 @@ button:disabled {
   background-color: var(--vscode-button-secondaryHoverBackground);
 }
 
+.codewalk-quiz-cancel,
+.codewalk-quiz-submit,
+.codewalk-quiz-result-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.codewalk-quiz-progress {
+  opacity: 0.8;
+  margin-top: -0.25rem;
+}
+
+.codewalk-quiz-question {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.codewalk-quiz-question-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.codewalk-quiz-question-number {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background-color: var(--vscode-textLink-foreground);
+  color: var(--vscode-editor-background);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.codewalk-quiz-question-title {
+  font-weight: 600;
+  margin: 0;
+  padding-top: 0.15rem;
+}
+
+.codewalk-quiz-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.codewalk-quiz-options li {
+  margin-bottom: 0.35rem;
+}
+
+.codewalk-quiz-options li:last-child {
+  margin-bottom: 0;
+}
+
+.codewalk-quiz-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.codewalk-quiz-option:hover {
+  border-color: var(--vscode-textLink-foreground);
+  background-color: var(--vscode-list-hoverBackground);
+  transform: translateY(-1px);
+}
+
+.codewalk-quiz-option:focus-within {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+.codewalk-quiz-option.is-selected {
+  border-color: var(--vscode-focusBorder);
+  background-color: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.codewalk-quiz-option-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.codewalk-quiz-option-indicator {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  transition: background-color 0.15s ease;
+}
+
+.codewalk-quiz-option-indicator .codicon {
+  font-size: 9px;
+  opacity: 0;
+  transform: scale(0.5);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
+.codewalk-quiz-option.is-selected .codewalk-quiz-option-indicator {
+  background-color: currentColor;
+}
+
+.codewalk-quiz-option.is-selected .codewalk-quiz-option-indicator .codicon {
+  opacity: 1;
+  transform: scale(1);
+  color: var(--vscode-list-activeSelectionBackground);
+  -webkit-text-stroke: 0.5px currentColor;
+}
+
+.codewalk-score-ring {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0.5rem 0;
+}
+
+.codewalk-score-ring-svg {
+  transform: rotate(-90deg);
+}
+
+.codewalk-score-ring-track {
+  fill: none;
+  stroke: var(--vscode-panel-border);
+}
+
+.codewalk-score-ring-progress {
+  fill: none;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.3s ease;
+}
+
+.codewalk-score-ring-progress.is-passed {
+  stroke: var(--vscode-testing-iconPassed);
+}
+
+.codewalk-score-ring-progress.is-failed {
+  stroke: var(--vscode-testing-iconFailed);
+}
+
+.codewalk-score-ring-label {
+  position: absolute;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.codewalk-score-status {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.25rem 0 0.5rem;
+  font-weight: 600;
+}
+
+.codewalk-score-status.is-passed {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.codewalk-score-status.is-failed {
+  color: var(--vscode-testing-iconFailed);
+}
+
+.codewalk-quiz-breakdown {
+  margin-top: 0.75rem;
+}
+
+.codewalk-quiz-breakdown-item {
+  border: 1px solid var(--vscode-panel-border);
+  border-left: 3px solid var(--vscode-panel-border);
+  border-radius: 0 8px 8px 0;
+  padding: 0.35rem 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.codewalk-quiz-breakdown-item.is-correct {
+  border-left-color: var(--vscode-testing-iconPassed);
+}
+
+.codewalk-quiz-breakdown-item.is-incorrect {
+  border-left-color: var(--vscode-testing-iconFailed);
+}
+
+.codewalk-quiz-breakdown-question {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.15rem;
+  font-weight: 600;
+}
+
+.codewalk-quiz-breakdown-icon {
+  flex-shrink: 0;
+}
+
+.codewalk-quiz-breakdown-item.is-correct .codewalk-quiz-breakdown-icon {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.codewalk-quiz-breakdown-item.is-incorrect .codewalk-quiz-breakdown-icon {
+  color: var(--vscode-testing-iconFailed);
+}
+
+.codewalk-quiz-breakdown-your-answer,
+.codewalk-quiz-breakdown-correct-answer {
+  margin: 0;
+  opacity: 0.85;
+}
+
+.codewalk-quiz-breakdown-correct-answer {
+  color: var(--vscode-testing-iconFailed);
+}
+
 .codewalk-file-ref {
   font-family: var(--vscode-editor-font-family);
   opacity: 0.8;
 }
 
+.codewalk-file-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
 .codewalk-file-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   width: 100%;
   text-align: left;
-  margin-bottom: 0.25rem;
-}
-
-details {
-  border: 1px solid var(--vscode-panel-border);
-  border-radius: 2px;
-  padding: 0.25rem 0.5rem;
   margin-bottom: 0.35rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid transparent;
+  color: var(--vscode-button-secondaryForeground);
+  background-color: var(--vscode-button-secondaryBackground);
 }
 
-details summary {
+.codewalk-file-item:hover:not(:disabled) {
+  border-left-color: var(--vscode-focusBorder);
+  background-color: var(--vscode-button-secondaryHoverBackground);
+  transform: translateX(2px);
+}
+
+.codewalk-file-item .codicon {
+  opacity: 0.85;
+}
+
+.codewalk-file-item-title {
+  flex: 1;
+}
+
+.codewalk-step-dots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin: -0.25rem 0 0.75rem;
+}
+
+.codewalk-step-dot {
+  position: relative;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--vscode-panel-border);
+  transition: all 0.15s ease;
+}
+
+.codewalk-step-dot.is-done {
+  background-color: var(--vscode-textLink-foreground);
+}
+
+.codewalk-step-dot.is-current {
+  width: 14px;
+  height: 14px;
+  background-color: var(--vscode-focusBorder);
+}
+
+.codewalk-step-dot.is-current::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 2px solid var(--vscode-focusBorder);
+  border-radius: 50%;
+  animation: codewalk-ping 1.6s ease-out infinite;
+}
+
+@keyframes codewalk-ping {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+
+.codewalk-narration {
+  line-height: 1.5;
+}
+
+.codewalk-walk-complete {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--vscode-focusBorder);
+  border-radius: 4px;
+  animation: codewalk-fade-in 0.2s ease;
+}
+
+.codewalk-walk-complete .codicon {
+  font-size: 1.3rem;
+  color: var(--vscode-focusBorder);
+}
+
+.codewalk-walk-complete p {
+  margin: 0;
+}
+
+.codewalk-terms {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.6rem 0;
+}
+
+.codewalk-term {
+  border: 1px solid var(--vscode-textLink-foreground);
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  margin: 0;
+  transition:
+    background-color 0.15s ease,
+    transform 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.codewalk-term:hover {
+  background-color: var(--vscode-list-hoverBackground);
+  transform: translateY(-1px);
+}
+
+.codewalk-term[open] {
+  background-color: var(--vscode-editorHoverWidget-background, transparent);
+  border-color: var(--vscode-focusBorder);
+}
+
+.codewalk-term summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   cursor: pointer;
   font-weight: 600;
+  color: var(--vscode-textLink-foreground);
+}
+
+.codewalk-term[open] summary {
+  color: var(--vscode-foreground);
+}
+
+.codewalk-term-icon {
+  color: var(--vscode-textLink-foreground);
+}
+
+.codewalk-term-label {
+  flex: 1;
+}
+
+.codewalk-term-chevron {
+  opacity: 0.7;
+  transition: transform 0.15s ease;
+}
+
+.codewalk-term[open] .codewalk-term-chevron {
+  transform: rotate(90deg);
+}
+
+.codewalk-term[open] > p {
+  margin: 0.5rem 0 0;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--vscode-panel-border);
+  animation: codewalk-pop-in 0.15s ease;
+}
+
+@keyframes codewalk-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .codewalk-error {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   color: var(--vscode-errorForeground);
 }

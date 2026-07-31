@@ -9,6 +9,12 @@ function copyThemeCss() {
   copyFileSync('ui/theme.css', 'dist/webview.css');
 }
 
+function copyCodicons() {
+  mkdirSync('dist', { recursive: true });
+  copyFileSync('node_modules/@vscode/codicons/dist/codicon.css', 'dist/codicon.css');
+  copyFileSync('node_modules/@vscode/codicons/dist/codicon.ttf', 'dist/codicon.ttf');
+}
+
 async function buildExtension() {
   const ctx = await esbuild.context({
     entryPoints: ['src/extension.ts'],
@@ -40,6 +46,7 @@ async function buildWebview() {
 
 async function main() {
   copyThemeCss();
+  copyCodicons();
   const [extensionCtx, webviewCtx] = await Promise.all([buildExtension(), buildWebview()]);
 
   if (watch) {

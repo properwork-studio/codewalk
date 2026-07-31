@@ -114,7 +114,10 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
   private async jumpToCurrentStep(): Promise<void> {
     const root = getWorkspaceRoot();
     if (!root || !this.currentWalk) return;
-    await jumpToStep(root, this.currentWalk.steps[this.stepIndex]);
+    const result = await jumpToStep(root, this.currentWalk.steps[this.stepIndex]);
+    if (!result.ok) {
+      this.post({ type: 'stepJumpError', message: result.message });
+    }
   }
 
   private post(message: HostToWebviewMessage): void {
@@ -124,13 +127,18 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
   private getHtml(webview: vscode.Webview): string {
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview.js'));
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview.css'));
+    const codiconUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'codicon.css'));
     const nonce = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
 
     return `<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; font-src ${webview.cspSource}; script-src 'nonce-${nonce}';" />
+  <!-- codicon.css 要先載入:它對 .codicon 的 font-size 用 font 這個 shorthand 屬性設定,
+       跟 theme.css 裡對應覆寫的 selector specificity 打平時,cascade 順序在後的會贏,
+       所以 theme.css 必須排在 codicon.css 之後,尺寸覆寫才會生效。 -->
+  <link href="${codiconUri}" rel="stylesheet" />
   <link href="${styleUri}" rel="stylesheet" />
 </head>
 <body>
