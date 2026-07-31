@@ -115,6 +115,100 @@ describe('validateCodewalk', () => {
   });
 });
 
+describe('validateCodewalk — step.items', () => {
+  function sampleWithItems(items: unknown[]) {
+    const sample = validSample() as any;
+    sample.steps[0].items = items;
+    return sample;
+  }
+
+  it('accepts a step with one of each of the 5 item kinds', () => {
+    const sample = sampleWithItems([
+      { kind: 'tip', text: '可以搭配 X 使用' },
+      { kind: 'pitfall', misconception: '這裡是非同步呼叫', reality: '其實是同步阻塞' },
+      { kind: 'todo', text: '這段行為未來可能會變' },
+      { kind: 'reference', label: 'RFC 793', url: 'https://www.rfc-editor.org/rfc/rfc793' },
+      { kind: 'snippet', label: '呼叫端在這裡', file: 'src/caller.ts', startLine: 10, endLine: 20 },
+    ]);
+    const result = validateCodewalk(sample);
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts a step without items (backwards compatible)', () => {
+    const result = validateCodewalk(validSample());
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects an item with an unknown kind', () => {
+    const result = validateCodewalk(sampleWithItems([{ kind: 'unknown', text: 'x' }]));
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects a tip item missing text', () => {
+    const result = validateCodewalk(sampleWithItems([{ kind: 'tip' }]));
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects a pitfall item missing reality', () => {
+    const result = validateCodewalk(sampleWithItems([{ kind: 'pitfall', misconception: '誤解' }]));
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.some((e) => e.includes('reality'))).toBe(true);
+    }
+  });
+
+  it('rejects a todo item missing text', () => {
+    const result = validateCodewalk(sampleWithItems([{ kind: 'todo' }]));
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects a reference item with a non-http(s) url', () => {
+    const result = validateCodewalk(
+      sampleWithItems([{ kind: 'reference', label: 'x', url: 'ftp://example.com/file' }]),
+    );
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.some((e) => e.includes('url'))).toBe(true);
+    }
+  });
+
+  it('rejects a reference item with a malformed url', () => {
+    const result = validateCodewalk(sampleWithItems([{ kind: 'reference', label: 'x', url: 'not a url' }]));
+    expect(result.valid).toBe(false);
+  });
+
+  it('accepts a reference item with a valid https url', () => {
+    const result = validateCodewalk(
+      sampleWithItems([{ kind: 'reference', label: 'x', url: 'https://example.com/docs' }]),
+    );
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects a snippet item where endLine < startLine', () => {
+    const result = validateCodewalk(
+      sampleWithItems([{ kind: 'snippet', label: 'x', file: 'src/a.ts', startLine: 20, endLine: 10 }]),
+    );
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.some((e) => e.includes('endLine'))).toBe(true);
+    }
+  });
+
+  it('rejects a snippet item missing file', () => {
+    const result = validateCodewalk(
+      sampleWithItems([{ kind: 'snippet', label: 'x', startLine: 1, endLine: 2 }]),
+    );
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects items that is not an array', () => {
+    const sample = validSample() as any;
+    sample.steps[0].items = 'not an array';
+    const result = validateCodewalk(sample);
+    expect(result.valid).toBe(false);
+  });
+});
+
 describe('resolvePassThreshold', () => {
   it('uses the explicit passThreshold when present', () => {
     const walk = { ...validSample(), passThreshold: 2 } as any;

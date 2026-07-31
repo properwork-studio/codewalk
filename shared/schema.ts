@@ -3,6 +3,13 @@ export interface CodewalkTerm {
   explanation: string;
 }
 
+export type CodewalkItem =
+  | { kind: 'tip'; text: string }
+  | { kind: 'pitfall'; misconception: string; reality: string }
+  | { kind: 'todo'; text: string }
+  | { kind: 'reference'; label: string; url: string }
+  | { kind: 'snippet'; label: string; file: string; startLine: number; endLine: number };
+
 export interface CodewalkStep {
   title: string;
   file: string;
@@ -10,6 +17,7 @@ export interface CodewalkStep {
   endLine: number;
   narration: string;
   terms?: CodewalkTerm[];
+  items?: CodewalkItem[];
 }
 
 export interface CodewalkQuizQuestion {
@@ -47,6 +55,31 @@ function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
 
+function isHttpUrl(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function validateLineRange(
+  obj: Record<string, unknown>,
+  path: string,
+  errors: string[],
+): void {
+  if (!isPositiveInteger(obj.startLine)) {
+    errors.push(`${path}.startLine 必須是正整數`);
+  }
+  if (!isPositiveInteger(obj.endLine)) {
+    errors.push(`${path}.endLine 必須是正整數`);
+  } else if (isPositiveInteger(obj.startLine) && (obj.endLine as number) < (obj.startLine as number)) {
+    errors.push(`${path}.endLine 不可小於 startLine`);
+  }
+}
+
 function validateTerm(term: unknown, path: string, errors: string[]): void {
   if (typeof term !== 'object' || term === null) {
     errors.push(`${path} 必須是物件`);
@@ -73,14 +106,7 @@ function validateStep(step: unknown, path: string, errors: string[]): void {
   if (!isNonEmptyString(s.file)) {
     errors.push(`${path}.file 必須是非空字串`);
   }
-  if (!isPositiveInteger(s.startLine)) {
-    errors.push(`${path}.startLine 必須是正整數`);
-  }
-  if (!isPositiveInteger(s.endLine)) {
-    errors.push(`${path}.endLine 必須是正整數`);
-  } else if (isPositiveInteger(s.startLine) && (s.endLine as number) < (s.startLine as number)) {
-    errors.push(`${path}.endLine 不可小於 startLine`);
-  }
+  validateLineRange(s, path, errors);
   if (!isNonEmptyString(s.narration)) {
     errors.push(`${path}.narration 必須是非空字串`);
   }
@@ -90,6 +116,56 @@ function validateStep(step: unknown, path: string, errors: string[]): void {
     } else {
       s.terms.forEach((term, i) => validateTerm(term, `${path}.terms[${i}]`, errors));
     }
+  }
+  if (s.items !== undefined) {
+    if (!Array.isArray(s.items)) {
+      errors.push(`${path}.items 必須是陣列`);
+    } else {
+      s.items.forEach((item, i) => validateItem(item, `${path}.items[${i}]`, errors));
+    }
+  }
+}
+
+function validateItem(item: unknown, path: string, errors: string[]): void {
+  if (typeof item !== 'object' || item === null) {
+    errors.push(`${path} 必須是物件`);
+    return;
+  }
+  const it = item as Record<string, unknown>;
+  switch (it.kind) {
+    case 'tip':
+    case 'todo':
+      if (!isNonEmptyString(it.text)) {
+        errors.push(`${path}.text 必須是非空字串`);
+      }
+      break;
+    case 'pitfall':
+      if (!isNonEmptyString(it.misconception)) {
+        errors.push(`${path}.misconception 必須是非空字串`);
+      }
+      if (!isNonEmptyString(it.reality)) {
+        errors.push(`${path}.reality 必須是非空字串`);
+      }
+      break;
+    case 'reference':
+      if (!isNonEmptyString(it.label)) {
+        errors.push(`${path}.label 必須是非空字串`);
+      }
+      if (!isHttpUrl(it.url)) {
+        errors.push(`${path}.url 必須是合法的 http/https 網址`);
+      }
+      break;
+    case 'snippet':
+      if (!isNonEmptyString(it.label)) {
+        errors.push(`${path}.label 必須是非空字串`);
+      }
+      if (!isNonEmptyString(it.file)) {
+        errors.push(`${path}.file 必須是非空字串`);
+      }
+      validateLineRange(it, path, errors);
+      break;
+    default:
+      errors.push(`${path}.kind 必須是 tip/pitfall/todo/reference/snippet 其中之一`);
   }
 }
 

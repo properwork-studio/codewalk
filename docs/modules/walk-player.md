@@ -15,6 +15,10 @@
 - Quiz 自測與回饋,過關門檻可由 `.codewalk.json` 的 `passThreshold` 設定(省略時預設題數簡單多數)→ [spec](../../openspec/specs/walk-player/spec.md)
 - ref 漂移偵測:比對 workspace HEAD 與導讀釘住的 commit,不符時顯示警告 → [spec](../../openspec/specs/walk-player/spec.md)
 - 視覺跟隨編輯器主題(讀 VS Code CSS 變數)→ [spec](../../openspec/specs/walk-player/spec.md)
+- Step 內顯示提示/陷阱警告/待辦標記(annotation:tip/pitfall/todo)→ [spec](../../openspec/specs/walk-player/spec.md)
+- Step 內顯示外部連結參考,點擊開啟外部瀏覽器 → [spec](../../openspec/specs/walk-player/spec.md)
+- Step 內顯示程式碼片段引用(snippet),語法高亮預覽並可點擊跳轉編輯器,語法高亮 theme 可由 `codewalk.snippetTheme` 設定 → [spec](../../openspec/specs/walk-player/spec.md)
+- 上述說明元件(annotation/reference/snippet)依 `.codewalk.json` 的 `items` 陣列原始順序自由交錯顯示 → [spec](../../openspec/specs/walk-player/spec.md)
 
 ## 主要流程
 
@@ -27,7 +31,7 @@
 
 ## E2E 覆蓋
 
-無自動化 E2E——VS Code extension 的 host↔webview↔vscode API 整合行為改走 Extension Development Host 手動驗證 checklist(見 `openspec/changes/archive/2026-08-01-walk-player/tasks.md` 第 10、11 節);純邏輯(schema 驗證、協定序列化、quiz 計分、ref 比對)由 Vitest 單元測試覆蓋。
+無自動化 E2E——VS Code extension 的 host↔webview↔vscode API 整合行為改走 Extension Development Host 手動驗證 checklist(見 `openspec/changes/archive/2026-08-01-walk-player/tasks.md` 第 10、11 節,`items` 相關 checklist 見 `openspec/changes/archive/2026-08-01-add-step-items/tasks.md`);純邏輯(schema 驗證、協定序列化、quiz 計分、ref 比對、snippet 讀檔、highlight.js 語言解析)由 Vitest 單元測試覆蓋。
 
 ## 已知限制與技術債
 
@@ -38,3 +42,4 @@
 ## 變更歷史
 
 - 2026-08-01 `walk-player` 新增 walk-player capability:VS Code extension MVP 播放器(步驟導覽、檔案跳轉、術語註解、Quiz 自測含可設定過關門檻、ref 漂移警告),含手動驗證階段追加的多項 bug 修復(quiz 結果頁/作答中無法離開、術語收合誤觸發、鍵盤快捷鍵失焦、檔案不存在錯誤未顯示)
+- 2026-08-01 `add-step-items` 新增 `CodewalkStep.items`:tip/pitfall/todo/reference/snippet 五種說明元件(discriminated union,依陣列順序交錯顯示),snippet 支援語法高亮預覽(highlight.js 官方色票,`codewalk.snippetTheme` 設定可選 10 種主題)與點擊跳轉編輯器

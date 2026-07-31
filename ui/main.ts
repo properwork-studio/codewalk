@@ -1,4 +1,4 @@
-import type { HostToWebviewMessage, WebviewToHostMessage } from '../shared/protocol';
+import type { HostToWebviewMessage, SnippetPreviewResult, WebviewToHostMessage } from '../shared/protocol';
 import {
   cancelQuiz,
   createWalkingState,
@@ -31,6 +31,9 @@ let current: Screen = { screen: 'fileList', files: [] };
 // 檔案跳轉失敗(如檔案不存在)是「這一步的暫時性警告」,不屬於導覽狀態機的一部分,
 // 所以獨立用一個變數保管,切換 step 時清空。
 let stepJumpError: string | null = null;
+// snippet 預覽內容由 host 隨 walkLoaded/stepChanged 送達,是「目前 step 的暫時性資料」,
+// 跟 stepJumpError 一樣不屬於狀態機本身,切換 step 時先清空、等新訊息到達再補上。
+let snippetPreviews: SnippetPreviewResult[] = [];
 // renderWalking() 每次都是整棵樹重繪(見下方 root.innerHTML = ''),若進場動畫直接
 // 掛在容器上,連展開/收合術語這種跟「換步驟」無關的重繪也會整頁重播動畫、造成閃爍。
 // 記住上次繪製的 stepIndex,只有真的換步驟(或剛進入 walking 畫面)才觸發動畫。
@@ -58,9 +61,12 @@ function render(): void {
           onPrev: onPrevStep,
           onToggleTerm: onToggleTerm,
           onEnterQuiz: onEnterQuiz,
+          onOpenReference: onOpenReference,
+          onJumpToSnippet: onJumpToSnippet,
         },
         stepJumpError,
         isStepTransition,
+        snippetPreviews,
       ),
     );
   } else if (current.screen === 'quiz') {
@@ -86,6 +92,7 @@ function onNextStep(): void {
   if (current.screen === 'walking') {
     current = nextStep(current);
     stepJumpError = null;
+    snippetPreviews = [];
     render();
   }
   vscode.postMessage({ type: 'nextStep' });
@@ -95,9 +102,20 @@ function onPrevStep(): void {
   if (current.screen === 'walking') {
     current = prevStep(current);
     stepJumpError = null;
+    snippetPreviews = [];
     render();
   }
   vscode.postMessage({ type: 'prevStep' });
+}
+
+function onOpenReference(url: string): void {
+  vscode.postMessage({ type: 'openReference', url });
+}
+
+function onJumpToSnippet(itemIndex: number): void {
+  if (current.screen === 'walking') {
+    vscode.postMessage({ type: 'jumpToSnippet', stepIndex: current.stepIndex, itemIndex });
+  }
 }
 
 function onToggleTerm(term: string): void {
@@ -171,11 +189,13 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
     case 'walkLoaded':
       current = createWalkingState(msg.walk, msg.refDrifted);
       stepJumpError = null;
+      snippetPreviews = msg.snippetPreviews;
       break;
     case 'stepChanged':
       if (current.screen === 'walking') {
         current = { ...current, stepIndex: msg.stepIndex };
         stepJumpError = null;
+        snippetPreviews = msg.snippetPreviews;
       }
       break;
     case 'loadError':

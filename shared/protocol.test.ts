@@ -38,6 +38,30 @@ describe('parseWebviewToHostMessage', () => {
     expect(parseWebviewToHostMessage({ type: 'quizSubmitted', answers: ['a'] })).toBeNull();
   });
 
+  it('parses an openReference message with a url', () => {
+    expect(parseWebviewToHostMessage({ type: 'openReference', url: 'https://example.com' })).toEqual({
+      type: 'openReference',
+      url: 'https://example.com',
+    });
+  });
+
+  it('rejects openReference without a url', () => {
+    expect(parseWebviewToHostMessage({ type: 'openReference' })).toBeNull();
+  });
+
+  it('parses a jumpToSnippet message with stepIndex and itemIndex', () => {
+    expect(parseWebviewToHostMessage({ type: 'jumpToSnippet', stepIndex: 1, itemIndex: 2 })).toEqual({
+      type: 'jumpToSnippet',
+      stepIndex: 1,
+      itemIndex: 2,
+    });
+  });
+
+  it('rejects jumpToSnippet without numeric indexes', () => {
+    expect(parseWebviewToHostMessage({ type: 'jumpToSnippet', stepIndex: 1 })).toBeNull();
+    expect(parseWebviewToHostMessage({ type: 'jumpToSnippet', stepIndex: '1', itemIndex: 2 })).toBeNull();
+  });
+
   it('rejects an unknown message type', () => {
     expect(parseWebviewToHostMessage({ type: 'unknown' })).toBeNull();
   });

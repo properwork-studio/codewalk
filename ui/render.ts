@@ -1,4 +1,6 @@
-import type { WalkFileSummary } from '../shared/protocol';
+import type { SnippetPreviewResult, WalkFileSummary } from '../shared/protocol';
+import type { CodewalkItem } from '../shared/schema';
+import { highlightSnippetLines } from './highlight';
 import { isAtLastStep, type QuizResult, type QuizState, type WalkingState } from './state';
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -52,6 +54,116 @@ export interface WalkingHandlers {
   onPrev: () => void;
   onToggleTerm: (term: string) => void;
   onEnterQuiz: () => void;
+  onOpenReference: (url: string) => void;
+  onJumpToSnippet: (itemIndex: number) => void;
+}
+
+function renderAnnotation(kind: 'tip' | 'todo', iconName: string, text: string): HTMLElement {
+  const box = el('div', `codewalk-annotation codewalk-annotation-${kind}`);
+  box.appendChild(icon(iconName, 'codewalk-annotation-icon'));
+  box.appendChild(el('p', 'codewalk-annotation-text', text));
+  return box;
+}
+
+function renderPitfall(misconception: string, reality: string): HTMLElement {
+  const box = el('div', 'codewalk-annotation codewalk-annotation-pitfall');
+  const header = el('div', 'codewalk-annotation-header');
+  header.appendChild(icon('alert', 'codewalk-annotation-icon'));
+  header.appendChild(el('span', undefined, '容易誤解的地方'));
+  box.appendChild(header);
+  const misconceptionRow = el('p', 'codewalk-pitfall-line');
+  misconceptionRow.appendChild(el('span', 'codewalk-pitfall-label', '誤解:'));
+  misconceptionRow.appendChild(document.createTextNode(misconception));
+  const realityRow = el('p', 'codewalk-pitfall-line');
+  realityRow.appendChild(el('span', 'codewalk-pitfall-label', '其實:'));
+  realityRow.appendChild(document.createTextNode(reality));
+  box.appendChild(misconceptionRow);
+  box.appendChild(realityRow);
+  return box;
+}
+
+function renderReference(label: string, url: string, onOpenReference: (url: string) => void): HTMLElement {
+  const button = el('button', 'codewalk-reference');
+  button.appendChild(icon('link-external'));
+  button.appendChild(el('span', undefined, label));
+  button.addEventListener('click', () => onOpenReference(url));
+  return button;
+}
+
+function renderSnippetCode(content: string, language: string, startLine: number): HTMLElement {
+  // 'hljs' class 是給 dist/hljs-themes.css(esbuild.js 從官方 highlight.js 主題檔案
+  // 產生,見該檔案註解)的 .hljs { background; color } 規則對應用的容器 class,
+  // 不是純樣式命名。
+  const code = el('div', 'codewalk-snippet-code hljs');
+  const lines = highlightSnippetLines(content, language);
+  lines.forEach((lineHtml, i) => {
+    const row = el('div', 'codewalk-snippet-line');
+    row.appendChild(el('span', 'codewalk-snippet-line-number', String(startLine + i)));
+    const lineCode = document.createElement('span');
+    lineCode.className = 'codewalk-snippet-line-code';
+    lineCode.innerHTML = lineHtml.length > 0 ? lineHtml : '&nbsp;';
+    row.appendChild(lineCode);
+    code.appendChild(row);
+  });
+  return code;
+}
+
+function renderSnippet(
+  item: Extract<CodewalkItem, { kind: 'snippet' }>,
+  itemIndex: number,
+  snippetPreviews: SnippetPreviewResult[],
+  onJumpToSnippet: (itemIndex: number) => void,
+): HTMLElement {
+  const container = el('div', 'codewalk-snippet');
+  const header = el('button', 'codewalk-snippet-header');
+  header.appendChild(icon('code'));
+  const headerText = el('span', 'codewalk-snippet-header-text');
+  headerText.appendChild(el('span', 'codewalk-snippet-label', item.label));
+  headerText.appendChild(
+    el('span', 'codewalk-snippet-file-ref', `${item.file}:${item.startLine}-${item.endLine}`),
+  );
+  header.appendChild(headerText);
+  header.addEventListener('click', () => onJumpToSnippet(itemIndex));
+  container.appendChild(header);
+
+  const preview = snippetPreviews.find((p) => p.itemIndex === itemIndex);
+  if (preview && preview.ok) {
+    container.appendChild(renderSnippetCode(preview.content, preview.language, item.startLine));
+  } else if (preview && !preview.ok) {
+    const warning = el('div', 'codewalk-warning');
+    warning.appendChild(icon('warning'));
+    warning.appendChild(el('span', undefined, preview.message));
+    container.appendChild(warning);
+  }
+  return container;
+}
+
+function renderItems(
+  items: CodewalkItem[],
+  snippetPreviews: SnippetPreviewResult[],
+  handlers: Pick<WalkingHandlers, 'onOpenReference' | 'onJumpToSnippet'>,
+): HTMLElement {
+  const container = el('div', 'codewalk-items');
+  items.forEach((item, itemIndex) => {
+    switch (item.kind) {
+      case 'tip':
+        container.appendChild(renderAnnotation('tip', 'lightbulb', item.text));
+        break;
+      case 'todo':
+        container.appendChild(renderAnnotation('todo', 'circle-large-outline', item.text));
+        break;
+      case 'pitfall':
+        container.appendChild(renderPitfall(item.misconception, item.reality));
+        break;
+      case 'reference':
+        container.appendChild(renderReference(item.label, item.url, handlers.onOpenReference));
+        break;
+      case 'snippet':
+        container.appendChild(renderSnippet(item, itemIndex, snippetPreviews, handlers.onJumpToSnippet));
+        break;
+    }
+  });
+  return container;
 }
 
 function createStepDots(current: number, total: number): HTMLElement {
@@ -74,6 +186,7 @@ export function renderWalking(
   handlers: WalkingHandlers,
   jumpError: string | null = null,
   animateStepChange = true,
+  snippetPreviews: SnippetPreviewResult[] = [],
 ): HTMLElement {
   const step = state.walk.steps[state.stepIndex];
   const container = el('div', `codewalk-walking${animateStepChange ? ' is-step-transition' : ''}`);
@@ -101,6 +214,15 @@ export function renderWalking(
   container.appendChild(el('p', 'codewalk-file-ref', `${step.file}:${step.startLine}-${step.endLine}`));
 
   container.appendChild(el('p', 'codewalk-narration', step.narration));
+
+  if (step.items && step.items.length > 0) {
+    container.appendChild(
+      renderItems(step.items, snippetPreviews, {
+        onOpenReference: handlers.onOpenReference,
+        onJumpToSnippet: handlers.onJumpToSnippet,
+      }),
+    );
+  }
 
   if (step.terms && step.terms.length > 0) {
     const termsContainer = el('div', 'codewalk-terms');

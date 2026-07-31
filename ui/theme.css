@@ -531,6 +531,167 @@ button:disabled {
   }
 }
 
+.codewalk-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.6rem 0;
+}
+
+.codewalk-annotation {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+}
+
+.codewalk-annotation-icon {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.codewalk-annotation-text {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.codewalk-annotation-tip {
+  border: 1px solid var(--vscode-textLink-foreground);
+  background-color: var(--vscode-textCodeBlock-background, transparent);
+}
+
+.codewalk-annotation-tip .codewalk-annotation-icon {
+  color: var(--vscode-textLink-foreground);
+}
+
+.codewalk-annotation-todo {
+  border: 1px dashed var(--vscode-panel-border);
+}
+
+.codewalk-annotation-todo .codewalk-annotation-icon {
+  color: var(--vscode-descriptionForeground);
+}
+
+/* pitfall 刻意不重用 .codewalk-warning(系統層級的 ref 漂移/檔案跳轉警告),
+   避免讀者把「內容提醒」誤認成「系統錯誤」——用強調色而非警告色系。 */
+.codewalk-annotation-pitfall {
+  flex-direction: column;
+  border: 1px solid var(--vscode-charts-purple, var(--vscode-focusBorder));
+  background-color: var(--vscode-textCodeBlock-background, transparent);
+}
+
+.codewalk-annotation-pitfall .codewalk-annotation-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  color: var(--vscode-charts-purple, var(--vscode-focusBorder));
+}
+
+.codewalk-pitfall-line {
+  margin: 0.3rem 0 0;
+  line-height: 1.4;
+}
+
+.codewalk-pitfall-label {
+  font-weight: 600;
+  margin-right: 0.25rem;
+}
+
+.codewalk-reference {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--vscode-textLink-foreground);
+  background-color: transparent;
+  padding: 0.3rem 0.5rem;
+}
+
+.codewalk-reference:hover:not(:disabled) {
+  text-decoration: underline;
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.codewalk-snippet {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.codewalk-snippet-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  text-align: left;
+  color: var(--vscode-foreground);
+  background-color: transparent;
+  border-radius: 0;
+  padding: 0.4rem 0.6rem;
+}
+
+.codewalk-snippet-header:hover:not(:disabled) {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.codewalk-snippet-header-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.codewalk-snippet-label {
+  flex: 1;
+}
+
+.codewalk-snippet-file-ref {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.85em;
+  opacity: 0.7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.codewalk-snippet-code {
+  margin: 0;
+  padding: 0.4rem 0;
+  overflow-x: auto;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.95em;
+  line-height: 1.8;
+}
+
+.codewalk-snippet-line {
+  display: flex;
+  white-space: pre;
+}
+
+.codewalk-snippet-line-number {
+  flex-shrink: 0;
+  min-width: 2.4em;
+  padding: 0 0.7rem;
+  text-align: right;
+  /* 跟隨 .codewalk-snippet-code 目前生效的主題前景色(由 dist/hljs-themes.css
+     的 .hljs 規則決定),用透明度做出「比程式碼淡」的行號觀感,不用為每個
+     theme 額外指定一次行號顏色。 */
+  color: inherit;
+  opacity: 0.55;
+  user-select: none;
+}
+
+.codewalk-snippet-line-code {
+  padding-right: 0.7rem;
+}
+
+/* snippet 語法高亮色票不在這裡手寫——esbuild.js 的 buildHljsThemesCss() 直接
+   讀取 node_modules/highlight.js/styles/*.css 官方主題檔,用 @scope 包裝後
+   輸出成 dist/hljs-themes.css,由 src/viewProvider.ts 的 getHtml() 引入。
+   codewalk.snippetTheme 設定值與來源主題的對應見該函式。 */
+
 .codewalk-error {
   display: flex;
   align-items: center;
