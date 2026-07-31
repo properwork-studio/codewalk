@@ -1,0 +1,51 @@
+schema: spec-driven
+locale: zh-TW
+
+# 專案脈絡:建立 artifact 時提供給 AI 的上下文(保持精簡,詳情住 CLAUDE.md 與 docs/)
+context: |
+  專案:{名稱} — {一句話}
+  技術棧:TypeScript strict、VS Code Extension API + webview、esbuild、Vitest、pnpm
+  結構:src/(extension host)、ui/(webview,禁碰 vscode API)、shared/(protocol 與 schema 單點)
+  文件:系統全貌見 docs/modules/;本 config 之 rules 為產出 artifact 的強制規範
+  階段:{demo / MVP}——{階段紀律,如:demo 期一律假資料、不接金流}
+
+rules:
+  clarify:
+    file_based:
+      trigger_command: "/opsx:continue"
+      steps:
+        - "/opsx:clarify <change-name> 將釐清問題寫入 openspec/changes/<change-name>/clarify.md"
+        - "使用者直接在 clarify.md 填答,選項用 - [ ] / - [x] 勾選"
+        - "填完後 /opsx:continue 觸發讀取;仍不清楚則追加問題再循環"
+    default_focus:
+      - "使用者、成功條件、範圍邊界、技術限制、錯誤處理"
+
+  specs:
+    - 使用 Given/When/Then 格式撰寫 scenarios
+    - 至少包含:正常流程、錯誤處理兩個情境
+    - 只描述行為(what),不描述實作(how)
+    - Scenarios 必須可測試,可對應到 Playwright E2E 或 Vitest
+    - 使用繁體中文(台灣用語);Given/When/Then 關鍵字保留英文
+
+  proposal:
+    - 使用繁體中文撰寫
+    - 根據 clarify.md 的問答產出,不自行假設未確認的需求
+    - Problem 從使用者角度描述,不是技術角度
+    - Out of Scope 與 Non-goals 必須明確列出,防止範圍蔓延
+    - 如有 Open Questions 必須列出,不能省略
+
+  design:
+    - 參照現有 codebase 的元件與慣例,不重新發明輪子
+    - 明確列出新增與修改的元件及路徑
+    - 資料結構以 JSON 風格描述 Request/Response 與錯誤情境
+    - UI 指定參照的既有元件與 design token
+    - 若需後端支援,另產 api-needs.md(API 需求單,見 dev-harness/templates/api-needs-範本.md);只寫需求不寫設計,endpoint 與 schema 由後端決定
+
+  tasks:
+    - 單一任務約 2 小時內可完成,必要時拆子任務
+    - 不寫「實作 X」,寫「實作 X 使 Y scenario 可通過」
+    - "**切直不切橫(vertical slice)**:每個任務是可獨立驗證、可 demo 的端到端切片;禁「先做完 API 再做 UI」式水平任務,除非該層本身就是完整交付"
+    - 每個任務標注 AFK(agent 可獨立完成)或 HITL(需人工介入:品味判斷、文案、外部帳號設定)
+    - 實作類任務預設以 tdd skill 執行(red-green-refactor)
+    - 開頭標注「建議開發方式」(對應 skill 或直接實作)
+    - 最後一項任務固定為:驗證通過(單元測試+Extension Development Host 手動驗證 checklist)

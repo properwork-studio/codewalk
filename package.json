@@ -1,0 +1,71 @@
+{
+  "name": "codewalk",
+  "displayName": "CodeWalk",
+  "description": "互動式 codebase 導讀播放器——讀取 .codewalk/ 的 JSON,在側邊面板帶讀者逐步走 code",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "codewalk-local",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.125.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codewalk",
+          "title": "CodeWalk",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "codewalk": [
+        {
+          "id": "codewalk.playerView",
+          "name": "Walk",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "codewalk.openWalk",
+        "title": "CodeWalk: 開啟導讀",
+        "category": "CodeWalk"
+      },
+      {
+        "command": "codewalk.nextStep",
+        "title": "CodeWalk: 下一步",
+        "category": "CodeWalk"
+      },
+      {
+        "command": "codewalk.prevStep",
+        "title": "CodeWalk: 上一步",
+        "category": "CodeWalk"
+      }
+    ]
+  },
+  "scripts": {
+    "watch": "node esbuild.js --watch",
+    "build": "node esbuild.js",
+    "vscode:prepublish": "node esbuild.js --production",
+    "package": "vsce package --out codewalk.vsix",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.125.0",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

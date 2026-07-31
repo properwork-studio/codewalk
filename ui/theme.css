@@ -1,0 +1,96 @@
+body {
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background-color: var(--vscode-editor-background);
+  padding: 0.5rem;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--vscode-button-foreground);
+  background-color: var(--vscode-button-background);
+  border: none;
+  border-radius: 2px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.codewalk-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.75rem;
+}
+
+.codewalk-warning {
+  color: var(--vscode-editorWarning-foreground);
+  border: 1px solid var(--vscode-editorWarning-foreground);
+  border-radius: 2px;
+  padding: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.codewalk-suggestion {
+  color: var(--vscode-editorWarning-foreground);
+}
+
+.codewalk-quiz-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.codewalk-quiz-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.codewalk-quiz-cancel {
+  color: var(--vscode-button-secondaryForeground);
+  background-color: var(--vscode-button-secondaryBackground);
+}
+
+.codewalk-quiz-cancel:hover:not(:disabled) {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.codewalk-file-ref {
+  font-family: var(--vscode-editor-font-family);
+  opacity: 0.8;
+}
+
+.codewalk-file-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 0.25rem;
+}
+
+details {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 2px;
+  padding: 0.25rem 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.codewalk-error {
+  color: var(--vscode-errorForeground);
+}
