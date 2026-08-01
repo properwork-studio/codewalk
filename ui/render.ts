@@ -1,5 +1,6 @@
+import { detectLanguage } from '../shared/language';
 import type { SnippetPreviewResult, WalkFileSummary } from '../shared/protocol';
-import type { CodewalkItem } from '../shared/schema';
+import type { CodewalkItem, CodewalkQuizQuestion } from '../shared/schema';
 import { highlightSnippetLines } from './highlight';
 import { isAtLastStep, type QuizResult, type QuizState, type WalkingState } from './state';
 
@@ -138,6 +139,82 @@ function renderSnippet(
   return container;
 }
 
+export interface DiffLine {
+  type: 'added' | 'removed' | 'context';
+  content: string;
+  oldLineNumber: number | null;
+  newLineNumber: number | null;
+}
+
+const DIFF_MARKER: Record<DiffLine['type'], string> = { added: '+', removed: '-', context: '' };
+
+/**
+ * diffText 只存 hunk 本體,逐行依開頭字元判斷型態並剝除該字元;不明開頭字元
+ * (含空字串行)一律視同 context、內容原樣保留、不強制剝除——見 design.md 決策 4
+ * 與 Risks 段落的取捨(作者忘記幫 context 行補開頭空白時,最差只是縮排多一格)。
+ * 舊版/新版行號各自獨立遞增:context 行兩者都進、added 只進新版、removed 只進舊版
+ * ——跟 git diff/GitHub PR diff 算雙欄行號的邏輯相同(見 design.md 決策 4 修訂)。
+ */
+export function classifyDiffLines(diffText: string, oldStartLine: number, newStartLine: number): DiffLine[] {
+  const rawLines = diffText.split('\n');
+  if (rawLines.length > 0 && rawLines[rawLines.length - 1] === '') {
+    rawLines.pop();
+  }
+  let oldLine = oldStartLine;
+  let newLine = newStartLine;
+  return rawLines.map((line) => {
+    if (line.startsWith('+')) {
+      return { type: 'added', content: line.slice(1), oldLineNumber: null, newLineNumber: newLine++ };
+    }
+    if (line.startsWith('-')) {
+      return { type: 'removed', content: line.slice(1), oldLineNumber: oldLine++, newLineNumber: null };
+    }
+    return { type: 'context', content: line, oldLineNumber: oldLine++, newLineNumber: newLine++ };
+  });
+}
+
+function renderDiffCode(diffLines: DiffLine[], language: string): HTMLElement {
+  const code = el('div', 'codewalk-diff-code hljs');
+  const highlighted = highlightSnippetLines(diffLines.map((l) => l.content).join('\n'), language);
+  diffLines.forEach((diffLine, i) => {
+    const row = el('div', `codewalk-diff-line codewalk-diff-line-${diffLine.type}`);
+    row.appendChild(el('span', 'codewalk-diff-line-marker', DIFF_MARKER[diffLine.type]));
+    row.appendChild(
+      el('span', 'codewalk-diff-line-number', diffLine.oldLineNumber === null ? '' : String(diffLine.oldLineNumber)),
+    );
+    row.appendChild(
+      el('span', 'codewalk-diff-line-number', diffLine.newLineNumber === null ? '' : String(diffLine.newLineNumber)),
+    );
+    const lineCode = document.createElement('span');
+    lineCode.className = 'codewalk-diff-line-code';
+    const lineHtml = highlighted[i] ?? '';
+    lineCode.innerHTML = lineHtml.length > 0 ? lineHtml : '&nbsp;';
+    row.appendChild(lineCode);
+    code.appendChild(row);
+  });
+  return code;
+}
+
+function renderDiff(
+  item: Extract<CodewalkItem, { kind: 'diff' }>,
+  itemIndex: number,
+  onJumpToSnippet: (itemIndex: number) => void,
+): HTMLElement {
+  const container = el('div', 'codewalk-diff');
+  const header = el('button', 'codewalk-diff-header');
+  header.appendChild(icon('diff'));
+  const headerText = el('span', 'codewalk-diff-header-text');
+  headerText.appendChild(el('span', 'codewalk-diff-label', item.label));
+  headerText.appendChild(el('span', 'codewalk-diff-file-ref', `${item.file}:${item.startLine}-${item.endLine}`));
+  header.appendChild(headerText);
+  header.addEventListener('click', () => onJumpToSnippet(itemIndex));
+  container.appendChild(header);
+
+  const diffLines = classifyDiffLines(item.diffText, item.oldStartLine, item.startLine);
+  container.appendChild(renderDiffCode(diffLines, detectLanguage(item.file)));
+  return container;
+}
+
 function renderItems(
   items: CodewalkItem[],
   snippetPreviews: SnippetPreviewResult[],
@@ -160,6 +237,9 @@ function renderItems(
         break;
       case 'snippet':
         container.appendChild(renderSnippet(item, itemIndex, snippetPreviews, handlers.onJumpToSnippet));
+        break;
+      case 'diff':
+        container.appendChild(renderDiff(item, itemIndex, handlers.onJumpToSnippet));
         break;
     }
   });
@@ -394,6 +474,29 @@ function createScoreRing(score: number, total: number, passed: boolean): HTMLEle
   return wrapper;
 }
 
+function createOptionExplanations(
+  question: CodewalkQuizQuestion,
+  optionExplanations: string[],
+  userAnswer: number | null,
+): HTMLElement {
+  const list = el('div', 'codewalk-quiz-breakdown-explanations');
+  question.options.forEach((optionText, optIndex) => {
+    const isCorrectOption = optIndex === question.correctIndex;
+    const isYourAnswer = optIndex === userAnswer;
+    const classes = ['codewalk-quiz-breakdown-explanation'];
+    if (isCorrectOption) classes.push('is-correct-option');
+    if (isYourAnswer) classes.push('is-your-answer');
+    const row = el('div', classes.join(' '));
+    row.appendChild(icon(isCorrectOption ? 'pass' : 'close', 'codewalk-quiz-breakdown-explanation-icon'));
+    const text = el('div', 'codewalk-quiz-breakdown-explanation-text');
+    text.appendChild(el('span', 'codewalk-quiz-breakdown-explanation-option', optionText));
+    text.appendChild(el('span', 'codewalk-quiz-breakdown-explanation-body', optionExplanations[optIndex]));
+    row.appendChild(text);
+    list.appendChild(row);
+  });
+  return list;
+}
+
 function createQuizBreakdown(state: QuizResult): HTMLElement {
   const breakdown = el('div', 'codewalk-quiz-breakdown');
   state.walk.quiz.forEach((question, qIndex) => {
@@ -410,6 +513,10 @@ function createQuizBreakdown(state: QuizResult): HTMLElement {
       item.appendChild(
         el('p', 'codewalk-quiz-breakdown-correct-answer', `正確答案:${question.options[question.correctIndex]}`),
       );
+    }
+    const optionExplanations = question.optionExplanations;
+    if (optionExplanations) {
+      item.appendChild(createOptionExplanations(question, optionExplanations, userAnswer));
     }
     breakdown.appendChild(item);
   });

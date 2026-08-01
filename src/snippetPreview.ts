@@ -1,30 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { detectLanguage } from '../shared/language';
 import type { SnippetPreviewResult } from '../shared/protocol';
 import type { CodewalkItem } from '../shared/schema';
-
-const EXTENSION_LANGUAGE: Record<string, string> = {
-  ts: 'typescript',
-  tsx: 'typescript',
-  js: 'javascript',
-  jsx: 'javascript',
-  json: 'json',
-  py: 'python',
-  go: 'go',
-  rs: 'rust',
-  css: 'css',
-  html: 'html',
-  md: 'markdown',
-  sh: 'bash',
-  bash: 'bash',
-  yml: 'yaml',
-  yaml: 'yaml',
-};
-
-function detectLanguage(file: string): string {
-  const ext = file.split('.').pop()?.toLowerCase() ?? '';
-  return EXTENSION_LANGUAGE[ext] ?? 'plaintext';
-}
 
 type SnippetItem = Extract<CodewalkItem, { kind: 'snippet' }>;
 

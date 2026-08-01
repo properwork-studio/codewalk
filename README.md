@@ -59,9 +59,14 @@ code --install-extension codewalk.vsix
     }
   ],
   "quiz": [
-    { "question": "...", "options": ["A", "B"], "correctIndex": 0 }
+    {
+      "question": "...",
+      "options": ["A", "B"],
+      "correctIndex": 0,
+      "optionExplanations": ["為什麼 A 錯", "為什麼 B 對"]
+    }
   ]
 }
 ```
 
-`quiz` 至少需要 1 題;可選填 `passThreshold`(答對題數門檻,省略時預設為題數的簡單多數,例如 5 題預設門檻是 3 題)。圖解資產請放在 `.codewalk/assets/` 並以相對路徑參照。
+`quiz` 至少需要 1 題;可選填 `passThreshold`(答對題數門檻,省略時預設為題數的簡單多數,例如 5 題預設門檻是 3 題)。每題可選填 `optionExplanations`(字串陣列,索引需與 `options` 一一對應,長度必須相同),用來在結果頁列出每個選項為什麼對或為什麼錯;省略時結果頁維持只顯示你的答案與正確答案。圖解資產請放在 `.codewalk/assets/` 並以相對路徑參照。

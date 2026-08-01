@@ -209,6 +209,182 @@ describe('validateCodewalk — step.items', () => {
   });
 });
 
+describe('validateCodewalk — diff item', () => {
+  function sampleWithItems(items: unknown[]) {
+    const sample = validSample() as any;
+    sample.steps[0].items = items;
+    return sample;
+  }
+
+  function validDiffItem(overrides: Record<string, unknown> = {}) {
+    return {
+      kind: 'diff',
+      label: '改了驗證邏輯',
+      file: 'src/a.ts',
+      startLine: 10,
+      endLine: 12,
+      oldStartLine: 10,
+      diffText: ' const x = 1;\n-const y = 2;\n+const y = 3;',
+      ...overrides,
+    };
+  }
+
+  it('accepts a well-formed diff item', () => {
+    const result = validateCodewalk(sampleWithItems([validDiffItem()]));
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects a diff item missing label', () => {
+    const item = validDiffItem();
+    delete (item as any).label;
+    const result = validateCodewalk(sampleWithItems([item]));
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.some((e) => e.includes('label'))).toBe(true);
+    }
+  });
+
+  it('rejects a diff item missing file', () => {
+    const item = validDiffItem();
+    delete (item as any).file;
+    const result = validateCodewalk(sampleWithItems([item]));
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects a diff item where endLine < startLine', () => {
+    const result = validateCodewalk(
+      sampleWithItems([validDiffItem({ startLine: 20, endLine: 10 })]),
+    );
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.some((e) => e.includes('endLine'))).toBe(true);
+    }
+  });
+
+  it('rejects a diff item missing diffText', () => {
+    const item = validDiffItem();
+    delete (item as any).diffText;
+    const result = validateCodewalk(sampleWithItems([item]));
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects a diffText with no added or removed lines', () => {
+    const result = validateCodewalk(
+      sampleWithItems([validDiffItem({ diffText: ' const x = 1;\n const y = 2;' })]),
+    );
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.some((e) => e.includes('diffText'))).toBe(true);
+    }
+  });
+
+  it('accepts a diffText with only added lines', () => {
+    const result = validateCodewalk(
+      sampleWithItems([validDiffItem({ diffText: '+const x = 1;\n+const y = 2;' })]),
+    );
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts a diffText with only removed lines', () => {
+    const result = validateCodewalk(
+      sampleWithItems([validDiffItem({ diffText: '-const x = 1;\n-const y = 2;' })]),
+    );
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts a diffText ending with a trailing newline', () => {
+    const result = validateCodewalk(
+      sampleWithItems([validDiffItem({ diffText: ' context line\n+added line\n' })]),
+    );
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects a diff item missing oldStartLine', () => {
+    const item = validDiffItem();
+    delete (item as any).oldStartLine;
+    const result = validateCodewalk(sampleWithItems([item]));
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.some((e) => e.includes('oldStartLine'))).toBe(true);
+    }
+  });
+
+  it('rejects a diff item with a non-positive-integer oldStartLine', () => {
+    const result = validateCodewalk(sampleWithItems([validDiffItem({ oldStartLine: 0 })]));
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.some((e) => e.includes('oldStartLine'))).toBe(true);
+    }
+  });
+
+  it('accepts oldStartLine differing from startLine', () => {
+    const result = validateCodewalk(
+      sampleWithItems([validDiffItem({ startLine: 100, endLine: 102, oldStartLine: 40 })]),
+    );
+    expect(result.valid).toBe(true);
+  });
+});
+
+describe('validateCodewalk — quiz.optionExplanations', () => {
+  function sampleWithOptionExplanations(optionExplanations: unknown) {
+    const sample = validSample() as any;
+    sample.quiz[0].optionExplanations = optionExplanations;
+    return sample;
+  }
+
+  it('accepts a quiz question with optionExplanations matching options length', () => {
+    const result = validateCodewalk(
+      sampleWithOptionExplanations(['錯:混淆了編譯期與執行期', '對:型別在編譯後就消失了']),
+    );
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts a quiz question without optionExplanations (backwards compatible)', () => {
+    const result = validateCodewalk(validSample());
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects optionExplanations that is not an array', () => {
+    const result = validateCodewalk(sampleWithOptionExplanations('not an array'));
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.some((e) => e.includes('optionExplanations') && e.includes('陣列'))).toBe(true);
+    }
+  });
+
+  it('rejects optionExplanations with a non-string element', () => {
+    const result = validateCodewalk(sampleWithOptionExplanations(['對:...', 123]));
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.some((e) => e.includes('optionExplanations[1]'))).toBe(true);
+    }
+  });
+
+  it('rejects optionExplanations with an empty string element', () => {
+    const result = validateCodewalk(sampleWithOptionExplanations(['對:...', '   ']));
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.some((e) => e.includes('optionExplanations[1]'))).toBe(true);
+    }
+  });
+
+  it('rejects optionExplanations shorter than options', () => {
+    const result = validateCodewalk(sampleWithOptionExplanations(['只有一個解釋']));
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.some((e) => e.includes('optionExplanations') && e.includes('長度'))).toBe(true);
+    }
+  });
+
+  it('rejects optionExplanations longer than options', () => {
+    const result = validateCodewalk(sampleWithOptionExplanations(['解釋一', '解釋二', '多出來的解釋']));
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.some((e) => e.includes('optionExplanations') && e.includes('長度'))).toBe(true);
+    }
+  });
+});
+
 describe('resolvePassThreshold', () => {
   it('uses the explicit passThreshold when present', () => {
     const walk = { ...validSample(), passThreshold: 2 } as any;

@@ -13,12 +13,14 @@
 - 檔案行號跳轉並高亮對應程式碼範圍,含檔案不存在的錯誤處理 → [spec](../../openspec/specs/walk-player/spec.md)
 - 可收合術語註解 → [spec](../../openspec/specs/walk-player/spec.md)
 - Quiz 自測與回饋,過關門檻可由 `.codewalk.json` 的 `passThreshold` 設定(省略時預設題數簡單多數)→ [spec](../../openspec/specs/walk-player/spec.md)
+- Quiz 每個選項可選填 `optionExplanations` 解釋為什麼對/為什麼錯,結果頁列出全部選項解釋並標示正確選項與讀者的選擇,長度需與 `options` 相符 → [spec](../../openspec/specs/walk-player/spec.md)
 - ref 漂移偵測:比對 workspace HEAD 與導讀釘住的 commit,不符時顯示警告 → [spec](../../openspec/specs/walk-player/spec.md)
 - 視覺跟隨編輯器主題(讀 VS Code CSS 變數)→ [spec](../../openspec/specs/walk-player/spec.md)
 - Step 內顯示提示/陷阱警告/待辦標記(annotation:tip/pitfall/todo)→ [spec](../../openspec/specs/walk-player/spec.md)
 - Step 內顯示外部連結參考,點擊開啟外部瀏覽器 → [spec](../../openspec/specs/walk-player/spec.md)
 - Step 內顯示程式碼片段引用(snippet),語法高亮預覽並可點擊跳轉編輯器,語法高亮 theme 可由 `codewalk.snippetTheme` 設定 → [spec](../../openspec/specs/walk-player/spec.md)
-- 上述說明元件(annotation/reference/snippet)依 `.codewalk.json` 的 `items` 陣列原始順序自由交錯顯示 → [spec](../../openspec/specs/walk-player/spec.md)
+- Step 內顯示改動片段(diff),逐行以背景色與 `+`/`-` 標記字元呈現新增/刪除/context,同時顯示舊版與新版雙欄行號並套用語法高亮,點擊可跳轉編輯器 → [spec](../../openspec/specs/walk-player/spec.md)
+- 上述說明元件(annotation/reference/snippet/diff)依 `.codewalk.json` 的 `items` 陣列原始順序自由交錯顯示 → [spec](../../openspec/specs/walk-player/spec.md)
 
 ## 主要流程
 
@@ -31,7 +33,7 @@
 
 ## E2E 覆蓋
 
-無自動化 E2E——VS Code extension 的 host↔webview↔vscode API 整合行為改走 Extension Development Host 手動驗證 checklist(見 `openspec/changes/archive/2026-08-01-walk-player/tasks.md` 第 10、11 節,`items` 相關 checklist 見 `openspec/changes/archive/2026-08-01-add-step-items/tasks.md`);純邏輯(schema 驗證、協定序列化、quiz 計分、ref 比對、snippet 讀檔、highlight.js 語言解析)由 Vitest 單元測試覆蓋。
+無自動化 E2E——VS Code extension 的 host↔webview↔vscode API 整合行為改走 Extension Development Host 手動驗證 checklist(見 `openspec/changes/archive/2026-08-01-walk-player/tasks.md` 第 10、11 節,`items` 相關 checklist 見 `openspec/changes/archive/2026-08-01-add-step-items/tasks.md`,`diff` 相關 checklist 見 `openspec/changes/archive/2026-08-01-add-diff-item/tasks.md` 第 6、7 節);純邏輯(schema 驗證、協定序列化、quiz 計分、ref 比對、snippet 讀檔、highlight.js 語言解析、diff 逐行分類與雙欄行號計算)由 Vitest 單元測試覆蓋。
 
 ## 已知限制與技術債
 
@@ -43,3 +45,5 @@
 
 - 2026-08-01 `walk-player` 新增 walk-player capability:VS Code extension MVP 播放器(步驟導覽、檔案跳轉、術語註解、Quiz 自測含可設定過關門檻、ref 漂移警告),含手動驗證階段追加的多項 bug 修復(quiz 結果頁/作答中無法離開、術語收合誤觸發、鍵盤快捷鍵失焦、檔案不存在錯誤未顯示)
 - 2026-08-01 `add-step-items` 新增 `CodewalkStep.items`:tip/pitfall/todo/reference/snippet 五種說明元件(discriminated union,依陣列順序交錯顯示),snippet 支援語法高亮預覽(highlight.js 官方色票,`codewalk.snippetTheme` 設定可選 10 種主題)與點擊跳轉編輯器
+- 2026-08-01 `quiz-option-explanations` 新增 `CodewalkQuizQuestion.optionExplanations`(選填字串陣列,索引對齊 `options`,長度不符即載入失敗):結果頁列出每個選項為什麼對/錯,答對與答錯的題目都會顯示,省略欄位時行為完全不變
+- 2026-08-01 `add-diff-item` 新增 `CodewalkItem` 第 6 種 kind `diff`:呈現既有檔案內一段程式碼的改動前後差異,逐行以背景色、`+`/`-` 標記字元、舊版/新版雙欄行號呈現新增/刪除/context 並套用語法高亮,點擊沿用既有跳轉機制;`diffText` 只存 hunk 本體,validator 要求至少一行加減行且 `oldStartLine` 為正整數;不新增 postMessage 協定訊息

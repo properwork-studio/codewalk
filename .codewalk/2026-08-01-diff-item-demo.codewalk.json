@@ -1,0 +1,100 @@
+{
+  "title": "測試導讀:diff 說明元件",
+  "ref": "858a97973ec1bdd3af5d1b69d1ea2fdfb154fd35",
+  "steps": [
+    {
+      "title": "第一步:小改動的 diff——擴充既有跳轉判斷",
+      "file": "src/viewProvider.ts",
+      "startLine": 111,
+      "endLine": 120,
+      "narration": "這是這次開發真實發生的改動:handleJumpToSnippet 原本只接受 snippet kind,現在放寬成同時接受 snippet 與 diff。下面的 diff 項目直接呈現這個改動——一行刪除、一行新增,前後各帶一行 context。",
+      "items": [
+        { "kind": "tip", "text": "diff 項目的 startLine/endLine 一律代表新版(現在檔案)的行號範圍,跟 snippet 語意相同。" },
+        {
+          "kind": "diff",
+          "label": "handleJumpToSnippet 放寬 kind 判斷",
+          "file": "src/viewProvider.ts",
+          "startLine": 114,
+          "endLine": 116,
+          "oldStartLine": 114,
+          "diffText": "    const item = step?.items?.[itemIndex];\n-    if (!root || !item || item.kind !== 'snippet') return;\n+    if (!root || !item || (item.kind !== 'snippet' && item.kind !== 'diff')) return;\n    const result = await jumpToStep(root, item);"
+        }
+      ]
+    },
+    {
+      "title": "第二步:大量刪除 + 少量新增的 diff",
+      "file": "src/snippetPreview.ts",
+      "startLine": 1,
+      "endLine": 7,
+      "narration": "這一步示範的是把 detectLanguage 搬到 shared/language.ts 的真實改動:新增一行 import,刪掉原本一大段 EXTENSION_LANGUAGE 對照表與 detectLanguage 函式(含中間的空白 context 行)。用來測試大量紅色刪除行與少量綠色新增行混排時的可讀性。",
+      "items": [
+        {
+          "kind": "diff",
+          "label": "detectLanguage 搬到 shared/language.ts",
+          "file": "src/snippetPreview.ts",
+          "startLine": 1,
+          "endLine": 7,
+          "oldStartLine": 1,
+          "diffText": "import { existsSync, readFileSync } from 'node:fs';\nimport { join } from 'node:path';\n+import { detectLanguage } from '../shared/language';\nimport type { SnippetPreviewResult } from '../shared/protocol';\nimport type { CodewalkItem } from '../shared/schema';\n\n-const EXTENSION_LANGUAGE: Record<string, string> = {\n-  ts: 'typescript',\n-  tsx: 'typescript',\n-  js: 'javascript',\n-  jsx: 'javascript',\n-  json: 'json',\n-  py: 'python',\n-  go: 'go',\n-  rs: 'rust',\n-  css: 'css',\n-  html: 'html',\n-  md: 'markdown',\n-  sh: 'bash',\n-  bash: 'bash',\n-  yml: 'yaml',\n-  yaml: 'yaml',\n-};\n-\n-function detectLanguage(file: string): string {\n-  const ext = file.split('.').pop()?.toLowerCase() ?? '';\n-  return EXTENSION_LANGUAGE[ext] ?? 'plaintext';\n-}\n-\ntype SnippetItem = Extract<CodewalkItem, { kind: 'snippet' }>;"
+        }
+      ]
+    },
+    {
+      "title": "第三步:純刪除 hunk 的跳轉位置(示範,非真實改動)",
+      "file": "src/fileJump.ts",
+      "startLine": 8,
+      "endLine": 8,
+      "narration": "這一步是刻意示範的假想情境(不是本次真實改動):如果 JumpTarget 底下曾經有兩行除錯用的 console.log 被整段刪除,diffText 只會有刪除行、沒有新增行。這種情況 startLine 與 endLine 相同,指向刪除發生處在新版檔案中的插入點。",
+      "items": [
+        {
+          "kind": "diff",
+          "label": "(示範)移除除錯用的 console.log",
+          "file": "src/fileJump.ts",
+          "startLine": 8,
+          "endLine": 8,
+          "oldStartLine": 8,
+          "diffText": "-  console.log('[debug] jumpToStep called', target);\n-  console.log('[debug] workspaceRoot', workspaceRoot);"
+        }
+      ]
+    },
+    {
+      "title": "第四步:diff 引用的檔案不存在",
+      "file": "src/viewProvider.ts",
+      "startLine": 111,
+      "endLine": 116,
+      "narration": "這一步的 diff 項目故意指向不存在的檔案,用來測試點擊時的錯誤處理:應該顯示「找不到檔案」提示,且不中斷整個導覽,仍可繼續下一步或前往 quiz。",
+      "items": [
+        { "kind": "todo", "text": "點擊下面這個 diff 項目,確認會顯示找不到檔案的提示。" },
+        {
+          "kind": "diff",
+          "label": "(刻意示範)這個檔案不存在",
+          "file": "src/this-file-does-not-exist.ts",
+          "startLine": 1,
+          "endLine": 2,
+          "oldStartLine": 1,
+          "diffText": " context line\n-const old = 1;\n+const changed = 2;"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "question": "diff 項目的 startLine/endLine 代表哪一側的行號?",
+      "options": ["diff 前的舊版行號", "diff 後的新版(現在檔案)行號"],
+      "correctIndex": 1,
+      "optionExplanations": [
+        "錯:舊版程式碼已經不在 workspace 裡,無處可跳轉,所以不會用舊版行號。",
+        "對:點擊 diff 項目的目的是「去看現在長怎樣」,所以行號永遠對應新版(現在檔案)的位置。"
+      ]
+    },
+    {
+      "question": "如果 diffText 全部都是 context 行(沒有任何 + 或 - 開頭的行),系統會怎麼處理?",
+      "options": ["正常顯示,只是沒有加減色", "載入失敗並顯示格式錯誤"],
+      "correctIndex": 1,
+      "optionExplanations": [
+        "錯:這種情況 validator 會直接拒絕載入,因為既然沒有任何改動,語意上就不該用 diff 表達,應該改用 snippet。",
+        "對:diffText 至少需要一行加或減行,否則載入時會被 validator 擋下來,顯示格式錯誤訊息。"
+      ]
+    }
+  ]
+}

@@ -112,7 +112,7 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
     const root = getWorkspaceRoot();
     const step = this.currentWalk?.steps[stepIndex];
     const item = step?.items?.[itemIndex];
-    if (!root || !item || item.kind !== 'snippet') return;
+    if (!root || !item || (item.kind !== 'snippet' && item.kind !== 'diff')) return;
     const result = await jumpToStep(root, item);
     if (!result.ok) {
       this.post({ type: 'stepJumpError', message: result.message });

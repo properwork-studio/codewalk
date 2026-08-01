@@ -8,7 +8,16 @@ export type CodewalkItem =
   | { kind: 'pitfall'; misconception: string; reality: string }
   | { kind: 'todo'; text: string }
   | { kind: 'reference'; label: string; url: string }
-  | { kind: 'snippet'; label: string; file: string; startLine: number; endLine: number };
+  | { kind: 'snippet'; label: string; file: string; startLine: number; endLine: number }
+  | {
+      kind: 'diff';
+      label: string;
+      file: string;
+      startLine: number;
+      endLine: number;
+      oldStartLine: number;
+      diffText: string;
+    };
 
 export interface CodewalkStep {
   title: string;
@@ -24,6 +33,7 @@ export interface CodewalkQuizQuestion {
   question: string;
   options: string[];
   correctIndex: number;
+  optionExplanations?: string[];
 }
 
 export interface CodewalkFile {
@@ -63,6 +73,19 @@ function isHttpUrl(value: unknown): value is string {
   } catch {
     return false;
   }
+}
+
+/**
+ * diffText 只存 hunk 本體(不含 diff --git/---/+++/@@ @@ 檔頭),依 '\n' 切行
+ * 後捨棄結尾換行產生的尾端空字串元素,要求至少一行以 '+' 或 '-' 開頭——否則
+ * 這段內容沒有任何改動,語意上該用 snippet 表達,不算 diff(見 design.md 決策 1)。
+ */
+function hasAtLeastOneChangedLine(diffText: string): boolean {
+  const lines = diffText.split('\n');
+  if (lines.length > 0 && lines[lines.length - 1] === '') {
+    lines.pop();
+  }
+  return lines.some((line) => line.startsWith('+') || line.startsWith('-'));
 }
 
 function validateLineRange(
@@ -164,8 +187,25 @@ function validateItem(item: unknown, path: string, errors: string[]): void {
       }
       validateLineRange(it, path, errors);
       break;
+    case 'diff':
+      if (!isNonEmptyString(it.label)) {
+        errors.push(`${path}.label 必須是非空字串`);
+      }
+      if (!isNonEmptyString(it.file)) {
+        errors.push(`${path}.file 必須是非空字串`);
+      }
+      validateLineRange(it, path, errors);
+      if (!isPositiveInteger(it.oldStartLine)) {
+        errors.push(`${path}.oldStartLine 必須是正整數`);
+      }
+      if (!isNonEmptyString(it.diffText)) {
+        errors.push(`${path}.diffText 必須是非空字串`);
+      } else if (!hasAtLeastOneChangedLine(it.diffText)) {
+        errors.push(`${path}.diffText 至少要有一行新增(+)或刪除(-)`);
+      }
+      break;
     default:
-      errors.push(`${path}.kind 必須是 tip/pitfall/todo/reference/snippet 其中之一`);
+      errors.push(`${path}.kind 必須是 tip/pitfall/todo/reference/snippet/diff 其中之一`);
   }
 }
 
@@ -188,6 +228,20 @@ function validateQuizQuestion(question: unknown, path: string, errors: string[])
     (Array.isArray(q.options) && q.correctIndex >= q.options.length)
   ) {
     errors.push(`${path}.correctIndex 必須是 options 範圍內的整數`);
+  }
+  if (q.optionExplanations !== undefined) {
+    if (!Array.isArray(q.optionExplanations)) {
+      errors.push(`${path}.optionExplanations 必須是陣列`);
+    } else {
+      q.optionExplanations.forEach((explanation, i) => {
+        if (!isNonEmptyString(explanation)) {
+          errors.push(`${path}.optionExplanations[${i}] 必須是非空字串`);
+        }
+      });
+      if (Array.isArray(q.options) && q.optionExplanations.length !== q.options.length) {
+        errors.push(`${path}.optionExplanations 的長度必須與 options 相同`);
+      }
+    }
   }
 }
 

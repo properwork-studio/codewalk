@@ -345,6 +345,59 @@ button:disabled {
   color: var(--vscode-testing-iconFailed);
 }
 
+/* 選項解釋刻意不重用 .codewalk-warning / .codewalk-annotation-pitfall 的色系——
+   這是內容說明,不是系統警告。錯誤選項用降權的 descriptionForeground 而非
+   errorForeground,避免一題 4 個選項時整段被紅字淹沒、搶走分數環的視覺重心。 */
+.codewalk-quiz-breakdown-explanations {
+  margin-top: 0.5rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--vscode-panel-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.codewalk-quiz-breakdown-explanation {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding-left: 0.3rem;
+  border-left: 2px solid transparent;
+}
+
+.codewalk-quiz-breakdown-explanation-icon {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  color: var(--vscode-descriptionForeground);
+}
+
+.codewalk-quiz-breakdown-explanation.is-correct-option .codewalk-quiz-breakdown-explanation-icon {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.codewalk-quiz-breakdown-explanation-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.codewalk-quiz-breakdown-explanation-option {
+  font-weight: 600;
+}
+
+.codewalk-quiz-breakdown-explanation.is-correct-option .codewalk-quiz-breakdown-explanation-option {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.codewalk-quiz-breakdown-explanation-body {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.92em;
+}
+
+.codewalk-quiz-breakdown-explanation.is-your-answer {
+  border-left-color: var(--vscode-focusBorder);
+}
+
 .codewalk-file-ref {
   font-family: var(--vscode-editor-font-family);
   opacity: 0.8;
@@ -691,6 +744,107 @@ button:disabled {
    讀取 node_modules/highlight.js/styles/*.css 官方主題檔,用 @scope 包裝後
    輸出成 dist/hljs-themes.css,由 src/viewProvider.ts 的 getHtml() 引入。
    codewalk.snippetTheme 設定值與來源主題的對應見該函式。 */
+
+.codewalk-diff {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.codewalk-diff-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  text-align: left;
+  color: var(--vscode-foreground);
+  background-color: transparent;
+  border-radius: 0;
+  padding: 0.4rem 0.6rem;
+}
+
+.codewalk-diff-header:hover:not(:disabled) {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.codewalk-diff-header-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.codewalk-diff-label {
+  flex: 1;
+}
+
+.codewalk-diff-file-ref {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.85em;
+  opacity: 0.7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.codewalk-diff-code {
+  margin: 0;
+  padding: 0.4rem 0;
+  overflow-x: auto;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.95em;
+  line-height: 1.8;
+}
+
+.codewalk-diff-line {
+  display: flex;
+  white-space: pre;
+}
+
+/* 加減行背景色用 VS Code 內建 diff 編輯器本身的變數——使用者換主題或自訂
+   diff 顏色都會自動跟著變,不用另外決定色碼(見 design.md 決策 5)。
+   context 行不上背景色,維持透明。 */
+.codewalk-diff-line-added {
+  background-color: var(--vscode-diffEditor-insertedLineBackground);
+}
+
+.codewalk-diff-line-removed {
+  background-color: var(--vscode-diffEditor-removedLineBackground);
+}
+
+/* +/- 標記字元:跟背景色是兩個獨立的視覺線索,對不容易分辨紅綠背景色的
+   讀者也是重要輔助(見 design.md 決策 4 修訂)。 */
+.codewalk-diff-line-marker {
+  flex-shrink: 0;
+  width: 1.4em;
+  text-align: center;
+  font-weight: 600;
+  user-select: none;
+}
+
+.codewalk-diff-line-added .codewalk-diff-line-marker {
+  color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+
+.codewalk-diff-line-removed .codewalk-diff-line-marker {
+  color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+
+/* 舊版/新版雙欄行號,比照 .codewalk-snippet-line-number 用透明度做出「比
+   程式碼淡」的觀感,不用為每個 theme 額外指定顏色。 */
+.codewalk-diff-line-number {
+  flex-shrink: 0;
+  min-width: 2.2em;
+  padding: 0 0.5rem;
+  text-align: right;
+  color: inherit;
+  opacity: 0.55;
+  user-select: none;
+}
+
+.codewalk-diff-line-code {
+  padding-right: 0.7rem;
+}
 
 .codewalk-error {
   display: flex;
