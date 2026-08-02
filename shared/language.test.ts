@@ -18,12 +18,38 @@ describe('detectLanguage', () => {
     expect(detectLanguage('config.yml')).toBe('yaml');
   });
 
+  it('maps JVM-family extensions, including Gradle build scripts', () => {
+    expect(detectLanguage('src/main/java/App.java')).toBe('java');
+    expect(detectLanguage('src/main/kotlin/App.kt')).toBe('kotlin');
+    expect(detectLanguage('Spec.groovy')).toBe('groovy');
+    expect(detectLanguage('build.gradle')).toBe('groovy');
+    expect(detectLanguage('build.gradle.kts')).toBe('kotlin');
+    expect(detectLanguage('Main.scala')).toBe('scala');
+  });
+
+  it('maps mobile and C-family extensions', () => {
+    expect(detectLanguage('lib/main.dart')).toBe('dart');
+    expect(detectLanguage('App.swift')).toBe('swift');
+    expect(detectLanguage('Program.cs')).toBe('csharp');
+    expect(detectLanguage('main.c')).toBe('c');
+    expect(detectLanguage('util.h')).toBe('c');
+    expect(detectLanguage('engine.cpp')).toBe('cpp');
+    expect(detectLanguage('engine.hpp')).toBe('cpp');
+  });
+
+  it('maps other common server-side extensions', () => {
+    expect(detectLanguage('index.php')).toBe('php');
+    expect(detectLanguage('archive.rb')).toBe('ruby');
+    expect(detectLanguage('schema.sql')).toBe('sql');
+  });
+
   it('is case-insensitive on the extension', () => {
     expect(detectLanguage('src/Caller.TS')).toBe('typescript');
+    expect(detectLanguage('App.JAVA')).toBe('java');
   });
 
   it('falls back to plaintext for unknown extensions', () => {
-    expect(detectLanguage('archive.rb')).toBe('plaintext');
+    expect(detectLanguage('archive.tar')).toBe('plaintext');
     expect(detectLanguage('no-extension')).toBe('plaintext');
   });
 });
