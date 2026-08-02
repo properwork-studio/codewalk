@@ -53,6 +53,24 @@ export function resolvePassThreshold(walk: CodewalkFile): number {
   return walk.passThreshold ?? Math.ceil(walk.quiz.length / 2);
 }
 
+export interface QuizScore {
+  score: number;
+  total: number;
+  passed: boolean;
+}
+
+/**
+ * 未作答的題目以 -1(或任何非法選項索引)表示,天然不會等於任一題的
+ * correctIndex,不需要另外特判「未作答」。
+ */
+export function scoreQuiz(walk: CodewalkFile, answers: readonly number[]): QuizScore {
+  const total = walk.quiz.length;
+  const score = walk.quiz.reduce((count, question, i) => {
+    return count + (answers[i] === question.correctIndex ? 1 : 0);
+  }, 0);
+  return { score, total, passed: score >= resolvePassThreshold(walk) };
+}
+
 export type ValidationResult =
   | { valid: true; value: CodewalkFile }
   | { valid: false; errors: string[] };

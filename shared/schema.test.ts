@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolvePassThreshold, validateCodewalk } from './schema';
+import { resolvePassThreshold, scoreQuiz, validateCodewalk } from './schema';
 
 function validSample() {
   return {
@@ -399,5 +399,43 @@ describe('resolvePassThreshold', () => {
   it('defaults correctly for an even question count', () => {
     const walk = { ...validSample(), quiz: validSample().quiz.slice(0, 4) } as any;
     expect(resolvePassThreshold(walk)).toBe(2); // ceil(4/2) === 2
+  });
+});
+
+describe('scoreQuiz', () => {
+  it('passes when the score meets the default majority threshold', () => {
+    const walk = validSample() as any; // 5 questions, correctIndex: 0
+    const result = scoreQuiz(walk, [0, 0, 0, 1, 1]);
+    expect(result).toEqual({ score: 3, total: 5, passed: true });
+  });
+
+  it('fails when the score is below the default majority threshold', () => {
+    const walk = validSample() as any;
+    const result = scoreQuiz(walk, [0, 0, 1, 1, 1]);
+    expect(result).toEqual({ score: 2, total: 5, passed: false });
+  });
+
+  it('uses a custom passThreshold when present', () => {
+    const walk = { ...validSample(), passThreshold: 4 } as any;
+    const result = scoreQuiz(walk, [0, 0, 0, 1, 1]); // score 3, below custom threshold 4
+    expect(result.passed).toBe(false);
+  });
+
+  it('scores a perfect run', () => {
+    const walk = validSample() as any;
+    const result = scoreQuiz(walk, [0, 0, 0, 0, 0]);
+    expect(result).toEqual({ score: 5, total: 5, passed: true });
+  });
+
+  it('scores a completely wrong run', () => {
+    const walk = validSample() as any;
+    const result = scoreQuiz(walk, [1, 1, 1, 1, 1]);
+    expect(result).toEqual({ score: 0, total: 5, passed: false });
+  });
+
+  it('treats an unanswered question (sentinel -1) as incorrect', () => {
+    const walk = validSample() as any;
+    const result = scoreQuiz(walk, [0, 0, 0, -1, -1]);
+    expect(result).toEqual({ score: 3, total: 5, passed: true });
   });
 });

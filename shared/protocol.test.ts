@@ -62,6 +62,17 @@ describe('parseWebviewToHostMessage', () => {
     expect(parseWebviewToHostMessage({ type: 'jumpToSnippet', stepIndex: '1', itemIndex: 2 })).toBeNull();
   });
 
+  it('parses a clearAttempt message with a path', () => {
+    expect(parseWebviewToHostMessage({ type: 'clearAttempt', path: 'a.codewalk.json' })).toEqual({
+      type: 'clearAttempt',
+      path: 'a.codewalk.json',
+    });
+  });
+
+  it('rejects clearAttempt without a path', () => {
+    expect(parseWebviewToHostMessage({ type: 'clearAttempt' })).toBeNull();
+  });
+
   it('rejects an unknown message type', () => {
     expect(parseWebviewToHostMessage({ type: 'unknown' })).toBeNull();
   });

@@ -1,8 +1,16 @@
 import type { CodewalkFile } from './schema';
 
+export interface AttemptSummary {
+  at: number;
+  score: number;
+  total: number;
+  passed: boolean;
+}
+
 export interface WalkFileSummary {
   path: string;
   title: string;
+  lastAttempt?: AttemptSummary;
 }
 
 export type SnippetPreviewResult =
@@ -30,7 +38,8 @@ export type WebviewToHostMessage =
   | { type: 'jumpToStep'; stepIndex: number }
   | { type: 'quizSubmitted'; answers: number[] }
   | { type: 'openReference'; url: string }
-  | { type: 'jumpToSnippet'; stepIndex: number; itemIndex: number };
+  | { type: 'jumpToSnippet'; stepIndex: number; itemIndex: number }
+  | { type: 'clearAttempt'; path: string };
 
 function isStringArrayLike(value: unknown): value is number[] {
   return Array.isArray(value) && value.every((v) => typeof v === 'number');
@@ -61,6 +70,8 @@ export function parseWebviewToHostMessage(data: unknown): WebviewToHostMessage |
       return typeof d.stepIndex === 'number' && typeof d.itemIndex === 'number'
         ? { type: 'jumpToSnippet', stepIndex: d.stepIndex, itemIndex: d.itemIndex }
         : null;
+    case 'clearAttempt':
+      return typeof d.path === 'string' ? { type: 'clearAttempt', path: d.path } : null;
     default:
       return null;
   }

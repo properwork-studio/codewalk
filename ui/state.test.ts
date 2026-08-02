@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { CodewalkFile } from '../shared/schema';
 import {
   cancelQuiz,
+  closeAttemptMenu,
+  createFileListState,
   createWalkingState,
   enterQuiz,
   isAtLastStep,
@@ -10,7 +12,9 @@ import {
   restartWalk,
   retryQuiz,
   selectQuizAnswer,
+  setPendingClear,
   submitQuiz,
+  toggleAttemptMenu,
   toggleTerm,
 } from './state';
 
@@ -141,5 +145,48 @@ describe('leaving the quiz result screen', () => {
     const retried = retryQuiz(result);
     expect(retried.screen).toBe('quiz');
     expect(retried.answers).toEqual([null, null, null, null, null]);
+  });
+});
+
+describe('file list attempt menu state', () => {
+  it('starts with no menu open and no pending clear', () => {
+    const state = createFileListState([]);
+    expect(state.openMenuPath).toBeNull();
+    expect(state.pendingClearPath).toBeNull();
+  });
+
+  it('opens the menu for a row on first toggle', () => {
+    const state = toggleAttemptMenu(createFileListState([]), 'a.codewalk.json');
+    expect(state.openMenuPath).toBe('a.codewalk.json');
+  });
+
+  it('toggling the same row again closes the menu and drops any pending clear', () => {
+    const opened = toggleAttemptMenu(createFileListState([]), 'a.codewalk.json');
+    const withPending = setPendingClear(opened, 'a.codewalk.json');
+    const closed = toggleAttemptMenu(withPending, 'a.codewalk.json');
+    expect(closed.openMenuPath).toBeNull();
+    expect(closed.pendingClearPath).toBeNull();
+  });
+
+  it('opening a different row automatically closes the previous one (only one at a time)', () => {
+    const first = toggleAttemptMenu(createFileListState([]), 'a.codewalk.json');
+    const firstPending = setPendingClear(first, 'a.codewalk.json');
+    const second = toggleAttemptMenu(firstPending, 'b.codewalk.json');
+    expect(second.openMenuPath).toBe('b.codewalk.json');
+    expect(second.pendingClearPath).toBeNull();
+  });
+
+  it('setPendingClear marks the clear item as confirming', () => {
+    const opened = toggleAttemptMenu(createFileListState([]), 'a.codewalk.json');
+    const pending = setPendingClear(opened, 'a.codewalk.json');
+    expect(pending.pendingClearPath).toBe('a.codewalk.json');
+  });
+
+  it('closeAttemptMenu resets both the open menu and pending clear', () => {
+    const opened = toggleAttemptMenu(createFileListState([]), 'a.codewalk.json');
+    const pending = setPendingClear(opened, 'a.codewalk.json');
+    const closed = closeAttemptMenu(pending);
+    expect(closed.openMenuPath).toBeNull();
+    expect(closed.pendingClearPath).toBeNull();
   });
 });

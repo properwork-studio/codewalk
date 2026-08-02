@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { parseWebviewToHostMessage, type HostToWebviewMessage } from '../shared/protocol';
-import type { CodewalkFile } from '../shared/schema';
+import { scoreQuiz, type CodewalkFile } from '../shared/schema';
+import { AttemptStore } from './attemptStore';
 import { jumpToStep } from './fileJump';
 import { getWorkspaceHead, isRefDrifted } from './refDrift';
 import { readSnippetPreviews } from './snippetPreview';
@@ -45,16 +46,20 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
 
   private view: vscode.WebviewView | undefined;
   private currentWalk: CodewalkFile | undefined;
+  private currentWalkPath: string | undefined;
   private stepIndex = 0;
   private refDrifted = false;
+  private readonly attemptStore: AttemptStore;
 
-  constructor(private readonly extensionUri: vscode.Uri) {}
+  constructor(private readonly context: vscode.ExtensionContext) {
+    this.attemptStore = new AttemptStore(context.workspaceState);
+  }
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {
     this.view = webviewView;
     webviewView.webview.options = {
       enableScripts: true,
-      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist')],
+      localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'dist')],
     };
     webviewView.webview.html = this.getHtml(webviewView.webview);
     webviewView.webview.onDidReceiveMessage((raw: unknown) => this.handleMessage(raw));
@@ -98,6 +103,7 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
         await this.setStep(msg.stepIndex);
         break;
       case 'quizSubmitted':
+        await this.handleQuizSubmitted(msg.answers);
         break;
       case 'openReference':
         await vscode.env.openExternal(vscode.Uri.parse(msg.url));
@@ -105,7 +111,28 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
       case 'jumpToSnippet':
         await this.handleJumpToSnippet(msg.stepIndex, msg.itemIndex);
         break;
+      case 'clearAttempt':
+        await this.handleClearAttempt(msg.path);
+        break;
     }
+  }
+
+  private async handleQuizSubmitted(answers: number[]): Promise<void> {
+    const root = getWorkspaceRoot();
+    if (!root || !this.currentWalk || !this.currentWalkPath) return;
+    const score = scoreQuiz(this.currentWalk, answers);
+    try {
+      await this.attemptStore.record(root, this.currentWalkPath, this.currentWalk.ref, Date.now(), score);
+    } catch {
+      // 作答紀錄是輔助功能,留存失敗不打斷讀者已完成的作答流程(design.md 決策 8)
+    }
+  }
+
+  private async handleClearAttempt(path: string): Promise<void> {
+    const root = getWorkspaceRoot();
+    if (!root) return;
+    await this.attemptStore.clear(root, path);
+    await this.sendFileList();
   }
 
   private async handleJumpToSnippet(stepIndex: number, itemIndex: number): Promise<void> {
@@ -125,7 +152,7 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
       this.post({ type: 'loadError', message: '未開啟任何 workspace' });
       return;
     }
-    const files = await listWalkFiles(root);
+    const files = await listWalkFiles(root, (filePath, ref) => this.attemptStore.get(root, filePath, ref));
     this.post({ type: 'walkFileList', files });
   }
 
@@ -137,6 +164,7 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
     }
 
     this.currentWalk = result.value;
+    this.currentWalkPath = path;
     this.stepIndex = 0;
     this.refDrifted = false;
 
@@ -194,11 +222,11 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
   }
 
   private getHtml(webview: vscode.Webview): string {
-    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview.js'));
-    const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview.css'));
-    const codiconUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'codicon.css'));
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview.js'));
+    const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview.css'));
+    const codiconUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'codicon.css'));
     const hljsThemesUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.extensionUri, 'dist', 'hljs-themes.css'),
+      vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'hljs-themes.css'),
     );
     const nonce = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
 

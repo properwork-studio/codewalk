@@ -9,7 +9,10 @@
       "endLine": 120,
       "narration": "這是這次開發真實發生的改動:handleJumpToSnippet 原本只接受 snippet kind,現在放寬成同時接受 snippet 與 diff。下面的 diff 項目直接呈現這個改動——一行刪除、一行新增,前後各帶一行 context。",
       "items": [
-        { "kind": "tip", "text": "diff 項目的 startLine/endLine 一律代表新版(現在檔案)的行號範圍,跟 snippet 語意相同。" },
+        {
+          "kind": "tip",
+          "text": "diff 項目的 startLine/endLine 一律代表新版(現在檔案)的行號範圍,跟 snippet 語意相同。"
+        },
         {
           "kind": "diff",
           "label": "handleJumpToSnippet 放寬 kind 判斷",
@@ -64,7 +67,10 @@
       "endLine": 116,
       "narration": "這一步的 diff 項目故意指向不存在的檔案,用來測試點擊時的錯誤處理:應該顯示「找不到檔案」提示,且不中斷整個導覽,仍可繼續下一步或前往 quiz。",
       "items": [
-        { "kind": "todo", "text": "點擊下面這個 diff 項目,確認會顯示找不到檔案的提示。" },
+        {
+          "kind": "todo",
+          "text": "點擊下面這個 diff 項目,確認會顯示找不到檔案的提示。"
+        },
         {
           "kind": "diff",
           "label": "(刻意示範)這個檔案不存在",

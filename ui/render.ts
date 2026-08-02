@@ -1,7 +1,8 @@
 import { detectLanguage } from '../shared/language';
-import type { SnippetPreviewResult, WalkFileSummary } from '../shared/protocol';
+import type { AttemptSummary, SnippetPreviewResult, WalkFileSummary } from '../shared/protocol';
 import type { CodewalkItem, CodewalkQuizQuestion } from '../shared/schema';
 import { highlightSnippetLines } from './highlight';
+import { formatAbsoluteDateTime, formatRelativeTime } from './relativeTime';
 import { isAtLastStep, type QuizResult, type QuizState, type WalkingState } from './state';
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -22,7 +23,70 @@ function icon(name: string, extraClass?: string): HTMLSpanElement {
   return span;
 }
 
-export function renderFileList(files: WalkFileSummary[], onSelect: (path: string) => void): HTMLElement {
+export interface FileListHandlers {
+  onSelect: (path: string) => void;
+  onToggleMenu: (path: string) => void;
+  onTriggerClear: (path: string) => void;
+}
+
+function renderAttemptSummary(attempt: AttemptSummary): HTMLElement {
+  const row = el('div', `codewalk-attempt-summary ${attempt.passed ? 'is-passed' : 'is-failed'}`);
+  // 原本只掛原生 title 屬性,但在 webview 裡實測不會顯示原生 tooltip(VS Code
+  // webview 環境的已知限制)。改用純 CSS 的自製 tooltip(:hover / :focus-within
+  // 控制顯示),同時保留 title 作為其他環境(如瀏覽器獨立開啟)的後備手段。
+  row.title = formatAbsoluteDateTime(attempt.at);
+  row.tabIndex = 0;
+  row.appendChild(icon(attempt.passed ? 'pass' : 'error'));
+  row.appendChild(el('span', undefined, `${attempt.score}/${attempt.total}`));
+  row.appendChild(el('span', 'codewalk-attempt-time', formatRelativeTime(attempt.at, Date.now())));
+  const tooltip = el('span', 'codewalk-attempt-tooltip', formatAbsoluteDateTime(attempt.at));
+  tooltip.setAttribute('role', 'tooltip');
+  row.appendChild(tooltip);
+  return row;
+}
+
+/**
+ * 常駐 trash 圖示容易被誤讀成「刪除這份導讀檔案」——改成揭露式選單,展開後
+ * 才看到文字明確的「清除 Quiz 紀錄」。選單永遠只有這一個動作,不做成完整
+ * ARIA menu widget(方向鍵環狀導覽等),用一般 <button> 天然滿足 Tab 順序
+ * 即可(design.md 決策 6)。
+ */
+function renderAttemptMenu(
+  path: string,
+  isOpen: boolean,
+  isPending: boolean,
+  handlers: Pick<FileListHandlers, 'onToggleMenu' | 'onTriggerClear'>,
+): HTMLElement {
+  const wrapper = el('div', 'codewalk-attempt-menu');
+
+  const trigger = el('button', 'codewalk-attempt-menu-trigger');
+  trigger.appendChild(icon('kebab-vertical'));
+  trigger.title = '更多動作';
+  trigger.setAttribute('aria-haspopup', 'true');
+  trigger.setAttribute('aria-expanded', String(isOpen));
+  trigger.addEventListener('click', () => handlers.onToggleMenu(path));
+  wrapper.appendChild(trigger);
+
+  if (isOpen) {
+    const popover = el('div', 'codewalk-attempt-menu-popover');
+    const clearItem = el(
+      'button',
+      `codewalk-attempt-menu-item${isPending ? ' is-pending' : ''}`,
+      isPending ? '確定清除?' : '清除 Quiz 紀錄',
+    );
+    clearItem.addEventListener('click', () => handlers.onTriggerClear(path));
+    popover.appendChild(clearItem);
+    wrapper.appendChild(popover);
+  }
+
+  return wrapper;
+}
+
+export function renderFileList(
+  files: WalkFileSummary[],
+  state: { openMenuPath: string | null; pendingClearPath: string | null },
+  handlers: FileListHandlers,
+): HTMLElement {
   const container = el('div', 'codewalk-file-list');
   container.appendChild(el('h2', undefined, '選擇導讀'));
   if (files.length === 0) {
@@ -31,12 +95,25 @@ export function renderFileList(files: WalkFileSummary[], onSelect: (path: string
   }
   const list = el('ul');
   for (const file of files) {
-    const item = el('li');
+    const item = el('li', 'codewalk-file-item-row');
+    item.dataset.walkPath = file.path;
+
     const button = el('button', 'codewalk-file-item');
     button.appendChild(icon('book'));
     button.appendChild(el('span', 'codewalk-file-item-title', file.title));
-    button.addEventListener('click', () => onSelect(file.path));
+    button.addEventListener('click', () => handlers.onSelect(file.path));
     item.appendChild(button);
+
+    if (file.lastAttempt) {
+      item.appendChild(renderAttemptSummary(file.lastAttempt));
+      item.appendChild(
+        renderAttemptMenu(file.path, state.openMenuPath === file.path, state.pendingClearPath === file.path, {
+          onToggleMenu: handlers.onToggleMenu,
+          onTriggerClear: handlers.onTriggerClear,
+        }),
+      );
+    }
+
     list.appendChild(item);
   }
   container.appendChild(list);
@@ -57,6 +134,7 @@ export interface WalkingHandlers {
   onEnterQuiz: () => void;
   onOpenReference: (url: string) => void;
   onJumpToSnippet: (itemIndex: number) => void;
+  onBackToList: () => void;
 }
 
 function renderAnnotation(kind: 'tip' | 'todo', iconName: string, text: string): HTMLElement {
@@ -270,6 +348,12 @@ export function renderWalking(
 ): HTMLElement {
   const step = state.walk.steps[state.stepIndex];
   const container = el('div', `codewalk-walking${animateStepChange ? ' is-step-transition' : ''}`);
+
+  const backButton = el('button', 'codewalk-back-to-list');
+  backButton.appendChild(icon('list-unordered'));
+  backButton.appendChild(el('span', undefined, '返回列表'));
+  backButton.addEventListener('click', handlers.onBackToList);
+  container.appendChild(backButton);
 
   if (state.refDrifted) {
     const warning = el('div', 'codewalk-warning');

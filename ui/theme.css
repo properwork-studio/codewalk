@@ -6,6 +6,22 @@ body {
   padding: 0.5rem;
 }
 
+/* 不挑特定 VS Code 色彩 token 當 hover 背景——同一組 token 在不同主題下彼此
+   對比可能差很多(手動驗證時連續兩組「理論上安全」的 token 配對在使用者的
+   主題下都不夠清楚,見 tasks.md 6.9、6.10)。改成疊加一層相對主背景淺/深的
+   半透明,前景色完全不動,適用任何主題。VS Code 會在 webview 的 <body> 上
+   加 vscode-light / vscode-dark / vscode-high-contrast(-light)class,靠它
+   判斷深淺,不靠猜測哪個 token 夠對比。 */
+body.vscode-light,
+body.vscode-high-contrast-light {
+  --codewalk-hover-overlay: rgba(0, 0, 0, 0.08);
+}
+
+body.vscode-dark,
+body.vscode-high-contrast {
+  --codewalk-hover-overlay: rgba(255, 255, 255, 0.14);
+}
+
 /* #app 只是用來接收鍵盤事件的隱形焦點容器,不是給使用者導覽用的可視元件,
    所以不需要瀏覽器預設的 focus outline。 */
 #app:focus {
@@ -48,6 +64,26 @@ button:disabled {
 
 .codewalk-walking.is-step-transition {
   animation: codewalk-fade-in 0.18s ease;
+}
+
+.codewalk-back-to-list {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-bottom: 0.5rem;
+  padding: 0.15rem 0.4rem;
+  color: var(--vscode-descriptionForeground);
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+/* 加上 button 型別選擇器 + :not(:disabled),把 specificity 拉到明確高於
+   全域的 `button:hover:not(:disabled)` 規則——四輪都改錯顏色,真正原因是
+   specificity 輸給那條全域規則,換什麼顏色都會被蓋掉(DevTools 截圖證實,
+   見對話紀錄)。不依賴「寫在後面就贏」的 cascade 順序,直接讓 specificity
+   贏得毫無疑問。 */
+button.codewalk-back-to-list:hover:not(:disabled) {
+  background-color: var(--codewalk-hover-overlay, rgba(128, 128, 128, 0.2));
 }
 
 .codewalk-nav {
@@ -434,6 +470,147 @@ button:disabled {
 
 .codewalk-file-item-title {
   flex: 1;
+}
+
+.codewalk-file-item-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.codewalk-file-item-row .codewalk-file-item {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.codewalk-attempt-summary {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+  font-size: 0.85em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.codewalk-attempt-summary.is-passed .codicon {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.codewalk-attempt-summary.is-failed .codicon {
+  color: var(--vscode-testing-iconFailed);
+}
+
+/* 原生 title 屬性在 webview 裡實測不會顯示 tooltip,改用純 CSS 自製 tooltip
+   (見 ui/render.ts renderAttemptSummary 的說明)。row 本身設了 tabIndex,
+   :focus-within 讓鍵盤操作者(Tab 過去)也看得到完整時間,不只滑鼠 hover。 */
+.codewalk-attempt-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 0.3rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid var(--vscode-editorHoverWidget-border, var(--vscode-panel-border));
+  background-color: var(--vscode-editorHoverWidget-background, var(--vscode-editor-background));
+  color: var(--vscode-editorHoverWidget-foreground, var(--vscode-foreground));
+  font-size: 0.85em;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.1s ease;
+  z-index: 2;
+}
+
+.codewalk-attempt-summary:hover .codewalk-attempt-tooltip,
+.codewalk-attempt-summary:focus-within .codewalk-attempt-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+.codewalk-attempt-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* 蓋掉瀏覽器預設的 :focus outline,改用 :focus-visible + --vscode-focusBorder
+   (專案既有 `.codewalk-quiz-option:focus-within` 也用同一個 token)——只在
+   鍵盤觸發的 focus 顯示,滑鼠點擊不會誤觸發。純粹的 a11y 一致性處理;實際
+   造成 hover 顏色一直沒變的真正原因是下面 CSS specificity 被全域
+   `button:hover:not(:disabled)` 蓋掉(見下方說明與 tasks.md 6.11),跟這裡
+   的 outline 無關,曾經懷疑過是同一個問題但排查後證實是兩回事。 */
+.codewalk-attempt-menu-trigger,
+.codewalk-attempt-menu-item,
+.codewalk-back-to-list {
+  outline: none;
+}
+
+.codewalk-attempt-menu-trigger:focus-visible,
+.codewalk-attempt-menu-item:focus-visible,
+.codewalk-back-to-list:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+.codewalk-attempt-menu-trigger {
+  padding: 0.2rem 0.3rem;
+  border-radius: 3px;
+  color: var(--vscode-icon-foreground);
+  background: transparent;
+  border: 1px solid transparent;
+  opacity: 0.7;
+}
+
+/* 連續兩組「理論上安全」的主題 token 配對(list.activeSelection*、
+   button.secondary*)在使用者的主題下都不夠清楚,見上方 --codewalk-hover-overlay
+   的說明——不再猜測哪組 token 夠對比,前景色維持不變,只疊加半透明背景。 */
+button.codewalk-attempt-menu-trigger:hover:not(:disabled),
+button.codewalk-attempt-menu-trigger[aria-expanded='true'] {
+  opacity: 1;
+  background-color: var(--codewalk-hover-overlay, rgba(128, 128, 128, 0.2));
+}
+
+.codewalk-attempt-menu-popover {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1;
+  margin-top: 0.15rem;
+  padding: 0.25rem;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  background-color: var(--vscode-menu-background, var(--vscode-editor-background));
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.codewalk-attempt-menu-item {
+  display: block;
+  width: 100%;
+  white-space: nowrap;
+  text-align: left;
+  color: var(--vscode-menu-foreground, var(--vscode-foreground));
+  background: transparent;
+  border: none;
+  padding: 0.35rem 0.6rem;
+}
+
+button.codewalk-attempt-menu-item:hover:not(:disabled) {
+  background-color: var(--codewalk-hover-overlay, rgba(128, 128, 128, 0.2));
+}
+
+.codewalk-attempt-menu-item.is-pending {
+  color: var(--vscode-testing-iconFailed);
+  font-weight: 600;
+}
+
+/* 確認清除的危險動作:hover 時強制紅底白字,不沿用一般選單項目的 hover 配色——
+   讀者在真的要按下去清除前,應該看到最明確的「這會刪除東西」視覺回饋。 */
+.codewalk-attempt-menu-item.is-pending:hover {
+  color: var(--vscode-inputValidation-errorForeground, #ffffff);
+  background-color: var(--vscode-inputValidation-errorBackground);
 }
 
 .codewalk-step-dots {

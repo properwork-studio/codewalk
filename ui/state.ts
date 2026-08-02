@@ -1,4 +1,34 @@
-import { resolvePassThreshold, type CodewalkFile } from '../shared/schema';
+import type { WalkFileSummary } from '../shared/protocol';
+import { scoreQuiz, type CodewalkFile } from '../shared/schema';
+
+export interface FileListState {
+  screen: 'fileList';
+  files: WalkFileSummary[];
+  /** 目前展開中的「更多動作」選單所屬導讀路徑;同一時間至多一份(design.md 決策 6)。 */
+  openMenuPath: string | null;
+  /** 選單內清除項目是否處於「確定清除?」二次確認態;只在對應選單展開時有意義。 */
+  pendingClearPath: string | null;
+}
+
+export function createFileListState(files: WalkFileSummary[]): FileListState {
+  return { screen: 'fileList', files, openMenuPath: null, pendingClearPath: null };
+}
+
+export function closeAttemptMenu(state: FileListState): FileListState {
+  return { ...state, openMenuPath: null, pendingClearPath: null };
+}
+
+/** 開啟另一份導讀的選單會自動收合前一個,天然滿足「同時最多一個」。 */
+export function toggleAttemptMenu(state: FileListState, path: string): FileListState {
+  if (state.openMenuPath === path) {
+    return closeAttemptMenu(state);
+  }
+  return { ...state, openMenuPath: path, pendingClearPath: null };
+}
+
+export function setPendingClear(state: FileListState, path: string): FileListState {
+  return { ...state, pendingClearPath: path };
+}
 
 export interface WalkingState {
   screen: 'walking';
@@ -80,15 +110,16 @@ export function retryQuiz(state: QuizResult): QuizState {
 }
 
 export function submitQuiz(state: QuizState): QuizResult {
-  const score = state.walk.quiz.reduce((count, question, i) => {
-    return count + (state.answers[i] === question.correctIndex ? 1 : 0);
-  }, 0);
+  const { score, passed } = scoreQuiz(
+    state.walk,
+    state.answers.map((a) => a ?? -1),
+  );
   return {
     screen: 'quizResult',
     walk: state.walk,
     refDrifted: state.refDrifted,
     answers: state.answers,
     score,
-    passed: score >= resolvePassThreshold(state.walk),
+    passed,
   };
 }

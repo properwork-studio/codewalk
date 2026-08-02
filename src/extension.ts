@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { WalkPlayerViewProvider } from './viewProvider';
 
 export function activate(context: vscode.ExtensionContext): void {
-  const provider = new WalkPlayerViewProvider(context.extensionUri);
+  const provider = new WalkPlayerViewProvider(context);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(WalkPlayerViewProvider.viewId, provider),

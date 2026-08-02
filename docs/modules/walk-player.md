@@ -21,10 +21,13 @@
 - Step 內顯示程式碼片段引用(snippet),語法高亮預覽並可點擊跳轉編輯器,語法高亮 theme 可由 `codewalk.snippetTheme` 設定 → [spec](../../openspec/specs/walk-player/spec.md)
 - Step 內顯示改動片段(diff),逐行以背景色與 `+`/`-` 標記字元呈現新增/刪除/context,同時顯示舊版與新版雙欄行號並套用語法高亮,點擊可跳轉編輯器 → [spec](../../openspec/specs/walk-player/spec.md)
 - 上述說明元件(annotation/reference/snippet/diff)依 `.codewalk.json` 的 `items` 陣列原始順序自由交錯顯示 → [spec](../../openspec/specs/walk-player/spec.md)
+- Quiz 作答紀錄:送出後留存該導讀最後一次的時間與結果(不寫入 `.codewalk.json`,存於 workspace 狀態),導讀列表顯示通過圖示、分數與相對時間,無紀錄不顯示;`ref` 變更(導讀重新產生)後舊紀錄失效;不阻擋重新走讀或重新作答 → [spec](../../openspec/specs/walk-player/spec.md)
+- 列表上每筆作答紀錄可透過 `⋮`「更多動作」選單清除,選單內「清除 Quiz 紀錄」文字明確、兩段式確認(點兩下才真的刪)避免誤觸,同時只有一份導讀的選單能展開 → [spec](../../openspec/specs/walk-player/spec.md)
+- 走讀畫面可隨時透過「返回列表」按鈕或 Esc 直接回到導讀選擇畫面,不需先走完全部步驟,也不會留下作答紀錄 → [spec](../../openspec/specs/walk-player/spec.md)
 
 ## 主要流程
 
-開啟面板 → 選擇 `.codewalk.json` → 逐步瀏覽(每步自動跳轉高亮程式碼)→ 走到最後一步 → 進入 Quiz 自測 → 顯示分數與(未達門檻時的)重走建議 → 可重新挑戰 Quiz / 重新走一次 / 回到導讀列表。
+開啟面板 → 選擇 `.codewalk.json` → 逐步瀏覽(每步自動跳轉高亮程式碼,可隨時返回列表)→ 走到最後一步 → 進入 Quiz 自測 → 顯示分數與(未達門檻時的)重走建議 → 可重新挑戰 Quiz / 重新走一次 / 回到導讀列表。
 
 ## 資料實體
 
@@ -40,6 +43,7 @@
 - Quiz 選擇題與結果頁尚未做視覺美化(目前是 vanilla TS 的陽春樣式),使用者已確認排入下一步待辦(2026-08-01)
 - schema 的 `startLine`/`endLine` 目前僅支援單行高亮(`startLine === endLine`),多行反白渲染邏輯尚未實作,欄位形狀已預留(2026-07-31)
 - 沒有 `@vscode/test-electron` 整合測試,MVP 階段刻意選擇手動驗證 checklist(design.md 決策 4),回頭條件:出現第二個貢獻者或手動測試單輪超過 ~15 分鐘
+- 作答紀錄存於 VS Code workspace 狀態,換機器、重裝 VS Code 或清除 extension 狀態即歸零,且無法手動編輯;導讀 `ref` 變更後舊紀錄不再顯示,但不做垃圾回收(殘留量級是每份導讀一筆、幾十 bytes,不值得處理)
 
 ## 變更歷史
 
@@ -47,3 +51,4 @@
 - 2026-08-01 `add-step-items` 新增 `CodewalkStep.items`:tip/pitfall/todo/reference/snippet 五種說明元件(discriminated union,依陣列順序交錯顯示),snippet 支援語法高亮預覽(highlight.js 官方色票,`codewalk.snippetTheme` 設定可選 10 種主題)與點擊跳轉編輯器
 - 2026-08-01 `quiz-option-explanations` 新增 `CodewalkQuizQuestion.optionExplanations`(選填字串陣列,索引對齊 `options`,長度不符即載入失敗):結果頁列出每個選項為什麼對/錯,答對與答錯的題目都會顯示,省略欄位時行為完全不變
 - 2026-08-01 `add-diff-item` 新增 `CodewalkItem` 第 6 種 kind `diff`:呈現既有檔案內一段程式碼的改動前後差異,逐行以背景色、`+`/`-` 標記字元、舊版/新版雙欄行號呈現新增/刪除/context 並套用語法高亮,點擊沿用既有跳轉機制;`diffText` 只存 hunk 本體,validator 要求至少一行加減行且 `oldStartLine` 為正整數;不新增 postMessage 協定訊息
+- 2026-08-03 `quiz-attempt-record` 新增 quiz 作答紀錄:送出後留存該導讀最後一次的時間與結果(存於 workspace 狀態,不寫入 `.codewalk.json`),導讀列表顯示過關圖示、分數、相對時間(無紀錄不顯示),`ref` 變更後舊紀錄自動失效;每筆紀錄可透過 `⋮`「更多動作」選單清除,選單內兩段式確認;不阻擋既有重走/重測流程。手動驗證階段一併補上走讀畫面的「返回列表」按鈕與 Esc 快捷鍵(既有 MVP 缺口),並歷經多輪修正列表項目 hover 對比度問題
