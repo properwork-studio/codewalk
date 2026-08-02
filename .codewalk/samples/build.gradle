@@ -1,0 +1,39 @@
+// 驗證 CodeWalk 語法高亮用的示範檔案——不參與建置。
+// 副檔名 .gradle 沒有 "groovy" 三個字,靠的是副檔名對應表把它導到 groovy 文法。
+
+plugins {
+    id 'java'
+    id 'groovy'
+}
+
+group = 'com.example.codewalk'
+version = '0.1.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.apache.groovy:groovy:4.0.21'
+    testImplementation 'org.spockframework:spock-core:2.3-groovy-4.0'
+}
+
+// GString 內插($ 開頭)與閉包是 Groovy 高亮最容易出錯的兩個地方
+ext.buildStamp = "${project.name}-${version}"
+
+tasks.register('printStamp') {
+    doLast {
+        def message = """
+            build : ${project.ext.buildStamp}
+            group : ${project.group}
+        """.stripIndent()
+        println message
+    }
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+    }
+}
