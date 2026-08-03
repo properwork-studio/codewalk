@@ -1,0 +1,736 @@
+{
+  "title": "CodeWalk 全專案導讀(詳細版):從 JSON 合約到側邊面板的一條龍",
+  "ref": "324251f802e4fcb64ab802e6de96641e4579e4ad",
+  "passThreshold": 4,
+  "steps": [
+    {
+      "title": "第 1 步:先看全貌——這個專案到底在做什麼",
+      "file": "README.md",
+      "startLine": 1,
+      "endLine": 5,
+      "narration": "CodeWalk 是一個 VS Code extension,做的事情只有一件:讀取目標 repo 裡 .codewalk/ 目錄下的 JSON 導讀檔,在側邊面板帶讀者一步一步走過程式碼——每走一步就自動開檔案、跳到指定行號、高亮那段範圍,面板同時顯示這一步的敘述、術語卡與說明元件,走完可以做 quiz 自測。整份專案的資料流可以用一句話記住:一份 JSON(合約)→ extension host 讀檔驗證(信任邊界)→ postMessage 送進 webview(唯一管道)→ webview 純前端渲染(禁碰 vscode API)。接下來 21 步就是沿著這條線走一遍。MVP 階段刻意「只播放、不產生」——產生導讀需要 AI 加上整個 repo 的脈絡,播放需要 UI 自由度,兩者混在一起會兩頭壞,所以產生器住在 harness 的 explain-change skill(或任何人手寫),extension 只認開放格式。",
+      "terms": [
+        {
+          "term": "extension host",
+          "explanation": "VS Code 跑 extension 程式碼的 Node.js 行程,擁有檔案系統與 vscode API 的完整權限。本專案的 src/ 目錄全部跑在這裡。"
+        },
+        {
+          "term": "webview",
+          "explanation": "VS Code 內嵌的一塊網頁畫面(本質是 iframe),與 extension host 是不同的執行環境,拿不到 vscode API,只能用 postMessage 跟 host 對話。本專案的 ui/ 目錄跑在這裡。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "tip",
+          "text": "把這 21 步當成四段來記:第 1-5 步是「合約與驗證」,第 6-13 步是 extension host 端,第 14-17 步是主題與高亮,第 18-21 步是 webview 端與打包。中途忘記自己在哪一層,就回頭看步驟標題的檔案路徑——src/ 是 host,ui/ 是 webview,shared/ 是兩邊共用。"
+        },
+        {
+          "kind": "reference",
+          "label": "VS Code Extension API 官方文件",
+          "url": "https://code.visualstudio.com/api"
+        }
+      ]
+    },
+    {
+      "title": "第 2 步:extension 怎麼在活動列佔一個位置(答案不是程式碼)",
+      "file": "package.json",
+      "startLine": 17,
+      "endLine": 35,
+      "narration": "很多人第一次寫 extension 會去找「註冊側邊欄圖示」的 API,但 VS Code 的 UI 貢獻幾乎全是宣告式的:contributes.viewsContainers 宣告活動列上那顆 CodeWalk 圖示,contributes.views 在那顆圖示底下掛一個 id 為 codewalk.playerView、type 為 webview 的面板。程式碼要做的只剩下「把一個 provider 綁到這個 id」。這個設計讓 VS Code 在完全沒有載入你的程式碼之前就知道該畫什麼 UI,也因此才有下面那個 lazy activation 的機制。注意整份 package.json 已經沒有 contributes.configuration——早期用來選 snippet 主題的 codewalk.snippetTheme 設定,在改成「自動跟隨編輯器主題」之後就整段移除了(見第 15 步)。",
+      "terms": [
+        {
+          "term": "contributes",
+          "explanation": "package.json 裡的宣告式擴充點,涵蓋指令、選單、設定、view、快捷鍵等。VS Code 啟動時只讀這段 JSON,不必執行 extension 的程式碼。"
+        },
+        {
+          "term": "webview view",
+          "explanation": "嵌在側邊欄面板裡的常駐 webview,跟用指令開出來的全螢幕 webview panel 不同——它由 WebviewViewProvider 提供內容,面板被收起再展開時可能會整個重建。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "pitfall",
+          "misconception": "activationEvents 是空陣列,代表這個 extension 永遠不會被啟動,或是會在 VS Code 開機時就無條件啟動。",
+          "reality": "兩者都不對。新版 VS Code 會從 contributes 自動推導啟動時機——因為宣告了 codewalk.playerView 這個 view,VS Code 會在使用者第一次展開該面板時才呼叫 activate(),也就是隱含的 onView 啟動事件,所以 activationEvents 不必手寫。"
+        },
+        {
+          "kind": "diff",
+          "label": "近期變更:engines 下限從 ^1.125.0 放寬到 ^1.90.0",
+          "file": "package.json",
+          "startLine": 9,
+          "endLine": 11,
+          "oldStartLine": 9,
+          "diffText": "   \"engines\": {\n-    \"vscode\": \"^1.125.0\"\n+    \"vscode\": \"^1.90.0\"\n   },\n"
+        },
+        {
+          "kind": "tip",
+          "text": "engines.vscode 是「最低相容版本」的宣告,不是編譯目標——降低它不會少拿到任何 API,只會讓落後幾個版本的 VS Code fork(如 Cursor)與舊環境也裝得起來。搭配 devDependencies 把 @types/vscode 釘成精確的 1.90.0,用了超出承諾範圍的新 API 時 tsc 會當場報錯。"
+        }
+      ]
+    },
+    {
+      "title": "第 3 步:整個專案唯一的對外合約——CodewalkFile 型別",
+      "file": "shared/schema.ts",
+      "startLine": 22,
+      "endLine": 46,
+      "narration": "這 20 幾行是整個產品最重要的東西:.codewalk.json 的格式定義。一份導讀檔就是 title(標題)、ref(釘住的 commit)、steps(步驟陣列)、quiz(自測題目),外加選填的 passThreshold(過關門檻)。每個 step 必備 title / file / startLine / endLine / narration,選填 terms(可收合術語卡)與 items(說明元件)。因為這是對外合約,任何欄位改名或刪除都等同破壞性 API 變更——別人 repo 裡放著的舊 JSON 會立刻壞掉,所以專案規則要求格式變更一律走 OpenSpec change 流程,而且定義只准住在這一個檔案裡。",
+      "terms": [
+        {
+          "term": "對外合約",
+          "explanation": "產品與外界(其他工具、其他人手寫的檔案)之間承諾不隨便改的介面。這裡是 JSON 的欄位結構,它的穩定性比內部程式碼的整潔更優先。"
+        },
+        {
+          "term": "discriminated union",
+          "explanation": "用一個共同欄位(這裡是 kind)區分不同形狀的物件所組成的聯集型別。TypeScript 能靠這個欄位在 switch 裡自動縮小型別,少寫型別斷言。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "CodewalkItem:六種說明元件的 discriminated union",
+          "file": "shared/schema.ts",
+          "startLine": 6,
+          "endLine": 20
+        },
+        {
+          "kind": "tip",
+          "text": "你正在讀的這一步下方那幾個彩色方塊,就是 items 的實際渲染結果:黃燈泡是 tip、紫框是 pitfall、圓圈是 todo、外連按鈕是 reference、有行號的程式碼區塊是 snippet、有加減行與雙欄行號的是 diff。整份導讀刻意把六種都用過至少兩次,方便你順便驗收播放器。"
+        },
+        {
+          "kind": "reference",
+          "label": "TypeScript 手冊:Discriminated Unions",
+          "url": "https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions"
+        }
+      ]
+    },
+    {
+      "title": "第 4 步:六種元件怎麼各驗各的——validateItem",
+      "file": "shared/schema.ts",
+      "startLine": 170,
+      "endLine": 228,
+      "narration": "validateItem() 用一個 switch 對 kind 窮舉六種元件,每種只檢查自己需要的欄位:tip 與 todo 共用同一條(都只有 text),pitfall 要 misconception 與 reality,reference 的 url 必須是合法的 http/https 網址,snippet 要 file 加行號範圍,diff 在 snippet 的基礎上再要求 oldStartLine 與「至少含一行加減行」的 diffText。落到 default 分支就是 kind 寫錯,直接列出六個合法值告訴作者。這裡值得注意的是 reference.url 是唯一做了語意驗證的欄位——因為那個字串最後會被送進 vscode.env.openExternal() 開啟,擋在入口比擋在使用點安全得多。",
+      "terms": [
+        {
+          "term": "窮舉",
+          "explanation": "把一個聯集型別的所有可能成員都處理過一遍。TypeScript 能在 switch 少寫一個 case 時透過型別收窄提醒你,是 discriminated union 最實用的好處。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "diff 的額外門檻:沒有任何加減行就不算 diff",
+          "file": "shared/schema.ts",
+          "startLine": 96,
+          "endLine": 107
+        },
+        {
+          "kind": "pitfall",
+          "misconception": "diffText 只要是非空字串就能通過驗證,反正畫出來讀者自己看得懂。",
+          "reality": "validator 額外要求至少一行以 + 或 - 開頭。一段完全沒有改動的內容在語意上是 snippet 而不是 diff,放行只會讓讀者看到一塊「宣稱是改動、卻什麼都沒改」的區塊。這條規則寫在 hasAtLeastOneChangedLine(),是 design.md 的明確決策。"
+        }
+      ]
+    },
+    {
+      "title": "第 5 步:為什麼要手寫一個 100 多行的 validator",
+      "file": "shared/schema.ts",
+      "startLine": 266,
+      "endLine": 307,
+      "narration": "validateCodewalk() 收一個 unknown,逐層檢查每個欄位,回傳的不是布林值而是一個 ValidationResult:成功時帶著已經收窄成 CodewalkFile 的 value,失敗時帶著一整串中文錯誤訊息(不是只回報第一個錯)。這個「錯誤全收集、不 fail-fast」的選擇是為了讓手寫 JSON 的作者一次看到所有問題。注意它完全沒有用 zod 之類的驗證套件——extension 的體積與相依性愈少愈好,而這份 schema 的形狀是穩定的,手寫的成本一次付清。最後那段 passThreshold 的檢查還會擋掉「門檻大於題數」這種寫不成立的設定。",
+      "terms": [
+        {
+          "term": "unknown",
+          "explanation": "TypeScript 中「不知道是什麼型別」的頂層型別。跟 any 不同的是,它強迫你先做檢查才能使用,正好適合當作外部資料進入系統的第一道型別。"
+        },
+        {
+          "term": "fail-fast",
+          "explanation": "遇到第一個錯誤就立刻中止的策略。對機器有效率,對「手寫檔案的人」很折磨——改完一個錯又冒出下一個。這裡刻意反過來做。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "pitfall",
+          "misconception": "既然 shared/schema.ts 已經用 TypeScript 定義了 CodewalkFile 介面,讀進來的 JSON 自然就是這個型別了,再驗一次是多餘的。",
+          "reality": "TypeScript 的型別在編譯後完全消失,執行期一點約束力都沒有。JSON.parse() 回來的東西可以是任何形狀,只要不驗證就會在使用時才炸掉(而且是在難以理解的地方炸)。這個 validator 就是型別系統與真實世界之間的那道關卡。"
+        },
+        {
+          "kind": "snippet",
+          "label": "過關門檻的預設值:沒寫就取簡單多數",
+          "file": "shared/schema.ts",
+          "startLine": 48,
+          "endLine": 54
+        }
+      ]
+    },
+    {
+      "title": "第 6 步:誰去讀那些 JSON——walkLoader",
+      "file": "src/walkLoader.ts",
+      "startLine": 31,
+      "endLine": 53,
+      "narration": "三個小函式各司其職:findCodewalkFiles() 掃 workspace 根目錄下的 .codewalk/,篩出 .codewalk.json 結尾的檔案並排序(所以面板上的列表順序等同檔名順序,而檔名帶日期前綴就自然按時間排);loadCodewalkFile() 讀檔、JSON.parse、丟給 validator;listWalkFiles() 為了做出面板上那份清單,會把每一份都讀進來解析一次,拿得到 title 就用 title、拿不到就退回檔名,順便用解析出來的 ref 去查這份導讀的最後作答紀錄。注意 readdir 失敗時直接回空陣列——沒有 .codewalk/ 目錄是完全正常的情況(讀者的 repo 可能根本沒建),不該被當成錯誤。",
+      "terms": [
+        {
+          "term": "workspace root",
+          "explanation": "VS Code 目前開啟的第一個工作資料夾的絕對路徑。本專案所有相對路徑(step 的 file 欄位)都以它為基準組合。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "todo",
+          "text": "listWalkFiles() 用序列 for 迴圈逐份 await:N 份導讀的延遲是 N 倍單份時間,而且每一份都完整讀檔加驗證只為了取出 title 與 ref。導讀數量一多(持續維護的專案很容易累積數十份)開面板就會卡。最便宜的第一步是改成 Promise.all 並行讀取——外部行為完全不變;要再進一步做部分解析或快取,就會碰到「列出符合 schema 的檔案」這條既有 requirement 的判定時機,得走 OpenSpec change。"
+        },
+        {
+          "kind": "snippet",
+          "label": "面板上的清單項目資料結構(WalkFileSummary)",
+          "file": "shared/protocol.ts",
+          "startLine": 10,
+          "endLine": 14
+        }
+      ]
+    },
+    {
+      "title": "第 7 步:extension 的入口 activate()",
+      "file": "src/extension.ts",
+      "startLine": 4,
+      "endLine": 15,
+      "narration": "整個 extension host 的進入點只有 12 行。它建立唯一一個 WalkPlayerViewProvider 實例、註冊給 package.json 宣告的 view id,再註冊三個指令:開啟導讀(其實只是把焦點移到面板)、下一步、上一步。全部塞進 context.subscriptions,VS Code 停用 extension 時會自動逐一 dispose。這種「入口極薄、邏輯全在 provider」的結構讓 activate() 本身不需要測試,真正的行為都在可以單獨檢視的模組裡。",
+      "terms": [
+        {
+          "term": "context.subscriptions",
+          "explanation": "extension 停用時要一併釋放的資源清單。註冊的指令、事件監聽、provider 都要放進來,否則 extension 重載時會殘留造成重複註冊。"
+        },
+        {
+          "term": "WebviewViewProvider",
+          "explanation": "VS Code 定義的介面,只要求實作一個 resolveWebviewView(),在面板第一次要顯示內容時被呼叫。本專案的 WalkPlayerViewProvider 就是它的實作。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "provider 的內部狀態:目前導讀、路徑、步數、漂移旗標、作答紀錄",
+          "file": "src/viewProvider.ts",
+          "startLine": 15,
+          "endLine": 27
+        },
+        {
+          "kind": "tip",
+          "text": "指令 codewalk.nextStep / codewalk.prevStep 存在,主要是為了讓使用者能在指令面板或自訂快捷鍵裡叫到它們;實際播放時方向鍵是由 webview 內部直接監聽的(見第 18 步),兩條路徑並存。"
+        }
+      ]
+    },
+    {
+      "title": "第 8 步:webview 的 HTML 是 host 手工組出來的(CSP 與 nonce)",
+      "file": "src/viewProvider.ts",
+      "startLine": 197,
+      "endLine": 219,
+      "narration": "getHtml() 回傳一整份 HTML 字串,是整個面板畫面的起點。這裡有三件事非做不可:一、所有資源路徑都要經過 webview.asWebviewUri() 轉換,因為 webview 的 origin 不是檔案系統,直接寫相對路徑一定 404;二、CSP 的 default-src 'none' 把預設全關掉,只放行來自 webview.cspSource 的樣式與字型,script 則必須帶對 nonce,這個 nonce 每次重繪都重新亂數產生;三、樣式表的載入順序有意義——codicon.css 必須排在 theme.css 前面,否則圖示尺寸的覆寫會輸掉 cascade。最後的 div#app 帶 tabindex=\"0\",是為了讓面板能接收鍵盤焦點,方向鍵導覽才會生效。",
+      "terms": [
+        {
+          "term": "CSP(Content Security Policy)",
+          "explanation": "瀏覽器層級的白名單機制,限制頁面能載入與執行哪些資源。VS Code 要求 webview 一律設定,以免 extension 顯示的內容被注入攻擊。"
+        },
+        {
+          "term": "nonce",
+          "explanation": "一次性的隨機字串。CSP 用它標記「這個 script 標籤是我自己放的」,攻擊者注入的 script 因為猜不到當次的 nonce 而無法執行。"
+        },
+        {
+          "term": "asWebviewUri",
+          "explanation": "把 extension 磁碟上的檔案路徑,轉換成 webview 這個特殊 origin 能夠載入的 URI。忘了轉換是新手最常見的「樣式沒生效」原因。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "pitfall",
+          "misconception": "webview 就是一個網頁,HTML 裡寫 <script src=\"./webview.js\"> 應該就能載入 dist 下的打包產物。",
+          "reality": "webview 跑在一個特殊的 vscode-webview:// origin 底下,相對路徑指向的位置跟你的 dist 目錄毫無關係,而且 localResourceRoots 還限定了可讀範圍。一定要 asWebviewUri() 轉換,而且要在 localResourceRoots 白名單內(這裡是 dist/)。"
+        },
+        {
+          "kind": "snippet",
+          "label": "resolveWebviewView:開 script、限定資源根目錄、掛主題監聽",
+          "file": "src/viewProvider.ts",
+          "startLine": 29,
+          "endLine": 42
+        },
+        {
+          "kind": "reference",
+          "label": "VS Code Webview API 指南(含 CSP 建議)",
+          "url": "https://code.visualstudio.com/api/extension-guides/webview"
+        }
+      ]
+    },
+    {
+      "title": "第 9 步:兩層之間唯一的管道——postMessage 協定",
+      "file": "shared/protocol.ts",
+      "startLine": 37,
+      "endLine": 65,
+      "narration": "host 與 webview 是兩個不同的執行環境,不能互相 import、不能共用記憶體,唯一的溝通方式是 postMessage 傳可序列化的物件。這個檔案把來回兩個方向的訊息都定義成 discriminated union:host 往 webview 送檔案清單、導讀載入、步驟變更、載入錯誤、跳轉錯誤、主題變更;webview 往 host 送就緒通知、選檔、上下一步、跳到某步、送出 quiz、開啟外部連結、跳到 snippet、清除作答紀錄。專案規則明訂這是「訊息型別的單一定義處」——想加一種互動,先來這裡加一個成員,兩邊的 TypeScript 就會同時告訴你哪裡還沒處理。",
+      "terms": [
+        {
+          "term": "postMessage",
+          "explanation": "跨執行環境傳訊息的標準機制,傳的物件會被結構化複製(等同序列化),所以不能帶函式、class 實例或循環參照。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "tip",
+          "text": "把兩個方向定義在同一個檔案的好處,是任何一次協定變更都會在同一個 diff 裡看到全貌;缺點是這個檔案會隨功能一直長。目前 15 種訊息,還遠沒到該拆的時候。"
+        },
+        {
+          "kind": "snippet",
+          "label": "webview 端取得傳訊句柄的唯一方式",
+          "file": "ui/main.ts",
+          "startLine": 25,
+          "endLine": 26
+        }
+      ]
+    },
+    {
+      "title": "第 10 步:host 不信任 webview 送來的任何東西",
+      "file": "shared/protocol.ts",
+      "startLine": 71,
+      "endLine": 101,
+      "narration": "parseWebviewToHostMessage() 是 host 端的守門員:收 unknown,用 switch 比對 type,逐一檢查該訊息需要的欄位型別,通過才回傳收窄後的訊息物件,不通過一律回 null(呼叫端直接忽略)。跟第 5 步的 schema validator 是同一種思路——凡是從外面進來的資料,型別標註不算數,要在執行期真的檢查過。這裡的「外面」是 webview:雖然那份 HTML 是我們自己組的,但它畢竟是渲染引擎裡的一段網頁,把它當作不可信輸入處理成本很低、風險降很多。",
+      "terms": [
+        {
+          "term": "信任邊界",
+          "explanation": "系統中「這一側的資料可以直接用、那一側必須先驗證」的分界線。本專案有兩條:JSON 檔案進 host、webview 訊息進 host。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "pitfall",
+          "misconception": "host 與 webview 共用同一份 TypeScript 型別定義,所以送過來的訊息一定符合 WebviewToHostMessage 的形狀,直接當成該型別用就好。",
+          "reality": "共用的只是編譯期的型別檔;訊息實際經過的是 postMessage 的序列化通道,抵達 onDidReceiveMessage 時只剩下 unknown。共用型別讓你「寫得對」,執行期驗證讓你「收得安全」,兩者缺一不可。"
+        },
+        {
+          "kind": "snippet",
+          "label": "呼叫端:先 parse,parse 失敗就直接 return",
+          "file": "src/viewProvider.ts",
+          "startLine": 52,
+          "endLine": 86
+        }
+      ]
+    },
+    {
+      "title": "第 11 步:載入一份導讀時,host 做了哪四件事",
+      "file": "src/viewProvider.ts",
+      "startLine": 132,
+      "endLine": 158,
+      "narration": "loadWalk() 是整個播放流程的樞紐,順序值得記住:一、載入並驗證檔案,不合格就只送 loadError、不改任何狀態;二、更新 provider 的內部狀態(currentWalk、currentWalkPath、stepIndex 歸零、refDrifted 先設 false);三、比對 git HEAD 與檔案裡釘住的 ref,算出是否漂移;四、把整份 walk、起始步數、漂移旗標與這一步需要的 snippet 預覽內容一次 post 給 webview,最後才觸發編輯器跳轉。這裡刻意讓 host 保有一份 stepIndex,是因為指令(第 7 步那兩個)可能在面板沒有焦點時被呼叫,host 必須自己知道走到哪。",
+      "terms": [
+        {
+          "term": "single source of truth",
+          "explanation": "同一份狀態只有一個權威來源。這裡是刻意的例外:host 與 webview 各有一份 stepIndex,靠訊息同步——代價是要小心兩邊不同步,換來的是兩條操作路徑都能用。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "tip",
+          "text": "驗證失敗時只送 loadError、完全不動 currentWalk,代表你選到一份壞掉的導讀時,原本正在走的那份不會被清掉——這是「錯誤處理不要破壞既有狀態」的小範例。"
+        },
+        {
+          "kind": "snippet",
+          "label": "setStep():把索引夾在合法範圍內,所以按到底不會爆",
+          "file": "src/viewProvider.ts",
+          "startLine": 165,
+          "endLine": 175
+        }
+      ]
+    },
+    {
+      "title": "第 12 步:ref 漂移偵測——衍生快照的自知之明",
+      "file": "src/refDrift.ts",
+      "startLine": 6,
+      "endLine": 17,
+      "narration": "整個檔案只有兩個函式:跑 git rev-parse HEAD 拿目前 commit,以及字串比對是否與導讀釘住的 ref 不同。簡單到近乎樸素,但它承載了一個重要的產品觀念:導讀是「衍生快照」,不是規格文件——它在某個 commit 上寫成,之後不維護、過期即刪,行為的真相永遠以 openspec/specs/ 為準。所以當 HEAD 與 ref 不同時,面板顯示的是一行「行號可能漂移」的警告,而不是拒絕播放。順帶一提:git 指令失敗(例如這個 workspace 根本不是 git repo)時回傳 null,呼叫端會當成「無法判斷,不警告」。",
+      "terms": [
+        {
+          "term": "衍生快照",
+          "explanation": "從某個時間點的程式碼衍生出來的產物,例如導讀、教材、簡報。它的正確性隨原始碼演進而衰減,因此該標日期、該過期就刪,不該被當成需要長期維護的文件。"
+        },
+        {
+          "term": "HEAD",
+          "explanation": "git 中指向目前所在 commit 的參照。rev-parse HEAD 會把它解析成完整的 40 位元 SHA。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "pitfall",
+          "misconception": "看到「行號可能漂移」的警告,代表這份導讀壞了、不該再往下走。",
+          "reality": "那只是提醒你行號是在另一個 commit 上量的,內容可能已經位移。導讀照樣能走完、quiz 照樣能做,只是遇到跳過去的程式碼跟敘述對不上時,你要知道原因出在哪。要驗證這個行為,把本檔案的 ref 欄位改成任意其他 40 字元 SHA、重新選一次導讀就會看到警告。"
+        },
+        {
+          "kind": "todo",
+          "text": "漂移偵測目前只做「相不相同」的布林判斷。要更聰明的話,可以用 git diff 比對兩個 commit 之間該檔案的行位移、自動修正行號——對長期維護的專案很有價值(導讀不會因為上游改了幾行就整份失準),但它會改變讀者可觀察的行為:跳轉位置不再等於 JSON 裡寫的 startLine。這是 design.md 明確排除過的複雜度,要做必須走 OpenSpec change,而且值得先跑 grill-me 壓實邊界:檔案被改名、內容大幅重寫、hunk 對不上時各該怎麼辦。"
+        }
+      ]
+    },
+    {
+      "title": "第 13 步:跳轉到程式碼——那個 preserveFocus 是關鍵",
+      "file": "src/fileJump.ts",
+      "startLine": 19,
+      "endLine": 36,
+      "narration": "jumpToStep() 先檢查檔案存不存在(不存在就回結構化錯誤,由面板顯示黃色警告、但不中斷導覽),存在才開檔、設定 selection、把範圍捲到畫面中央。兩個細節值得停下來看:showTextDocument 的 preserveFocus 設為 true,不搶走 CodeWalk 面板的鍵盤焦點——否則你按一次方向鍵跳轉後,焦點跑到編輯器,第二次按方向鍵就變成在移動游標了;endLine 用 Math.min 夾在檔案實際行數內,避免導讀寫的行號超出檔案長度時 lineAt() 直接丟例外。注意 vscode 是用動態 import 進來的,這樣「檔案不存在」這條分支才能在 Vitest 的 node 環境裡單獨測試。",
+      "terms": [
+        {
+          "term": "preserveFocus",
+          "explanation": "showTextDocument 的選項,決定開啟編輯器後鍵盤焦點要不要轉移過去。設 true 表示畫面切過去、但焦點留在原處。"
+        },
+        {
+          "term": "revealRange",
+          "explanation": "把編輯器捲動到指定範圍的 API。InCenter 表示盡量讓該範圍出現在畫面正中央,而不是勉強露出一行在邊緣。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "tip",
+          "text": "成功路徑需要真實的 vscode API,無法在 node 環境的 Vitest 裡驗證,所以走的是 design.md 訂的手動驗證 checklist。這是務實的取捨:不為了測試覆蓋率硬造一整層 vscode API 的假物件。"
+        },
+        {
+          "kind": "snippet",
+          "label": "(刻意示範)指向不存在的檔案,預覽區會顯示錯誤而不是卡住",
+          "file": "src/definitely-not-here.ts",
+          "startLine": 1,
+          "endLine": 3
+        }
+      ]
+    },
+    {
+      "title": "第 14 步:snippet 預覽——只讀「現在這一步」需要的內容",
+      "file": "src/snippetPreview.ts",
+      "startLine": 13,
+      "endLine": 31,
+      "narration": "你在導讀裡看到的那些程式碼區塊,內容不是 webview 自己讀的(它沒有檔案系統權限),而是 host 在每次 walkLoaded / stepChanged 時,只讀取「目前這一步」的 snippet 項目、切出指定行範圍、附上依副檔名判斷的語言字串,一起 post 過去。刻意不預讀整份導讀的所有 snippet,是為了避免一次載入時做大量無謂的磁碟 I/O;代價是每次換步驟都要重讀,但那只有幾個檔案、幾十行,幾乎無感。讀不到檔案時不丟例外,而是回一則帶訊息的失敗結果,讓面板顯示警告後繼續。注意 diff 元件不走這裡——它的內容直接寫在 JSON 的 diffText 裡,不需要回讀檔案。",
+      "terms": [
+        {
+          "term": "磁碟 I/O",
+          "explanation": "讀寫檔案的操作。相對於記憶體運算非常慢,因此「什麼時候讀、讀多少」是效能設計上第一個該想的事。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "pitfall",
+          "misconception": "snippet 的行號範圍寫錯(例如 endLine 超過檔案長度)會讓面板整個炸掉。",
+          "reality": "slice() 對超出範圍的索引只會少切幾行、不會丟例外,所以最糟的情況是預覽內容比預期短。真正的錯誤處理集中在「檔案不存在」這一條,回傳結構化的失敗結果而非例外。"
+        }
+      ]
+    },
+    {
+      "title": "第 15 步:副檔名怎麼變成語言——兩個檔案的隱形契約",
+      "file": "shared/language.ts",
+      "startLine": 1,
+      "endLine": 42,
+      "narration": "detectLanguage() 就是查一張表:副檔名對到 Shiki 的語言 id,查不到回 plaintext(不上色)。目前覆蓋 36 個副檔名、23 種語言,連 .kts 走 kotlin、.gradle 走 groovy、.h 併到 c 這種細節都處理了。真正的陷阱在檔案開頭那段註解:這張表的值必須是 ui/highlight.ts 有 import 進來的語言,漏一邊的話 snippet 會安靜地退回純文字——不報錯、不警告,只是沒有顏色,很難發現。因為 Shiki 的語言是靜態 import 的,無法從這張表動態產生,雙重維護消不掉,於是改用測試把兩邊綁在一起。",
+      "terms": [
+        {
+          "term": "Shiki",
+          "explanation": "以 VS Code 同一套 TextMate grammar 做語法高亮的函式庫,輸出帶顏色的 token 而非 HTML 字串。CodeWalk 從 highlight.js 換到它,是為了讓 snippet 的配色能跟讀者的編輯器主題一致。"
+        },
+        {
+          "term": "隱形契約",
+          "explanation": "兩處程式碼必須同步修改、但語言層面沒有任何機制強制的關係。最好的處理方式不是寫註解提醒,而是用測試讓它一旦違反就變紅。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "守門測試:對照表的每個語言都必須真的註冊過",
+          "file": "ui/highlight.test.ts",
+          "startLine": 17,
+          "endLine": 25
+        },
+        {
+          "kind": "tip",
+          "text": "這就是「rule of three」以外的另一種抽象判準:重複只有兩處、抽不掉,但漏改的代價是安靜失敗——那就用測試把契約釘住,比註解可靠得多。"
+        }
+      ]
+    },
+    {
+      "title": "第 16 步:讀者的編輯器主題,host 要自己去解析出來",
+      "file": "src/themeSource.ts",
+      "startLine": 26,
+      "endLine": 47,
+      "narration": "要讓 snippet 的配色跟讀者的編輯器一致,光靠 CSS 變數不夠——VS Code 沒有把「目前主題的 token 配色」開放給 extension 讀,所以只能自己動手:讀 workbench.colorTheme 設定拿到主題名稱,掃過所有已安裝 extension 的 contributes.themes 找出對應的定義檔,讀檔、解析(主題檔常是帶註解的 JSONC,還可能用 include 繼承別的主題),把 tokenColors 正規化後送給 webview。這條鏈上任何一環失敗都回傳 null,面板照常運作、只是配色退回 Shiki 內建的 dark-plus / light-plus。另一個細節藏在 name:每次解析都用遞增計數器產生新名字,因為 Shiki 的 loadTheme() 對同名主題重載是 no-op,沿用舊名字會讓「切換主題後重繪」整個失效。",
+      "terms": [
+        {
+          "term": "JSONC",
+          "explanation": "允許註解與尾隨逗號的 JSON 方言,VS Code 的設定檔與主題檔都用它。標準 JSON.parse() 會直接噴錯,所以本專案有一個 src/jsonc.ts 專門先把註解與尾逗號剝掉。"
+        },
+        {
+          "term": "no-op",
+          "explanation": "呼叫了但什麼也沒做的操作。這種「安靜地不生效」最難除錯——本專案是實測之後才發現 loadTheme() 對同名主題是 no-op,並把結論寫進註解留給後人。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "findThemeDefinition:掃過所有 extension,第一個命中就回傳",
+          "file": "src/themeParsing.ts",
+          "startLine": 93,
+          "endLine": 107
+        },
+        {
+          "kind": "pitfall",
+          "misconception": "workbench.colorTheme 設定的字串能唯一指向一個主題,所以在兩台機器(或 VS Code 與 Cursor)設成同一個名字,看到的顏色就會一樣。",
+          "reality": "那個設定存的是主題的顯示名稱,不含任何 extension 資訊。當兩個不同作者的 extension 都貢獻了同名主題(在 Cursor 上很常見——熱門主題的原作未必發佈到 Open VSX,使用者只好裝第三方重打包版),findThemeDefinition() 只能掃到哪個算哪個,色值自然不同。CodeWalk 本身全走 VS Code CSS 變數,拿到什麼畫什麼,行為是對的——但排查「兩邊顏色不一樣」時要先懷疑主題來源,而不是懷疑 extension。"
+        },
+        {
+          "kind": "reference",
+          "label": "VS Code 主題色彩參考(Theme Color)",
+          "url": "https://code.visualstudio.com/api/references/theme-color"
+        }
+      ]
+    },
+    {
+      "title": "第 17 步:高亮的降級鏈——寧可不上色,也不猜錯",
+      "file": "ui/highlight.ts",
+      "startLine": 115,
+      "endLine": 129,
+      "narration": "highlightSnippetLines() 把一段程式碼轉成逐行的 token 陣列,每個 token 帶著顏色與粗體斜體。它開頭那個 if 是整段的重點:高亮引擎還沒就緒(Shiki 初始化是非同步的),或這個語言沒註冊過,就回傳一整行的純文字 token。這是刻意的產品決策——猜錯的顏色比不上色更誤導讀者。webview 這端因此有兩次重繪:第一次先用純文字把內容顯示出來,引擎就緒後再補一次讓它換上顏色,讀者不會盯著空白等載入。fontStyle 那段位元運算則是沿用 vscode-textmate 的慣例:1 是斜體、2 是粗體。",
+      "terms": [
+        {
+          "term": "token",
+          "explanation": "語法高亮把程式碼切成的最小單位,例如一個關鍵字、一個字串、一段註解。每個 token 依它在文法中的角色被賦予顏色。"
+        },
+        {
+          "term": "位元遮罩",
+          "explanation": "把多個布林旗標塞進同一個整數的不同位元,用 & 運算取出。這裡 fontStyle & 1 判斷斜體、& 2 判斷粗體,一個數字帶多種樣式。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "把「語言有沒有註冊」開放給測試查詢",
+          "file": "ui/highlight.ts",
+          "startLine": 84,
+          "endLine": 91
+        },
+        {
+          "kind": "tip",
+          "text": "Shiki 用的是 JS regex 引擎而非 oniguruma WASM,體積小很多但不支援部分 oniguruma 專有語法。選用前有一支 scripts/compare-shiki-engines.mjs 逐一比對過 23 種 grammar 的 token 輸出,差異為 0——新增語言時應該重跑一次再決定引擎是否仍夠用。"
+        }
+      ]
+    },
+    {
+      "title": "第 18 步:跨進入 webview——一個沒有框架的渲染迴圈",
+      "file": "ui/main.ts",
+      "startLine": 71,
+      "endLine": 126,
+      "narration": "從這一步開始,我們在 webview 這一側,再也碰不到 vscode API。這裡沒有 React、沒有 Vue,render() 就是把 #app 清空、依目前畫面狀態呼叫對應的 render 函式、把回傳的 DOM 節點掛回去——五種畫面(檔案清單、錯誤、走讀中、quiz、quiz 結果)各一個分支。這種「整棵樹重繪」的作法在這個規模下完全夠用,而且省掉一整個框架的相依與打包體積。代價則要自己補:lastWalkingStepIndex 用來判斷這次重繪是不是真的換了步驟(否則展開一張術語卡也會整頁重播進場動畫),menuFocusPath 用來在重繪後把鍵盤焦點還給同一列的控制項(否則鍵盤操作者會被彈回文件最前面)。",
+      "terms": [
+        {
+          "term": "整棵樹重繪",
+          "explanation": "每次狀態變化都丟棄既有 DOM、重新建立一遍,而不是計算差異只改動到的部分。實作簡單、不易出錯,代價是失去 DOM 節點上的暫時狀態(如捲動位置、輸入焦點)。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "方向鍵導覽:直接在 webview 內監聽,不繞 VS Code 指令系統",
+          "file": "ui/main.ts",
+          "startLine": 287,
+          "endLine": 308
+        },
+        {
+          "kind": "tip",
+          "text": "webview 端按下一步時會先自己更新畫面、再送訊息給 host,不等 host 回覆——這叫樂觀更新(optimistic update),讓按方向鍵的手感是即時的。host 隨後送回的 stepChanged 會把兩邊校準回同一步。"
+        },
+        {
+          "kind": "reference",
+          "label": "MDN:Window postMessage",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage"
+        }
+      ]
+    },
+    {
+      "title": "第 19 步:導覽邏輯是一組不碰 DOM 的純函式",
+      "file": "ui/state.ts",
+      "startLine": 61,
+      "endLine": 96,
+      "narration": "上一步、下一步、展開術語,全部是「吃一個狀態、回一個新狀態」的純函式,完全不碰 DOM、不送訊息、不改參數。nextStep 用 Math.min 夾住上界、prevStep 用 Math.max 夾住下界——「已經在最後一步時按下一步不會報錯,只是留在原地」這個 spec scenario 的實作就是這一行。這種寫法的直接好處是可以在 Vitest 裡毫無準備地測試:不需要 jsdom、不需要假 vscode API,傳個物件進去比對回傳值就好,所以這個檔案是全專案測試覆蓋最完整的地方。",
+      "terms": [
+        {
+          "term": "純函式",
+          "explanation": "輸出只由輸入決定、且不產生任何外部影響(不改全域狀態、不寫檔、不碰 DOM)的函式。最容易測試也最容易推理。"
+        },
+        {
+          "term": "不可變更新",
+          "explanation": "不直接修改原本的物件,而是用展開運算子複製一份再改。這裡連 Set 都是 new Set(...) 複製後才增刪,避免不同狀態版本之間互相污染。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "對應的測試:直觀到不需要任何前置設定",
+          "file": "ui/state.test.ts",
+          "startLine": 34,
+          "endLine": 39
+        },
+        {
+          "kind": "tip",
+          "text": "cancelQuiz() 回到的是「最後一步」而不是第一步,restartWalk() 才是從頭走。兩個看起來相似的函式差在這一個索引,讀 state.ts 時值得對照著看。"
+        }
+      ]
+    },
+    {
+      "title": "第 20 步:六種說明元件怎麼被畫出來",
+      "file": "ui/render.ts",
+      "startLine": 314,
+      "endLine": 343,
+      "narration": "renderItems() 是一個對 kind 的 switch,六種元件各自對應一個建構函式,依陣列原始順序逐一 append——所以 JSON 裡 items 的排列順序就是畫面由上而下的順序,作者可以自由交錯,不會被重新分組。整份 render.ts 全部用 createElement 加 textContent 組 DOM,沒有任何字串樣板拼接。這不只是風格偏好:導讀 JSON 可能來自別人,把它的字串直接當 HTML 塞進去就是一個現成的注入漏洞。連語法高亮也不例外——Shiki 回傳的是 token 陣列而非 HTML 字串,appendTokens() 逐個建立 span 再設 textContent,整條路徑上沒有任何一處碰過 innerHTML。",
+      "terms": [
+        {
+          "term": "textContent 對 innerHTML",
+          "explanation": "textContent 把字串當純文字放進節點,標籤會原樣顯示;innerHTML 會把字串當 HTML 解析執行。處理外部內容時前者才安全。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "classifyDiffLines:一趟掃描同時算出新舊兩欄行號",
+          "file": "ui/render.ts",
+          "startLine": 255,
+          "endLine": 271
+        },
+        {
+          "kind": "pitfall",
+          "misconception": "diff 區塊左邊那兩欄行號,可以直接用陣列索引加上起始行號算出來。",
+          "reality": "新增行在舊檔不存在、刪除行在新檔不存在,兩欄的計數器必須各自獨立前進:遇到 + 只推進新檔行號、遇到 - 只推進舊檔行號、context 行兩邊一起走,不存在的那一欄留白。用單一索引推算,只要 hunk 裡有任何加減行,後面每一行的行號就全錯了。"
+        },
+        {
+          "kind": "tip",
+          "text": "圖示全部來自 @vscode/codicons,也就是 VS Code 自己用的那套字型圖示,所以面板的視覺會自然融進編輯器,不會有「外掛感」。"
+        },
+        {
+          "kind": "reference",
+          "label": "VS Code Codicons 圖示清單",
+          "url": "https://microsoft.github.io/vscode-codicons/dist/codicon.html"
+        }
+      ]
+    },
+    {
+      "title": "第 21 步:作答紀錄與打包——最後兩塊拼圖",
+      "file": "src/attemptStore.ts",
+      "startLine": 62,
+      "endLine": 76,
+      "narration": "送出 quiz 後,分數會存進 workspaceState(VS Code 提供的、跟著這個工作區走的鍵值儲存),下次打開導讀列表就能看到「4/5 14 小時前」這樣的紀錄。這裡最值得看的是 get() 開頭那個 ref 比對:紀錄裡存的 ref 與導讀檔案目前的 ref 不同時,直接視同沒有紀錄。因為導讀重新產生後題目可能整套換過,拿舊分數對新題目是誤導。留存失敗也不會打斷讀者——record() 的呼叫端整段包在 try/catch 裡,作答紀錄是輔助功能,不該讓它的失敗影響已經完成的作答。最後是打包:esbuild 打兩包(host 端 CJS、webview 端 IIFE),把 theme.css 與 codicons 複製到 dist,vsce 再把 dist 連同 package.json 封成 VSIX。走完了——按下方的按鈕開始 quiz 吧。",
+      "terms": [
+        {
+          "term": "workspaceState",
+          "explanation": "VS Code 給 extension 用的持久化儲存,綁在目前工作區。換一個 repo 就是另一份資料,也因此 VS Code 與 Cursor 各自獨立、不互通。"
+        },
+        {
+          "term": "IIFE",
+          "explanation": "立即執行函式運算式。webview 端打包成這種格式,載入即執行、不需要模組載入器,配合 CSP 的 nonce 用一個 script 標籤就搞定。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "esbuild 打兩包:平台、格式、external 都不同",
+          "file": "esbuild.js",
+          "startLine": 18,
+          "endLine": 45
+        },
+        {
+          "kind": "diff",
+          "label": "近期變更:.vscodeignore 的 glob 原本只匹配根目錄",
+          "file": ".vscodeignore",
+          "startLine": 12,
+          "endLine": 13,
+          "oldStartLine": 12,
+          "diffText": "-*.test.ts\n-*.map\n+**/*.test.ts\n+**/*.map\n"
+        },
+        {
+          "kind": "tip",
+          "text": "上面這個 diff 的檔案沒有副檔名,detectLanguage() 查不到就回 plaintext——所以它是灰的。這正是第 17 步說的降級行為:寧可不上色,也不猜錯。"
+        },
+        {
+          "kind": "todo",
+          "text": "dist/webview.js 目前約 2.5 MB,絕大多數是 Shiki 的 23 份 grammar。真要瘦身可以改成動態 import 按需載入語言,但那會讓「第一次顯示某語言的 snippet」多一次非同步等待,得先確認值不值得。另外 package.json 還缺 repository 欄位與 LICENSE 檔,vsce 每次打包都會警告——本地安裝無妨,上架前要補。"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "question": "webview 送出的 { type: 'jumpToStep', stepIndex: 3 } 訊息,在 host 端到達 handleMessage 時的實際型別是什麼?為什麼需要 parseWebviewToHostMessage()?",
+      "options": [
+        "已經是 WebviewToHostMessage——兩邊共用 shared/protocol.ts 的型別定義,parse 只是為了寫起來順手",
+        "是 unknown——TypeScript 型別在編譯後消失,訊息經過序列化通道後只剩執行期資料,必須實際檢查欄位才能安全使用",
+        "是 string——postMessage 只能傳字串,parse 的工作其實是 JSON.parse",
+        "是 any——VS Code 會自動依 view id 對應的型別做轉換,parse 只是額外的保險"
+      ],
+      "correctIndex": 1,
+      "optionExplanations": [
+        "錯:共用型別只在編譯期存在,postMessage 經過結構化複製後,執行期看到的只是 unknown,不會自動變回該型別。",
+        "對:TypeScript 型別標註編譯後消失,onDidReceiveMessage 收到的是 unknown,必須靠 parseWebviewToHostMessage() 實際檢查每個欄位才能安全使用。",
+        "錯:postMessage 傳的是可序列化的物件(結構化複製),不是限定字串;webview 端本就是直接送物件過去,不存在 JSON.parse 這一步。",
+        "錯:VS Code 不會替訊息做型別轉換,view id 只決定 webview 顯示什麼內容,跟訊息的執行期型別無關。"
+      ]
+    },
+    {
+      "question": "src/fileJump.ts 的 showTextDocument 若把 preserveFocus 從 true 改成 false,使用者會遇到什麼具體症狀?",
+      "options": [
+        "編輯器不會捲動到目標行號,必須手動尋找",
+        "面板會顯示「找不到檔案」的警告,因為焦點轉移打斷了開檔流程",
+        "第一次跳轉後焦點落在編輯器,再按方向鍵會變成移動游標,連續走步驟的快捷鍵失效",
+        "程式碼範圍不會被高亮,只會把游標移到起始行"
+      ],
+      "correctIndex": 2,
+      "optionExplanations": [
+        "錯:revealRange() 與 selection 設定不受 preserveFocus 影響,捲動與高亮照常發生——preserveFocus 只決定鍵盤焦點停在哪。",
+        "錯:preserveFocus 不影響檔案是否存在的判斷,「找不到檔案」的分支在 existsSync() 檢查就已經決定,跟焦點轉移無關。",
+        "對:preserveFocus 為 false 時,showTextDocument() 會把鍵盤焦點轉移到編輯器,CodeWalk 面板失去焦點後,webview 內監聽的方向鍵事件就再也收不到,快捷鍵形同失效。",
+        "錯:高亮(selection/revealRange)在焦點轉移前就已經設定完成,不受 preserveFocus 影響。"
+      ]
+    },
+    {
+      "question": "在 shared/language.ts 的對照表新增一個副檔名、對到某個尚未在 ui/highlight.ts import 的語言,會發生什麼事?",
+      "options": [
+        "載入導讀時 validator 會擋下來,顯示「不支援的語言」錯誤訊息",
+        "Shiki 會自動下載並註冊該語言的 grammar,只是第一次顯示會慢一點",
+        "snippet 安靜地退回純文字顯示、不報錯也不警告,但 ui/highlight.test.ts 的守門測試會失敗",
+        "webview 會拋出未捕捉的例外,整個面板變成空白"
+      ],
+      "correctIndex": 2,
+      "optionExplanations": [
+        "錯:validator 只驗 .codewalk.json 的格式,完全不認識語言對照表,語言支援與否跟載入驗證是兩回事。",
+        "錯:Shiki 在本專案是靜態 import 全部 grammar 後打包進 dist,沒有任何動態下載機制,webview 也沒有對外網路權限(CSP default-src 'none')。",
+        "對:highlightSnippetLines() 發現語言未註冊就回傳純文字 token,不報錯——正因為這種安靜失敗難以察覺,才有那支把對照表與註冊清單綁在一起的測試,漏一邊就變紅。",
+        "錯:未支援語言是預期內的降級路徑(plainTextLines),不是例外情況,不會讓畫面崩潰。"
+      ]
+    },
+    {
+      "question": "一個 diff 元件的 diffText 依序是「context、+、+、-、context」五行,oldStartLine 是 10、startLine 是 12。第五行(最後那個 context)左右兩欄會顯示什麼行號?",
+      "options": [
+        "舊 12、新 15",
+        "舊 14、新 16",
+        "舊 11、新 13",
+        "舊 15、新 15"
+      ],
+      "correctIndex": 0,
+      "optionExplanations": [
+        "對:兩欄各自獨立推進。舊檔計數器從 10 起:第 1 行 context 取 10、兩個新增行不推進、刪除行取 11、最後的 context 取 12。新檔計數器從 12 起:第 1 行 context 取 12、兩個新增行取 13 與 14、刪除行不推進、最後的 context 取 15。",
+        "錯:這是把兩欄都當成從各自起點連續加一的結果。新增行在舊檔並不存在、刪除行在新檔並不存在,不區分行的類型就會多算——只要 hunk 裡有任何加減行,後面每一行的行號都會錯。",
+        "錯:這是只把 context 行計入、加減行完全跳過的結果。實際上加減行仍佔用各自那一側的行號(新增行佔新檔一行、刪除行佔舊檔一行),只是另一欄留白。",
+        "錯:diff 呈現的正是新舊兩套座標,有加減行時兩欄必然不同;若永遠相同,就沒有做成雙欄的必要了。"
+      ]
+    },
+    {
+      "question": "面板顯示「目前 commit 與導讀釘住的版本不同,行號可能漂移」時,系統的行為與這個設計背後的理由是什麼?",
+      "options": [
+        "中止載入並要求讀者切換到 ref 指定的 commit,因為行號對不上時導讀內容會誤導",
+        "自動用 git diff 比對兩個 commit、修正所有 step 的行號後繼續播放",
+        "只顯示警告、導讀照常可以走完與作答,因為導讀是衍生快照——不維護、過期即刪,行為的真相以 openspec/specs/ 為準",
+        "改用檔案內容比對取代行號定位,警告只是告知已切換定位方式"
+      ],
+      "correctIndex": 2,
+      "optionExplanations": [
+        "錯:isRefDrifted() 只影響要不要顯示警告,loadWalk() 從不因為漂移而中止載入或阻擋讀者往下走。",
+        "錯:refDrift.ts 只做「相不相同」的布林比對,完全沒有呼叫 git diff 或做任何行號修正,那屬於 design.md 明確排除的複雜度(第 12 步的 todo 有記下要做的話該怎麼評估)。",
+        "對:導讀是衍生快照,產出後不維護、過期即刪;漂移警告只是提醒行號可能對不上,讀者仍可繼續瀏覽與作答,行為的權威來源永遠是 openspec/specs/。",
+        "錯:定位方式沒有切換,jumpToStep() 全程仍用 startLine/endLine 這組行號座標,警告只是附加提示,不改變底層機制。"
+      ]
+    }
+  ]
+}
