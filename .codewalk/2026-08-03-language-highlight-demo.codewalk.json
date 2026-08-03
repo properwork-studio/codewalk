@@ -7,11 +7,11 @@
       "file": ".codewalk/samples/Greeter.java",
       "startLine": 10,
       "endLine": 40,
-      "narration": "Java 高亮最值得盯的不是關鍵字顏色,而是 text block(三引號跨行字串)。highlight.js 對整段程式碼輸出一整塊 HTML,跨行的 <span> 沒辦法直接用換行切開;splitHighlightedLines() 會在換行處補上結束標籤、下一行開頭再重開。下面第一個 snippet 就是刻意挑的跨行字串——請確認第 14、15 行是字串色,而第 18 行的 private final 有回到正常的關鍵字色,沒有被字串色吃掉。",
+      "narration": "Java 高亮最值得盯的不是關鍵字顏色,而是 text block(三引號跨行字串)。Shiki 的 codeToTokens() 原生依行輸出 token(不像先前的 highlight.js 需要輸出一整塊 HTML、再手動追蹤標籤堆疊把跨行 <span> 切開),理論上不會有樣式洩漏的問題——但這正適合拿真實案例驗證。下面第一個 snippet 就是刻意挑的跨行字串——請確認第 14、15 行是字串色,而第 18 行的 private final 有回到正常的關鍵字色,沒有被字串色吃掉。",
       "terms": [
         {
           "term": "text block",
-          "explanation": "Java 15 起的三引號跨行字串語法,內容會自動去掉共同縮排。對語法高亮來說它是一個橫跨多行的 token,是逐行切行邏輯最容易出錯的地方。"
+          "explanation": "Java 15 起的三引號跨行字串語法,內容會自動去掉共同縮排。對語法高亮來說它是一個橫跨多行的 token,是驗證「跨行內容不會把顏色洩漏到下一行」的最佳案例。"
         }
       ],
       "items": [
@@ -74,8 +74,8 @@
         },
         {
           "kind": "reference",
-          "label": "highlight.js 支援語言總表(想再加語言時對照這裡)",
-          "url": "https://github.com/highlightjs/highlight.js/blob/main/SUPPORTED_LANGUAGES.md"
+          "label": "Shiki 支援語言總表(想再加語言時對照這裡)",
+          "url": "https://shiki.style/languages"
         }
       ]
     },
@@ -105,11 +105,11 @@
       "file": "shared/language.ts",
       "startLine": 13,
       "endLine": 33,
-      "narration": "語言支援拆成兩半:shared/language.ts 決定「副檔名 → 語言名」,ui/highlight.ts 決定「哪些語言的文法被載進 bundle」。兩邊少一邊都會安靜地退回純文字而不報錯,所以測試裡加了一條把兩者綁在一起的不變式。下面的 diff 是這次對應表的實際改動——順帶也在驗證 diff 元件本身的 TypeScript 高亮。",
+      "narration": "語言支援拆成兩半:shared/language.ts 決定「副檔名 → 語言名」,ui/highlight.ts 決定「哪些語言的文法真的被載進 bundle」。兩邊少一邊都會安靜地退回純文字而不報錯,所以測試裡加了一條把兩者綁在一起的不變式(isLanguageSupported() 對照 EXTENSION_LANGUAGE 的每個值)。下面的 diff 是當初那次語言擴充對副檔名對應表的實際改動;下面的 snippet 則是現在(換成 Shiki 之後)ui/highlight.ts 對應的語言清單。",
       "terms": [
         {
           "term": "退回純文字",
-          "explanation": "highlightSnippet() 遇到沒註冊的語言時不會呼叫 highlightAuto 去猜,而是直接輸出逃脫過的純文字——猜錯顏色比不上色更容易誤導讀者。"
+          "explanation": "highlightSnippetLines() 遇到沒註冊的語言時不會嘗試自動偵測語言,而是直接輸出未上色的純文字——猜錯顏色比不上色更容易誤導讀者。"
         }
       ],
       "items": [
@@ -124,14 +124,14 @@
         },
         {
           "kind": "snippet",
-          "label": "另一半:ui/highlight.ts 的語言註冊",
+          "label": "另一半:ui/highlight.ts 的 LANGS 清單(哪些語言的文法真的被載進 bundle)",
           "file": "ui/highlight.ts",
-          "startLine": 26,
-          "endLine": 48
+          "startLine": 34,
+          "endLine": 37
         },
         {
           "kind": "todo",
-          "text": "本次未涵蓋的語言(Objective-C、Elixir、Terraform HCL 等)先不加,等實際有讀者導讀到那些 repo 再補——每加一個語言 bundle 就多 4~20KB。"
+          "text": "本次未涵蓋的語言(Objective-C、Elixir、Terraform HCL 等)先不加,等實際有讀者導讀到那些 repo 再補。換成 Shiki 後每個語言的 grammar 檔案大小差異頗大(Dart 約 10KB,TypeScript 這類大型 grammar 未壓縮近 200KB),加新語言前建議先實測。"
         }
       ]
     }
@@ -155,13 +155,13 @@
       "question": "如果 snippet 引用了一個副檔名沒被支援的檔案(例如 .erl),畫面上會發生什麼事?",
       "options": [
         "顯示逃脫過的純文字,不上色也不報錯",
-        "highlight.js 自動猜測語言並盡量上色",
+        "系統自動猜測語言並盡量上色",
         "snippet 區塊顯示錯誤訊息,無法展開"
       ],
       "correctIndex": 0,
       "optionExplanations": [
-        "正解。刻意不猜——猜錯的顏色比沒有顏色更容易誤導讀者。",
-        "highlightAuto 是刻意不用的:自動猜測在短片段上準確率低。",
+        "正解。系統刻意不猜——猜錯的顏色比沒有顏色更容易誤導讀者。",
+        "自動偵測是刻意不用的:短片段上的自動判斷準確率低,錯誤的高亮比不上色更誤導人。",
         "錯誤訊息只保留給「找不到檔案」的情況,語言不支援不算錯誤。"
       ]
     },
@@ -175,8 +175,8 @@
       "correctIndex": 2,
       "optionExplanations": [
         "兩邊只用字串相連,型別系統看不出關聯。",
-        "hljs.getLanguage() 找不到語言時回傳 undefined,程式碼會走到純文字分支,不會丟例外。",
-        "正解。正因為失敗是無聲的,測試才加了一條「EXTENSION_LANGUAGE 的每個值都必須被 hljs 認得」的不變式。"
+        "isLanguageSupported() 找不到語言時回傳 false,程式碼會走到純文字分支,不會丟例外。",
+        "正解。正因為失敗是無聲的,測試才加了一條「EXTENSION_LANGUAGE 的每個值都必須被高亮引擎認得」的不變式。"
       ]
     }
   ]
