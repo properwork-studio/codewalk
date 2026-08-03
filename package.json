@@ -7,7 +7,7 @@
   "publisher": "codewalk-local",
   "license": "UNLICENSED",
   "engines": {
-    "vscode": "^1.125.0"
+    "vscode": "^1.90.0"
   },
   "categories": [
     "Other"
@@ -55,14 +55,14 @@
     "watch": "node esbuild.js --watch",
     "build": "node esbuild.js",
     "vscode:prepublish": "node esbuild.js --production",
-    "package": "vsce package --out codewalk.vsix",
+    "package": "vsce package --no-dependencies --out codewalk.vsix",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
-    "@types/vscode": "^1.125.0",
+    "@types/vscode": "1.90.0",
     "@vscode/codicons": "0.0.46-24",
     "@vscode/vsce": "^3.9.2",
     "esbuild": "^0.24.0",
