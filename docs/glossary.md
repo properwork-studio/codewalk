@@ -9,8 +9,8 @@
   - **pitfall**:「容易誤解成 X,其實是 Y」的警示。結構化雙欄位(非單一 text):`{ kind: 'pitfall'; misconception: string; reality: string }`。視覺語言與系統層級的 refDrift/stepJump 警告(`codewalk-warning`)刻意區隔,避免讀者誤認成系統錯誤。
   - **todo**:標出「這段行為未來可能會變」的提醒。`{ kind: 'todo'; text: string }`
   - **reference**:外部連結(官方文件/RFC/issue)。`{ kind: 'reference'; label: string; url: string }`,`url` 需通過 http/https 合法格式驗證。
-  - **snippet**:額外引用另一段相關程式碼(如「呼叫端在這裡」)。`{ kind: 'snippet'; label: string; file: string; startLine: number; endLine: number }`。面板上預設展開預覽實際程式碼內容(highlight.js 高亮,依深/淺色模式切換固定 theme);點擊會重用既有 jumpToLocation 機制跳轉編輯器,不記錄「正在查看 snippet」的額外狀態。
-  - **diff**:呈現既有檔案內一段程式碼「改了什麼」的說明元件(前後差異對照),用於區塊性改動——整檔新增或整檔刪除不適用,應改用 `snippet`(整檔新增)或文字說明(整檔刪除)。`{ kind: 'diff'; label: string; file: string; startLine: number; endLine: number; diffText: string }`。`diffText` 只存 diff 的 hunk 本體(不含 `diff --git`/`---`/`+++`/`@@ @@` 等檔頭行),逐行依開頭字元(`+`/`-`/空白)判斷新增/刪除/context,驗證階段要求至少一行加減行(否則不算 diff,退化情境應改用 `snippet`)。`startLine`/`endLine` 一律代表**新版(現在檔案)**的行號範圍,供點擊跳轉使用,與舊版行號無關;純刪除 hunk 時兩者相同,指向刪除位置在新版檔案中的插入點。渲染時依每行開頭字元疊加紅/綠背景色,並重用 highlight.js 對去除開頭字元後的內容做語法高亮(共用 `codewalk.snippetTheme`)。點擊行為與 `snippet` 完全相同,跳轉編輯器、不額外記錄狀態。
+  - **snippet**:額外引用另一段相關程式碼(如「呼叫端在這裡」)。`{ kind: 'snippet'; label: string; file: string; startLine: number; endLine: number }`。面板上預設展開預覽實際程式碼內容(Shiki 高亮,配色跟隨讀者當前的 VS Code 主題,無法解析時降級為內建的 dark-plus/light-plus,依編輯器深/淺色選用);點擊會重用既有 jumpToLocation 機制跳轉編輯器,不記錄「正在查看 snippet」的額外狀態。
+  - **diff**:呈現既有檔案內一段程式碼「改了什麼」的說明元件(前後差異對照),用於區塊性改動——整檔新增或整檔刪除不適用,應改用 `snippet`(整檔新增)或文字說明(整檔刪除)。`{ kind: 'diff'; label: string; file: string; startLine: number; endLine: number; diffText: string }`。`diffText` 只存 diff 的 hunk 本體(不含 `diff --git`/`---`/`+++`/`@@ @@` 等檔頭行),逐行依開頭字元(`+`/`-`/空白)判斷新增/刪除/context,驗證階段要求至少一行加減行(否則不算 diff,退化情境應改用 `snippet`)。`startLine`/`endLine` 一律代表**新版(現在檔案)**的行號範圍,供點擊跳轉使用,與舊版行號無關;純刪除 hunk 時兩者相同,指向刪除位置在新版檔案中的插入點。渲染時依每行開頭字元疊加紅/綠背景色,並重用 Shiki 對去除開頭字元後的內容做語法高亮(配色來源與 snippet 相同,跟隨編輯器主題)。點擊行為與 `snippet` 完全相同,跳轉編輯器、不額外記錄狀態。
 
 ## 作答紀錄(attempt record)
 
