@@ -18,4 +18,13 @@
 - **導讀列表載入不是效能問題,不再重開**(2026-08-04 實測,`Promise.all` 並行版):5 份 0.37 ms、50 份 2.4 ms、100 份 4.8 ms、500 份 25 ms——100 份仍低於一個 60fps 影格,讀者感知不到。衍生三條:
   - **不做部分解析**:`validateCodewalk` 只花 0.005 ms(是 `JSON.parse` 0.027 ms 的 1/5),且 title/ref 本來就得 parse 才拿得到。完全跳過驗證的理論上限是省 6%(50 份省 0.15 ms)——不值得動搖 spec 「列出符合 schema 的檔案」的判定時機
   - **不做列表快取**:會憑空生出「改了檔案後列表多久更新」這個新的可觀察行為,換取本來就不存在的收益
-  - **真要查開面板變慢,先看 `dist/webview.js`**(2.6 MB,Shiki 帶 30+ 語言),它比 `listWalkFiles` 高一到兩個數量級
+  - **真要查開面板變慢,先看 `dist/webview.js`**(2.6 MB,Shiki 帶 30+ 語言),它比 `listWalkFiles` 高一到兩個數量級——已查,見下條
+
+- **webview bundle 已查過,結論如下(2026-08-04 實測)**——`dist/webview.js` 2.6 MB 的組成、成本與可行手段都已量過,不必重新調查;目前**決定不動**:
+  - **組成**:Shiki 語言 grammar 佔 **92.2%**(2374 KB),Shiki 核心+regex 引擎 4.7%,自家 `ui/`+`shared/` 只有 21 KB(0.8%)。`ui/highlight.ts` 宣告 23 個語言,bundle 內實際有 **33 個** grammar(多出 `cpp-macro`、`glsl`、`jsx`、`tsx`、`graphql`、`haml`、`lua`、`regexp`、`shellscript`、`xml` 等傳遞相依)
+  - **主因是 `ruby`**:`ruby.mjs` import `cpp.mjs`(489 KB),`cpp` 再拉 `cpp-macro`(278 KB)與 `glsl`——**一個 Ruby 帶進整包的 30%**。注意「只砍 cpp」或「砍 cpp+c」完全無效(bundle 仍 2553 KB),ruby 會把它拉回來
+  - **各語言集實測**(bundle / `createHighlighterCore` / 到首次上色):23 全部 2553 KB / 78 ms / 173 ms;僅去 ruby 2122 KB / **31 ms** / 125 ms;去 ruby+cpp+c 1274 KB / 24 ms / 114 ms;13 常見 920 KB / 14 ms / 101 ms;8 核心 742 KB / 9 ms / 97 ms
+  - **嚴重度低於帳面**:高亮**不擋首次繪製**——`ui/main.ts` 的 `onHighlightReady` 是就緒後補一次重繪,snippet 在那之前已以純文字顯示。症狀是「程式碼先無色、約 170 ms 後上色」的閃動,不是面板延遲出現
+  - **約 71 ms 砍不掉**:首次 `codeToTokens` 要編譯 TypeScript grammar 的 regex,與註冊幾個語言無關(上列五組全是 71 ms 上下)。所以 173 ms 的最佳情況只到約 97 ms;穩定後每次 `codeToTokens` 僅 0.17 ms
+  - **`@shikijs/langs-precompiled` + `createJavaScriptRawEngine` 已排除**:反而更糟——模組求值 25 ms → **208 ms**(巨大 precompiled regex 實字在求值時全部編譯),總計 336 ms vs 177 ms,bundle 還從 2553 KB 漲到 2775 KB
+  - **未定**:要不要縮減支援語言清單。真正的分水嶺在 13 個常見語言,而 `dart`/`groovy`/`scala`/`kotlin`/`swift` 值不值得留是**產品決策**。且動 `shared/language.ts` 的副檔名對應會命中 syntax-highlighting spec 的「依檔案副檔名判定語言」requirement,是可觀察行為變更,**必須走 change,不是小改**
