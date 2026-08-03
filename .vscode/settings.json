@@ -1,5 +1,4 @@
 {
   "editor.fontFamily": "Fira Code, Menlo NF, monospace",
-  "workbench.colorTheme": "Nightfox",
-  "codewalk.snippetTheme": "material-palenight"
+  "workbench.colorTheme": "Nightfox"
 }
