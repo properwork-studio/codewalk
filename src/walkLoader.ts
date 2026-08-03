@@ -34,20 +34,21 @@ export async function listWalkFiles(
   getAttempt?: (filePath: string, ref: string) => AttemptSummary | undefined,
 ): Promise<WalkFileSummary[]> {
   const filePaths = await findCodewalkFiles(workspaceRoot);
-  const summaries: WalkFileSummary[] = [];
-  for (const filePath of filePaths) {
-    const result = await loadCodewalkFile(filePath);
-    const summary: WalkFileSummary = {
-      path: filePath,
-      title: result.valid ? result.value.title : basename(filePath),
-    };
-    if (result.valid && getAttempt) {
-      const lastAttempt = getAttempt(filePath, result.value.ref);
-      if (lastAttempt) {
-        summary.lastAttempt = lastAttempt;
+  // 並行讀取:Promise.all 保證回傳順序等同 filePaths,與檔案讀完的先後無關
+  return Promise.all(
+    filePaths.map(async (filePath) => {
+      const result = await loadCodewalkFile(filePath);
+      const summary: WalkFileSummary = {
+        path: filePath,
+        title: result.valid ? result.value.title : basename(filePath),
+      };
+      if (result.valid && getAttempt) {
+        const lastAttempt = getAttempt(filePath, result.value.ref);
+        if (lastAttempt) {
+          summary.lastAttempt = lastAttempt;
+        }
       }
-    }
-    summaries.push(summary);
-  }
-  return summaries;
+      return summary;
+    }),
+  );
 }
