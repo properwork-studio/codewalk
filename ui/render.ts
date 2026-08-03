@@ -1,7 +1,7 @@
 import { detectLanguage } from '../shared/language';
 import type { AttemptSummary, SnippetPreviewResult, WalkFileSummary } from '../shared/protocol';
 import type { CodewalkItem, CodewalkQuizQuestion } from '../shared/schema';
-import { highlightSnippetLines } from './highlight';
+import { highlightSnippetLines, type HighlightToken } from './highlight';
 import { formatAbsoluteDateTime, formatRelativeTime } from './relativeTime';
 import { isAtLastStep, type QuizResult, type QuizState, type WalkingState } from './state';
 
@@ -169,18 +169,37 @@ function renderReference(label: string, url: string, onOpenReference: (url: stri
   return button;
 }
 
+/**
+ * 用 textContent(非 innerHTML)逐一附加 token,不需要跳脫 HTML——Shiki 回傳
+ * 結構化 token 而非 HTML 字串,天然沒有注入疑慮。空行(無 token 或內容全空)
+ * 補一個全形空白,維持行高與可選取性。
+ */
+function appendTokens(container: HTMLElement, tokens: HighlightToken[]): void {
+  const hasVisibleContent = tokens.some((token) => token.content.length > 0);
+  if (!hasVisibleContent) {
+    container.appendChild(document.createTextNode(' '));
+    return;
+  }
+  for (const token of tokens) {
+    if (token.content.length === 0) continue;
+    const span = document.createElement('span');
+    span.textContent = token.content;
+    if (token.color) span.style.color = token.color;
+    if (token.italic) span.style.fontStyle = 'italic';
+    if (token.bold) span.style.fontWeight = 'bold';
+    container.appendChild(span);
+  }
+}
+
 function renderSnippetCode(content: string, language: string, startLine: number): HTMLElement {
-  // 'hljs' class 是給 dist/hljs-themes.css(esbuild.js 從官方 highlight.js 主題檔案
-  // 產生,見該檔案註解)的 .hljs { background; color } 規則對應用的容器 class,
-  // 不是純樣式命名。
-  const code = el('div', 'codewalk-snippet-code hljs');
+  const code = el('div', 'codewalk-snippet-code');
   const lines = highlightSnippetLines(content, language);
-  lines.forEach((lineHtml, i) => {
+  lines.forEach((lineTokens, i) => {
     const row = el('div', 'codewalk-snippet-line');
     row.appendChild(el('span', 'codewalk-snippet-line-number', String(startLine + i)));
     const lineCode = document.createElement('span');
     lineCode.className = 'codewalk-snippet-line-code';
-    lineCode.innerHTML = lineHtml.length > 0 ? lineHtml : '&nbsp;';
+    appendTokens(lineCode, lineTokens);
     row.appendChild(lineCode);
     code.appendChild(row);
   });
@@ -252,7 +271,7 @@ export function classifyDiffLines(diffText: string, oldStartLine: number, newSta
 }
 
 function renderDiffCode(diffLines: DiffLine[], language: string): HTMLElement {
-  const code = el('div', 'codewalk-diff-code hljs');
+  const code = el('div', 'codewalk-diff-code');
   const highlighted = highlightSnippetLines(diffLines.map((l) => l.content).join('\n'), language);
   diffLines.forEach((diffLine, i) => {
     const row = el('div', `codewalk-diff-line codewalk-diff-line-${diffLine.type}`);
@@ -265,8 +284,7 @@ function renderDiffCode(diffLines: DiffLine[], language: string): HTMLElement {
     );
     const lineCode = document.createElement('span');
     lineCode.className = 'codewalk-diff-line-code';
-    const lineHtml = highlighted[i] ?? '';
-    lineCode.innerHTML = lineHtml.length > 0 ? lineHtml : '&nbsp;';
+    appendTokens(lineCode, highlighted[i] ?? []);
     row.appendChild(lineCode);
     code.appendChild(row);
   });

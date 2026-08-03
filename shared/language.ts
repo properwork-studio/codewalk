@@ -1,6 +1,7 @@
 /**
- * 這裡的值必須是 `ui/highlight.ts` 有註冊的 highlight.js 語言名(或其別名),
- * 否則 highlightSnippet() 會退回純文字——新增副檔名時兩邊要一起改。
+ * 這裡的值必須是 `ui/highlight.ts` 有註冊的 Shiki 語言 id,否則
+ * `isLanguageSupported()` 會判定為不支援、`highlightSnippetLines()` 退回
+ * 純文字——新增副檔名時兩邊要一起改。
  */
 export const EXTENSION_LANGUAGE: Record<string, string> = {
   ts: 'typescript',

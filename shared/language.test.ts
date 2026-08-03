@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { detectLanguage } from './language';
 
 describe('detectLanguage', () => {
-  it('maps common extensions to their highlight.js language name', () => {
+  it('maps common extensions to their Shiki language id', () => {
     expect(detectLanguage('src/caller.ts')).toBe('typescript');
     expect(detectLanguage('src/component.tsx')).toBe('typescript');
     expect(detectLanguage('src/index.js')).toBe('javascript');

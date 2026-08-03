@@ -1,4 +1,5 @@
 import type { HostToWebviewMessage, SnippetPreviewResult, WebviewToHostMessage } from '../shared/protocol';
+import { applyEditorTheme, onHighlightReady } from './highlight';
 import {
   cancelQuiz,
   closeAttemptMenu,
@@ -263,8 +264,22 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
     case 'stepJumpError':
       stepJumpError = msg.message;
       break;
+    case 'themeChanged':
+      // applyEditorTheme() 是非同步(loadTheme 要等 Shiki 內部處理完成),下面的
+      // render() 這時多半還在用舊主題;等套用完成後再補一次 render() 才會真的
+      // 換色。目前畫面若剛好不是 walking(沒有 snippet/diff 要重繪)就不必補繪。
+      void applyEditorTheme(msg.theme, msg.kind).then(() => {
+        if (current.screen === 'walking') render();
+      });
+      break;
   }
   render();
+});
+
+// 高亮引擎初始化是非同步的(見 ui/highlight.ts);就緒前 snippet/diff 已經以
+// 純文字先顯示(design.md 決策 6),這裡在就緒後補一次重繪讓它們換上顏色。
+onHighlightReady(() => {
+  if (current.screen === 'walking') render();
 });
 
 // 不依賴 VS Code 指令系統的 keybinding when 條件比對——直接在 webview 內監聽鍵盤事件,

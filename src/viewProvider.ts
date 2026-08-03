@@ -5,40 +5,11 @@ import { AttemptStore } from './attemptStore';
 import { jumpToStep } from './fileJump';
 import { getWorkspaceHead, isRefDrifted } from './refDrift';
 import { readSnippetPreviews } from './snippetPreview';
+import { currentThemeKind, resolveEditorTheme } from './themeSource';
 import { listWalkFiles, loadCodewalkFile } from './walkLoader';
 
 function getWorkspaceRoot(): string | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-}
-
-// 對應 esbuild.js 的 NAMED_HLJS_THEMES + 'auto'——那邊決定實際套用哪個 highlight.js
-// 官方主題檔案,這裡只需要知道合法的設定值有哪些。
-const SNIPPET_THEMES = [
-  'auto',
-  'github-dark',
-  'github-light',
-  'monokai',
-  'atom-one-dark',
-  'night-owl',
-  'dracula',
-  'material-palenight',
-  'rose-pine-moon',
-  'tokyo-night-dark',
-] as const;
-
-// 需與 package.json 的 codewalk.snippetTheme.default 保持一致。
-const DEFAULT_SNIPPET_THEME: (typeof SNIPPET_THEMES)[number] = 'material-palenight';
-
-/**
- * enum 只在 Settings UI 裡擋得住手誤選項,使用者手改 settings.json 仍可能塞入
- * 任意字串——這裡白名單一次,同時避免該字串被直接接到 HTML 屬性裡造成注入。
- * 白名單外的值(包含使用者手改設定塞入的非法字串)一律退回預設 theme。
- */
-function resolveSnippetTheme(): (typeof SNIPPET_THEMES)[number] {
-  const raw = vscode.workspace.getConfiguration('codewalk').get<string>('snippetTheme');
-  return (SNIPPET_THEMES as readonly string[]).includes(raw ?? '')
-    ? (raw as (typeof SNIPPET_THEMES)[number])
-    : DEFAULT_SNIPPET_THEME;
 }
 
 export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
@@ -63,15 +34,11 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
     };
     webviewView.webview.html = this.getHtml(webviewView.webview);
     webviewView.webview.onDidReceiveMessage((raw: unknown) => this.handleMessage(raw));
-    // 設定變更後重繪整個 webview 是最簡單、風險最低的作法:snippet 主題只在
-    // 面板內部樣式生效,不影響其他狀態的正確性,換來的代價(重繪會回到導讀
-    // 列表畫面)在「使用者剛改完設定」這個情境下可以接受。
-    const configListener = vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('codewalk.snippetTheme') && this.view) {
-        this.view.webview.html = this.getHtml(this.view.webview);
-      }
-    });
-    webviewView.onDidDispose(() => configListener.dispose());
+    // 主題切換時只送一則 themeChanged 訊息、由 webview 自行重繪目前 step,
+    // 不重建整個 webview.html——避免像舊版 snippetTheme 設定那樣把讀者彈回
+    // 導讀列表畫面(design.md 決策 3、tasks.md 3.1)。
+    const themeListener = vscode.window.onDidChangeActiveColorTheme(() => this.sendTheme());
+    webviewView.onDidDispose(() => themeListener.dispose());
   }
 
   public async handleNextStep(): Promise<void> {
@@ -88,6 +55,7 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
 
     switch (msg.type) {
       case 'webviewReady':
+        await this.sendTheme();
         await this.sendFileList();
         break;
       case 'selectWalkFile':
@@ -144,6 +112,11 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
     if (!result.ok) {
       this.post({ type: 'stepJumpError', message: result.message });
     }
+  }
+
+  private async sendTheme(): Promise<void> {
+    const theme = await resolveEditorTheme();
+    this.post({ type: 'themeChanged', theme, kind: currentThemeKind() });
   }
 
   private async sendFileList(): Promise<void> {
@@ -225,9 +198,6 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview.js'));
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview.css'));
     const codiconUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'codicon.css'));
-    const hljsThemesUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'hljs-themes.css'),
-    );
     const nonce = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
 
     return `<!DOCTYPE html>
@@ -240,12 +210,9 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
        所以 theme.css 必須排在 codicon.css 之後,尺寸覆寫才會生效。 -->
   <link href="${codiconUri}" rel="stylesheet" />
   <link href="${styleUri}" rel="stylesheet" />
-  <!-- hljs-themes.css 用 @scope 包裝、specificity 遠高於前兩者,載入順序其實不影響
-       結果,排最後只是沿用「一般 → 具體」的慣例。 -->
-  <link href="${hljsThemesUri}" rel="stylesheet" />
 </head>
 <body>
-  <div id="app" tabindex="0" data-codewalk-theme="${resolveSnippetTheme()}"></div>
+  <div id="app" tabindex="0"></div>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

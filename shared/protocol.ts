@@ -17,6 +17,23 @@ export type SnippetPreviewResult =
   | { itemIndex: number; ok: true; content: string; language: string }
   | { itemIndex: number; ok: false; message: string };
 
+/** VS Code 主題 JSON 的 tokenColors 條目;scope 可以是單一字串或字串陣列。 */
+export interface ThemeTokenColorRule {
+  scope: string | string[];
+  settings: { foreground?: string; fontStyle?: string };
+}
+
+/**
+ * 由 host 解析讀者當前 VS Code 主題後送往 webview 的結果。name 由 host 每次
+ * 解析時遞增產生,不重複使用——Shiki 的 loadTheme() 對同名主題重載是 no-op
+ * (已實測),同名會讓「切換主題後重繪」失效,見 design.md 決策 3 的修訂。
+ */
+export interface ResolvedEditorTheme {
+  name: string;
+  kind: 'light' | 'dark';
+  tokenColors: ThemeTokenColorRule[];
+}
+
 export type HostToWebviewMessage =
   | { type: 'walkFileList'; files: WalkFileSummary[] }
   | {
@@ -28,7 +45,13 @@ export type HostToWebviewMessage =
     }
   | { type: 'stepChanged'; stepIndex: number; snippetPreviews: SnippetPreviewResult[] }
   | { type: 'loadError'; message: string }
-  | { type: 'stepJumpError'; message: string };
+  | { type: 'stepJumpError'; message: string }
+  | {
+      type: 'themeChanged';
+      /** host 無法解析讀者當前主題時為 null,webview 改依 kind 選用內建主題。 */
+      theme: ResolvedEditorTheme | null;
+      kind: 'light' | 'dark';
+    };
 
 export type WebviewToHostMessage =
   | { type: 'webviewReady' }

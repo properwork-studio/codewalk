@@ -49,41 +49,7 @@
         "title": "CodeWalk: 上一步",
         "category": "CodeWalk"
       }
-    ],
-    "configuration": {
-      "title": "CodeWalk",
-      "properties": {
-        "codewalk.snippetTheme": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "github-dark",
-            "github-light",
-            "monokai",
-            "atom-one-dark",
-            "night-owl",
-            "dracula",
-            "material-palenight",
-            "rose-pine-moon",
-            "tokyo-night-dark"
-          ],
-          "enumDescriptions": [
-            "跟隨目前 VS Code 深色/淺色模式,套用 GitHub 官方色票",
-            "GitHub Dark 官方色票",
-            "GitHub Light 官方色票",
-            "Monokai 官方色票",
-            "Atom One Dark 官方色票",
-            "Night Owl 官方色票",
-            "Dracula 官方色票",
-            "Material Palenight 官方色票(預設)",
-            "Rosé Pine Moon 官方色票(紫調)",
-            "Tokyo Night Dark 官方色票(深藍調)"
-          ],
-          "default": "material-palenight",
-          "description": "CodeWalk 導讀面板內 snippet 程式碼預覽的語法高亮配色。"
-        }
-      }
-    }
+    ]
   },
   "scripts": {
     "watch": "node esbuild.js --watch",
@@ -104,6 +70,8 @@
     "vitest": "^2.1.0"
   },
   "dependencies": {
-    "highlight.js": "^11.11.1"
+    "@shikijs/langs": "^4.4.1",
+    "@shikijs/themes": "^4.4.1",
+    "shiki": "^4.4.1"
   }
 }

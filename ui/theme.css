@@ -788,7 +788,11 @@ button.codewalk-attempt-menu-item:hover:not(:disabled) {
 
 .codewalk-annotation-tip {
   border: 1px solid var(--vscode-textLink-foreground);
-  background-color: var(--vscode-textCodeBlock-background, transparent);
+  /* 原用 --vscode-textCodeBlock-background(hover 提示框用的疊加灰),跟編輯器
+     背景明顯不同色,與這次 syntax-highlighting change「配色跟編輯器一致」的
+     目標互相矛盾——順手一併改用 editor-background(見 switch-to-shiki-highlighter
+     design.md 決策 8)。 */
+  background-color: var(--vscode-editor-background);
 }
 
 .codewalk-annotation-tip .codewalk-annotation-icon {
@@ -804,11 +808,13 @@ button.codewalk-attempt-menu-item:hover:not(:disabled) {
 }
 
 /* pitfall 刻意不重用 .codewalk-warning(系統層級的 ref 漂移/檔案跳轉警告),
-   避免讀者把「內容提醒」誤認成「系統錯誤」——用強調色而非警告色系。 */
+   避免讀者把「內容提醒」誤認成「系統錯誤」——用強調色而非警告色系(邊框顏色
+   維持不變)。背景色原用 --vscode-textCodeBlock-background,理由與上面
+   .codewalk-annotation-tip 相同,一併改用 editor-background。 */
 .codewalk-annotation-pitfall {
   flex-direction: column;
   border: 1px solid var(--vscode-charts-purple, var(--vscode-focusBorder));
-  background-color: var(--vscode-textCodeBlock-background, transparent);
+  background-color: var(--vscode-editor-background);
 }
 
 .codewalk-annotation-pitfall .codewalk-annotation-header {
@@ -886,6 +892,19 @@ button.codewalk-attempt-menu-item:hover:not(:disabled) {
   white-space: nowrap;
 }
 
+/* 背景與預設前景色直接用 VS Code CSS 變數——Shiki 只替「有對應到 scope」
+   的 token 上色,沒對應到的字元(空白、未知符號)要靠這裡的預設前景色顯示,
+   換主題時容器背景與底色也隨之更新,不需額外的主題切換邏輯。
+   刻意不用 --vscode-textCodeBlock-background:那是給 hover 提示框、markdown
+   預覽這類「小塊程式碼」用的疊加色,設計上就跟編輯器本體背景不同(通常是
+   一層灰階疊加)——這裡要的是跟編輯器完全一致,必須直接用 editor-background。 */
+.codewalk-snippet-code,
+.codewalk-diff-code {
+  background-color: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+  border-radius: 6px;
+}
+
 .codewalk-snippet-code {
   margin: 0;
   padding: 0.4rem 0;
@@ -905,9 +924,8 @@ button.codewalk-attempt-menu-item:hover:not(:disabled) {
   min-width: 2.4em;
   padding: 0 0.7rem;
   text-align: right;
-  /* 跟隨 .codewalk-snippet-code 目前生效的主題前景色(由 dist/hljs-themes.css
-     的 .hljs 規則決定),用透明度做出「比程式碼淡」的行號觀感,不用為每個
-     theme 額外指定一次行號顏色。 */
+  /* 跟隨 .codewalk-snippet-code 的預設前景色,用透明度做出「比程式碼淡」的
+     行號觀感,不用為每個 token 顏色額外指定一次行號顏色。 */
   color: inherit;
   opacity: 0.55;
   user-select: none;
@@ -916,11 +934,6 @@ button.codewalk-attempt-menu-item:hover:not(:disabled) {
 .codewalk-snippet-line-code {
   padding-right: 0.7rem;
 }
-
-/* snippet 語法高亮色票不在這裡手寫——esbuild.js 的 buildHljsThemesCss() 直接
-   讀取 node_modules/highlight.js/styles/*.css 官方主題檔,用 @scope 包裝後
-   輸出成 dist/hljs-themes.css,由 src/viewProvider.ts 的 getHtml() 引入。
-   codewalk.snippetTheme 設定值與來源主題的對應見該函式。 */
 
 .codewalk-diff {
   border: 1px solid var(--vscode-panel-border);
