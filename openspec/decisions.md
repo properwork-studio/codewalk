@@ -28,3 +28,6 @@
   - **約 71 ms 砍不掉**:首次 `codeToTokens` 要編譯 TypeScript grammar 的 regex,與註冊幾個語言無關(上列五組全是 71 ms 上下)。所以 173 ms 的最佳情況只到約 97 ms;穩定後每次 `codeToTokens` 僅 0.17 ms
   - **`@shikijs/langs-precompiled` + `createJavaScriptRawEngine` 已排除**:反而更糟——模組求值 25 ms → **208 ms**(巨大 precompiled regex 實字在求值時全部編譯),總計 336 ms vs 177 ms,bundle 還從 2553 KB 漲到 2775 KB
   - **未定**:要不要縮減支援語言清單。真正的分水嶺在 13 個常見語言,而 `dart`/`groovy`/`scala`/`kotlin`/`swift` 值不值得留是**產品決策**。且動 `shared/language.ts` 的副檔名對應會命中 syntax-highlighting spec 的「依檔案副檔名判定語言」requirement,是可觀察行為變更,**必須走 change,不是小改**
+
+- **導讀檔視為含程式碼片段的文件**(2026-08-04,stale-step-detection change 定案):`anchor`(step/snippet 引用範圍的逐字原文)與既有的 `diffText` 都是原始碼的逐字複製,`.codewalk.json` 自此不再只是「敘述+行號」,而是連同一份程式碼快照。同一 repo 內零額外暴露(git 本來就無檔案層級權限,能 clone 就能讀到同樣內容);風險只在**人為單獨分享**這份檔案時成立(workshop、貼進 issue/Slack、獨立 docs repo 等),分享前應比照原始碼的敏感度判斷,**MVP 不為此設計脫敏或遮蔽機制**
+- **格式化紀律**(2026-08-04):專案已裝 Prettier(`.prettierrc.json`、singleQuote/printWidth 110/trailingComma all)並設定 VS Code format-on-save 使用同一套規則;AI 或人手改完 `.ts` 檔收工前務必跑 `pnpm format`,讓「已提交的排版」與「讀者存檔時觸發的排版」保持冪等——否則讀者一存檔,`git diff` 會混進大量無意義的排版變動,連帶讓 `anchor` 逐字比對誤判成內容改動(見 stale-step-detection capability)

@@ -115,6 +115,106 @@ describe('validateCodewalk', () => {
   });
 });
 
+describe('validateCodewalk — step.anchor', () => {
+  it('accepts a step without anchor (backwards compatible)', () => {
+    const result = validateCodewalk(validSample());
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts a step with a string anchor', () => {
+    const sample = validSample() as any;
+    sample.steps[0].anchor = 'export function foo() {}';
+    const result = validateCodewalk(sample);
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts a step whose anchor is whitespace-only', () => {
+    const sample = validSample() as any;
+    sample.steps[0].anchor = '   \n  ';
+    const result = validateCodewalk(sample);
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects a step whose anchor is not a string', () => {
+    const sample = validSample() as any;
+    sample.steps[0].anchor = 123;
+    const result = validateCodewalk(sample);
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.some((e) => e.includes('anchor'))).toBe(true);
+    }
+  });
+});
+
+describe('validateCodewalk — snippet item.anchor', () => {
+  function sampleWithItems(items: unknown[]) {
+    const sample = validSample() as any;
+    sample.steps[0].items = items;
+    return sample;
+  }
+
+  it('accepts a snippet item with a string anchor', () => {
+    const result = validateCodewalk(
+      sampleWithItems([
+        { kind: 'snippet', label: 'x', file: 'src/a.ts', startLine: 1, endLine: 2, anchor: 'const x = 1;' },
+      ]),
+    );
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects a snippet item whose anchor is not a string', () => {
+    const result = validateCodewalk(
+      sampleWithItems([
+        { kind: 'snippet', label: 'x', file: 'src/a.ts', startLine: 1, endLine: 2, anchor: 123 },
+      ]),
+    );
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.some((e) => e.includes('anchor'))).toBe(true);
+    }
+  });
+});
+
+describe('validateCodewalk — regenerateHint', () => {
+  it('accepts a file without regenerateHint (backwards compatible)', () => {
+    const result = validateCodewalk(validSample());
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts a non-empty string regenerateHint', () => {
+    const sample = { ...validSample(), regenerateHint: '在專案根目錄執行 /explain-change' };
+    const result = validateCodewalk(sample);
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts a multi-line regenerateHint', () => {
+    const sample = { ...validSample(), regenerateHint: '第一行\n第二行' };
+    const result = validateCodewalk(sample);
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects an empty string regenerateHint', () => {
+    const sample = { ...validSample(), regenerateHint: '' };
+    const result = validateCodewalk(sample);
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.errors.some((e) => e.includes('regenerateHint'))).toBe(true);
+    }
+  });
+
+  it('rejects a whitespace-only regenerateHint', () => {
+    const sample = { ...validSample(), regenerateHint: '   ' };
+    const result = validateCodewalk(sample);
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects a non-string regenerateHint', () => {
+    const sample = { ...validSample(), regenerateHint: 42 };
+    const result = validateCodewalk(sample);
+    expect(result.valid).toBe(false);
+  });
+});
+
 describe('validateCodewalk — step.items', () => {
   function sampleWithItems(items: unknown[]) {
     const sample = validSample() as any;
@@ -252,9 +352,7 @@ describe('validateCodewalk — diff item', () => {
   });
 
   it('rejects a diff item where endLine < startLine', () => {
-    const result = validateCodewalk(
-      sampleWithItems([validDiffItem({ startLine: 20, endLine: 10 })]),
-    );
+    const result = validateCodewalk(sampleWithItems([validDiffItem({ startLine: 20, endLine: 10 })]));
     expect(result.valid).toBe(false);
     if (!result.valid) {
       expect(result.errors.some((e) => e.includes('endLine'))).toBe(true);

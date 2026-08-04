@@ -20,9 +20,7 @@ function validSampleJson(title = '範例導讀') {
   return JSON.stringify({
     title,
     ref: 'a1b2c3d4',
-    steps: [
-      { title: '第一步', file: 'src/index.ts', startLine: 1, endLine: 1, narration: '入口' },
-    ],
+    steps: [{ title: '第一步', file: 'src/index.ts', startLine: 1, endLine: 1, narration: '入口' }],
     quiz: Array.from({ length: 5 }, (_, i) => ({
       question: `題目 ${i + 1}`,
       options: ['A', 'B'],

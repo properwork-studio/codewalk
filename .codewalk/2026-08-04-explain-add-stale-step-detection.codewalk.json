@@ -1,0 +1,282 @@
+{
+  "title": "導讀失準偵測與重生引導",
+  "ref": "e5b384f01e77f0905425402893db05856bf1196",
+  "regenerateHint": "在本 repo 執行 /explain-change， change 名稱： add-stale-step-detection（openspec/changes/add-stale-step-detection/）",
+  "steps": [
+    {
+      "title": "格式合約： CodewalkStep 新增可選的 anchor 欄位",
+      "file": "shared/schema.ts",
+      "startLine": 22,
+      "endLine": 32,
+      "narration": "現況： snippetPreview.ts 過去只依 JSON 裡寫死的 startLine/endLine，從「現行檔案」切幾行貼給讀者。上游改了幾行、甚至整段被改寫之後，面板照樣顯示一段完全不相干、但外觀正常的程式碼——讀者看不出這是錯的。\n\n直覺：解法不是去猜「這段搬去哪裡了」（那是我們明確否決的 git diff 校正方案），而是在產生導讀當下，把當時看到的程式碼原文存下來當「錨」。載入導讀時，拿現行檔案跟這個錨比對，結果分三種：\n\n1. 內容沒變：準確\n2. 內容在別處找到唯一一份：只是位移，行號跟著走\n3. 內容找不到、或找到多份：判定這一步已經不可信\n\n這一步先看格式合約本身： CodewalkStep 新增可選欄位 anchor，存這個 step 引用範圍（file、startLine、endLine 三個既有欄位對應的那段程式碼）在產生當下的逐字原文。是可選欄位，舊導讀完全不受影響，見下方「新增 regenerateHint」的 diff 對照。",
+      "anchor": "export interface CodewalkStep {\n  title: string;\n  file: string;\n  startLine: number;\n  endLine: number;\n  narration: string;\n  /** 產出當下該行段的程式碼原文,用於失準偵測(見 stale-step-detection capability)。 */\n  anchor?: string;\n  terms?: CodewalkTerm[];\n  items?: CodewalkItem[];\n}",
+      "terms": [
+        {
+          "term": "錨（anchor）",
+          "explanation": "產生導讀當下，把 step 或 snippet 引用的那段程式碼原文整段存進 JSON。之所以叫「錨」而非簡單的「快照」，是因為它後續真的被拿來在整份檔案裡搜尋定位：內容沒變就是原地不動，找到別處就是被錨定到新位置。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "diff",
+          "label": "CodewalkFile 頂層同時新增 regenerateHint",
+          "file": "shared/schema.ts",
+          "startLine": 45,
+          "endLine": 50,
+          "oldStartLine": 43,
+          "diffText": "    quiz: CodewalkQuizQuestion[];\n    /** 過關門檻(答對題數)。省略時預設為簡單多數(ceil(題數/2))。 */\n    passThreshold?: number;\n    /** 重新產生本導讀的方式,由產生器自述;播放器只顯示與複製,不解讀內容。 */\n+   regenerateHint?: string;\n  }"
+        },
+        {
+          "kind": "snippet",
+          "label": "驗證規則： anchor 若存在必須是字串",
+          "file": "shared/schema.ts",
+          "startLine": 156,
+          "endLine": 158,
+          "anchor": "  if (!isOptionalString(s.anchor)) {\n    errors.push(`${path}.anchor 必須是字串`);\n  }"
+        }
+      ]
+    },
+    {
+      "title": "協定：四種錨驗證狀態",
+      "file": "shared/protocol.ts",
+      "startLine": 25,
+      "endLine": 29,
+      "narration": "每個 step、每個 snippet 引用經驗證後，只會落在四種狀態之一：\n\n1. unanchored：沒有 anchor，舊導讀或作者沒寫\n2. matched：內容逐字相同\n3. shifted：內容沒變，但在檔案裡找到唯一一處別的位置\n4. stale：找不到或找到多處，判定失準\n\n這四個狀態刻意定義在 shared/protocol.ts，不是 src/ 的實作細節，因為 webview 端的畫面（要不要顯示失準標記、行號要用哪個）跟 host 端的跳轉邏輯，兩邊都要依同一份判定結果做事，不能各自實作一份、算出不一樣的答案。",
+      "anchor": "export type AnchorStatus =\n  | { kind: 'unanchored' }\n  | { kind: 'matched' }\n  | { kind: 'shifted'; startLine: number; endLine: number }\n  | { kind: 'stale'; reason: 'notFound' | 'ambiguous' | 'fileMissing' };",
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "AnchorReport：整份導讀的驗證結果",
+          "file": "shared/protocol.ts",
+          "startLine": 46,
+          "endLine": 51,
+          "anchor": "export interface AnchorReport {\n  anyAnchored: boolean;\n  anyStale: boolean;\n  staleCount: number;\n  steps: AnchorStepReport[];\n}"
+        }
+      ]
+    },
+    {
+      "title": "核心引擎： checkAnchorAgainstLines 的判定順序",
+      "file": "src/anchorCheck.ts",
+      "startLine": 42,
+      "endLine": 77,
+      "narration": "這是整個功能的核心，純函式、不碰檔案系統（方便測試，呼叫端負責把檔案讀成行陣列傳進來）。判定順序寫死：\n\n1. anchor 是 undefined 或去空白後為空 → unanchored，直接放行，不追究\n2. 檔案讀不到（lines 傳 null 進來）→ stale/fileMissing\n3. 現行 startLine-endLine 那段內容，正規化換行後跟 anchor 逐字相同 → matched\n4. 否則在整份檔案裡搜尋 anchor：找到唯一一處 → shifted，回傳新行號；找不到或找到多處 → stale\n\n注意第三、四步刻意只正規化換行（CRLF 轉 LF），不 trim。縮排或尾隨空白的差異代表真實的程式碼改動，吞掉它等於謊報「這段沒變」，這是故意的取捨，不是遺漏。",
+      "anchor": "export function checkAnchorAgainstLines(\n  fileLines: string[] | null,\n  startLine: number,\n  endLine: number,\n  anchor: string | undefined,\n): AnchorStatus {\n  if (anchor === undefined || anchor.trim().length === 0) {\n    return { kind: 'unanchored' };\n  }\n  if (fileLines === null) {\n    return { kind: 'stale', reason: 'fileMissing' };\n  }\n\n  const normalizedAnchor = normalizeNewlines(anchor);\n  const currentSlice = fileLines.slice(startLine - 1, endLine).join('\\n');\n  if (currentSlice === normalizedAnchor) {\n    return { kind: 'matched' };\n  }\n\n  const whole = fileLines.join('\\n');\n  const offsets = findLineAlignedOffsets(whole, normalizedAnchor);\n  if (offsets.length === 0) {\n    return { kind: 'stale', reason: 'notFound' };\n  }\n  if (offsets.length > 1) {\n    return { kind: 'stale', reason: 'ambiguous' };\n  }\n\n  const newStartLine = lineNumberAtOffset(whole, offsets[0]);\n  const anchorLineCount = normalizedAnchor.split('\\n').length;\n  return {\n    kind: 'shifted',\n    startLine: newStartLine,\n    endLine: newStartLine + anchorLineCount - 1,\n  };\n}",
+      "terms": [
+        {
+          "term": "位移跟隨",
+          "explanation": "錨的內容在檔案裡搜尋到唯一一處、但位置跟 JSON 記錄的行號不同時，系統直接改用新行號，不當成失準。刻意不叫「校正」，因為校正暗示系統在猜測或修補，而位移跟隨只在內容逐字相同時生效，零推測成分，所以也不對讀者顯示任何「已調整」的提示，見後面的 render.ts 那一步。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "tip",
+          "text": "為什麼不索性用 git diff 去追行號位移?因為 git 能追行號、追不了語意。校正成功時省下讀者幾秒，校正錯誤時卻會做出「行號正確、敘述已經對不上」的假可信，比現在的整份警告更危險。這是 proposal 明確否決的方案， design.md 決策一有完整理由。"
+        }
+      ]
+    },
+    {
+      "title": "容易漏掉的細節：搜尋要對齊行邊界",
+      "file": "src/anchorCheck.ts",
+      "startLine": 18,
+      "endLine": 31,
+      "narration": "找唯一匹配這件事，最初的天真實作是直接對整份檔案內容做字串 indexOf。但這樣會誤判：如果 anchor 是「b 換行 c」，而檔案內容剛好是「ab 換行 cd」， indexOf 會在偏移一找到這段子字串，但那個匹配橫跨兩行的邊界（從第一行的 b 到第二行的 c），不是任何一段完整的程式碼。\n\nfindLineAlignedOffsets 修正了這點：一個匹配只有在起點是檔案開頭、或緊接在換行字元之後，終點是檔案結尾、或緊接在換行字元之前時，才算數。",
+      "anchor": "function findLineAlignedOffsets(whole: string, anchor: string): number[] {\n  const offsets: number[] = [];\n  let fromIndex = 0;\n  for (;;) {\n    const idx = whole.indexOf(anchor, fromIndex);\n    if (idx === -1) break;\n    const startsAtBoundary = idx === 0 || whole[idx - 1] === '\\n';\n    const endIdx = idx + anchor.length;\n    const endsAtBoundary = endIdx === whole.length || whole[endIdx] === '\\n';\n    if (startsAtBoundary && endsAtBoundary) offsets.push(idx);\n    fromIndex = idx + 1;\n  }\n  return offsets;\n}",
+      "items": [
+        {
+          "kind": "pitfall",
+          "misconception": "字串比對只要用 indexOf 找子字串出現次數就夠了",
+          "reality": "沒有對齊行邊界的話，恰好橫跨兩行邊界的子字串會被誤判成一次「匹配」，讓本該判定為失準的內容被誤判成位移，見左側 findLineAlignedOffsets 的 startsAtBoundary、endsAtBoundary 檢查。"
+        }
+      ]
+    },
+    {
+      "title": "buildAnchorReport：整份導讀一次驗證、每個檔案只讀一次",
+      "file": "src/anchorCheck.ts",
+      "startLine": 89,
+      "endLine": 125,
+      "narration": "載入導讀時，對所有 step 與 snippet 一次性跑完驗證，不是逐步才驗證。design.md 有實測： 21 步、40 個錨、23 個相異檔案，最壞情況也只要 0.70 毫秒，不需要快取。linesFor() 用 Map 快取每個檔案的行陣列，同一份檔案被多個 step 或多個 snippet 引用時只讀一次磁碟。\n\nkind 為 diff 的項目完全不參與驗證（flatMap 直接濾掉），它自己已經有 diffText 當原文快照，而且描述的是「已完成的變更」，那段舊碼本來就注定會在現行檔案裡消失，錨它只會製造永遠亮紅燈的假警報。",
+      "anchor": "export function buildAnchorReport(workspaceRoot: string, walk: CodewalkFile): AnchorReport {\n  const lineCache = new Map<string, string[] | null>();\n  function linesFor(file: string): string[] | null {\n    if (!lineCache.has(file)) {\n      lineCache.set(file, readLinesOrNull(workspaceRoot, file));\n    }\n    return lineCache.get(file) ?? null;\n  }\n\n  let anyAnchored = false;\n  let staleCount = 0;\n\n  function track(status: AnchorStatus): AnchorStatus {\n    if (status.kind !== 'unanchored') anyAnchored = true;\n    if (status.kind === 'stale') staleCount++;\n    return status;\n  }\n\n  const steps: AnchorStepReport[] = walk.steps.map((step) => {\n    const stepStatus = track(\n      checkAnchorAgainstLines(linesFor(step.file), step.startLine, step.endLine, step.anchor),\n    );\n\n    const items: AnchorItemStatus[] = (step.items ?? []).flatMap((item, itemIndex) => {\n      if (item.kind !== 'snippet') return [];\n      const snippet = item as Extract<CodewalkItem, { kind: 'snippet' }>;\n      const status = track(\n        checkAnchorAgainstLines(linesFor(snippet.file), snippet.startLine, snippet.endLine, snippet.anchor),\n      );\n      return [{ itemIndex, status }];\n    });\n\n    return { step: stepStatus, items };\n  });\n\n  return { anyAnchored, anyStale: staleCount > 0, staleCount, steps };\n}",
+      "items": [
+        {
+          "kind": "todo",
+          "text": "目前 anyAnchored、anyStale 是整份導讀的兩個布林旗標；如果未來要做「只顯示還沒驗過的檔案」這類更細的進度提示，這裡的資料結構會需要再加欄位。"
+        }
+      ]
+    },
+    {
+      "title": "串接進 host：載入導讀時算好整份 AnchorReport",
+      "file": "src/viewProvider.ts",
+      "startLine": 148,
+      "endLine": 178,
+      "narration": "loadWalk() 在既有的 refDrifted 判定（HEAD 跟 ref 比對）之後，多做一件事：呼叫 buildAnchorReport() 算出整份的錨驗證結果，存在 this.anchorReport，並隨 walkLoaded 訊息一起送給 webview。\n\n刻意保留 refDrifted 這個既有欄位、沒有拿掉。沒有 workspace root、或整份導讀完全沒有 anchor 時（emptyAnchorReport），行為要退回現在的「整份漂移警告」，新舊兩條路徑並存，靠 webview 端依 anyAnchored 決定要顯示哪一種，下面 render.ts 那一步會看到。",
+      "anchor": "  private async loadWalk(path: string): Promise<void> {\n    const result = await loadCodewalkFile(path);\n    if (!result.valid) {\n      this.post({ type: 'loadError', message: result.errors.join('; ') });\n      return;\n    }\n\n    this.currentWalk = result.value;\n    this.currentWalkPath = path;\n    this.stepIndex = 0;\n    this.refDrifted = false;\n\n    const root = getWorkspaceRoot();\n    if (root) {\n      const head = await getWorkspaceHead(root);\n      this.refDrifted = head !== null && isRefDrifted(head, result.value.ref);\n      this.anchorReport = buildAnchorReport(root, result.value);\n    } else {\n      this.anchorReport = emptyAnchorReport(result.value);\n    }\n\n    this.post({\n      type: 'walkLoaded',\n      walk: this.currentWalk,\n      stepIndex: this.stepIndex,\n      refDrifted: this.refDrifted,\n      anchorReport: this.anchorReport,\n      snippetPreviews: await this.readCurrentSnippetPreviews(),\n    });\n    await this.jumpToCurrentStep();\n  }"
+    },
+    {
+      "title": "跳轉時套用位移或失準狀態，不再照抄 JSON 原始行號",
+      "file": "src/viewProvider.ts",
+      "startLine": 205,
+      "endLine": 217,
+      "narration": "jumpToCurrentStep() 原本直接拿 step.startLine、endLine 去跳轉。現在先查這個 step 在 anchorReport 裡的狀態，用 effectiveLineRange() 算出「該用哪個行號」（位移就用新的、其餘用原本的），再用 jumpModeFor() 決定「要不要選取」（失準就只開檔不選取）。\n\n這兩個輔助函式故意定義在 shared/protocol.ts 的 effectiveLineRange，而不是 src/，因為 webview 端顯示行號文字時，要算出同一個「有效行號」，兩邊必須共用同一份邏輯，不能各自重算一次。",
+      "anchor": "  private async jumpToCurrentStep(): Promise<void> {\n    const root = getWorkspaceRoot();\n    if (!root || !this.currentWalk) return;\n    const step = this.currentWalk.steps[this.stepIndex];\n    const status = this.anchorReport?.steps[this.stepIndex]?.step ?? {\n      kind: 'unanchored' as const,\n    };\n    const target = effectiveLineRange(step, status);\n    const result = await jumpToStep(root, { ...step, ...target }, jumpModeFor(status));\n    if (!result.ok) {\n      this.post({ type: 'stepJumpError', message: result.message });\n    }\n  }",
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "handleJumpToSnippet 對 snippet 項目做一樣的事",
+          "file": "src/viewProvider.ts",
+          "startLine": 117,
+          "endLine": 131,
+          "anchor": "  private async handleJumpToSnippet(stepIndex: number, itemIndex: number): Promise<void> {\n    const root = getWorkspaceRoot();\n    const step = this.currentWalk?.steps[stepIndex];\n    const item = step?.items?.[itemIndex];\n    if (!root || !item || (item.kind !== 'snippet' && item.kind !== 'diff')) return;\n    const status = this.anchorReport?.steps[stepIndex]?.items.find((s) => s.itemIndex === itemIndex)\n      ?.status ?? {\n      kind: 'unanchored' as const,\n    };\n    const target = effectiveLineRange(item, status);\n    const result = await jumpToStep(root, { ...item, ...target }, jumpModeFor(status));\n    if (!result.ok) {\n      this.post({ type: 'stepJumpError', message: result.message });\n    }\n  }"
+        }
+      ]
+    },
+    {
+      "title": "只開檔、不選取：失準時不假裝知道游標該落在哪",
+      "file": "src/fileJump.ts",
+      "startLine": 13,
+      "endLine": 14,
+      "narration": "jumpToStep() 新增第三個參數 mode，預設 select（既有行為不變）。失準的目標一律用 openOnly：開啟檔案，但不設定 selection、不呼叫 revealRange。\n\n刻意不用 JSON 裡記錄的原始行號去選取，那是已知過期的位置，把游標放上去等於假裝系統知道正確答案。這個決定也回答了受眾問題： CodeWalk 的讀者不只是熟悉 codebase 的人，對不熟的讀者來說，把游標停在一個明知是錯的位置，比什麼都不做更容易誤導。",
+      "anchor": " * 不假裝知道游標該落在哪(design.md 決策 6)。 */\nexport type JumpMode = 'select' | 'openOnly';",
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "mode 分支： openOnly 提前 return",
+          "file": "src/fileJump.ts",
+          "startLine": 36,
+          "endLine": 38,
+          "anchor": "  if (mode === 'openOnly') {\n    return { ok: true };\n  }"
+        }
+      ]
+    },
+    {
+      "title": "失準時改送錨定原文，不再貼現行檔案內容",
+      "file": "src/snippetPreview.ts",
+      "startLine": 33,
+      "endLine": 46,
+      "narration": "這是修復本次變更最初想解決的那個問題本體： snippetPreview.ts 過去無條件讀現行檔案的 startLine-endLine 貼給讀者。現在先看這個 snippet 項目的錨驗證狀態， stale 的話直接回傳 anchor 的內容（source 標成 anchor），不去碰現行檔案；檔案剛好也不存在的話，連同「找不到檔案」訊息與 anchor 內容一起回傳，讓讀者至少看得到原文。\n\n只有非 stale 的情況（matched、shifted、unanchored）才會落到下面讀現行檔案的既有邏輯，而且會用 effectiveLineRange() 取代直接讀 snippet.startLine、endLine，位移的情況自動讀到新位置。",
+      "anchor": "    if (status.kind === 'stale') {\n      if (status.reason === 'fileMissing') {\n        results.push({\n          itemIndex,\n          ok: false,\n          message: `找不到檔案:${snippet.file}`,\n          anchorContent: snippet.anchor,\n          language,\n        });\n      } else {\n        results.push({ itemIndex, ok: true, content: snippet.anchor ?? '', language, source: 'anchor' });\n      }\n      return;\n    }",
+      "items": [
+        {
+          "kind": "pitfall",
+          "misconception": "snippetPreview.ts 現在會判斷檔案存不存在，所以「找不到檔案」的處理邏輯應該都走同一條路",
+          "reality": "有兩種「找不到檔案」：一種是沒有 anchor 的舊行為，只顯示警告，沒有內容可秀；一種是失準且檔案剛好也被刪除，警告之外還能秀出 anchor 原文。兩者用不同分支處理，不能合併，合併後前者會憑空冒出一個不存在的 anchorContent。"
+        }
+      ]
+    },
+    {
+      "title": "webview 狀態機： anchorReport 要跟著 walk 全程流轉",
+      "file": "ui/state.ts",
+      "startLine": 33,
+      "endLine": 58,
+      "narration": "WalkingState、QuizState、QuizResult 三個畫面狀態都新增了 anchorReport 欄位，理由跟既有的 refDrifted 完全一樣：讀者從 walking 進 quiz、送出答案、回到 walking 重新走一次，這份驗證結果要原封不動跟著走，不能因為換畫面就消失或被重算。\n\ncreateWalkingState() 因此多了第三個必填參數；所有重建 WalkingState 的地方（cancelQuiz、restartWalk、retryQuiz）都從舊 state 把 anchorReport 原樣傳下去，沒有一處是「用空的重新算」。",
+      "anchor": "export interface WalkingState {\n  screen: 'walking';\n  walk: CodewalkFile;\n  stepIndex: number;\n  refDrifted: boolean;\n  anchorReport: AnchorReport;\n  expandedTerms: Set<string>;\n}\n\nexport interface QuizState {\n  screen: 'quiz';\n  walk: CodewalkFile;\n  refDrifted: boolean;\n  anchorReport: AnchorReport;\n  answers: (number | null)[];\n}\n\nexport interface QuizResult {\n  screen: 'quizResult';\n  walk: CodewalkFile;\n  refDrifted: boolean;\n  anchorReport: AnchorReport;\n  answers: (number | null)[];\n  score: number;\n  passed: boolean;\n}"
+    },
+    {
+      "title": "面板呈現：漂移警告降級為退路，失準改成逐步標記",
+      "file": "ui/render.ts",
+      "startLine": 459,
+      "endLine": 486,
+      "narration": "這是把前面所有 host 端的判斷，實際畫到面板上的地方。第一個關鍵改動很小但決定整個體驗：既有的「行號可能漂移」整份警告，現在只在 state.anchorReport.anyAnchored 是 false（完全沒有任何錨，多半是舊導讀）時才顯示；只要有任何一個目標有錨，就改用逐步的失準標記取代它，讀者不再被整份一個「可能漂移」嚇到，而是清楚看到哪幾步真的有問題。\n\nanyStale 為真時額外顯示重生引導（renderRegeneratePrompt），有 regenerateHint 才會多顯示「複製重生指令」按鈕。",
+      "anchor": "export function renderWalking(\n  state: WalkingState,\n  handlers: WalkingHandlers,\n  jumpError: string | null = null,\n  animateStepChange = true,\n  snippetPreviews: SnippetPreviewResult[] = [],\n): HTMLElement {\n  const step = state.walk.steps[state.stepIndex];\n  const stepReport = state.anchorReport.steps[state.stepIndex] ?? {\n    step: { kind: 'unanchored' as const },\n    items: [],\n  };\n  const container = el('div', `codewalk-walking${animateStepChange ? ' is-step-transition' : ''}`);\n\n  const backButton = el('button', 'codewalk-back-to-list');\n  backButton.appendChild(icon('list-unordered'));\n  backButton.appendChild(el('span', undefined, '返回列表'));\n  backButton.addEventListener('click', handlers.onBackToList);\n  container.appendChild(backButton);\n\n  // 導讀含任一具備有效 anchor 的目標時,改以逐步失準狀態取代整份漂移警告\n  // (walk-player capability「ref 漂移偵測」MODIFIED requirement)。\n  if (state.refDrifted && !state.anchorReport.anyAnchored) {\n    const warning = el('div', 'codewalk-warning');\n    warning.appendChild(icon('warning'));\n    warning.appendChild(el('span', undefined, '目前 commit 與導讀釘住的版本不同,行號可能漂移'));\n    container.appendChild(warning);\n  }",
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "renderStepStaleBlock：失準的主 step 才會出現的區塊",
+          "file": "ui/render.ts",
+          "startLine": 420,
+          "endLine": 422,
+          "anchor": "function renderStepStaleBlock(\n  step: CodewalkStep,\n  status: Extract<AnchorStatus, { kind: 'stale' }>,"
+        },
+        {
+          "kind": "snippet",
+          "label": "renderSnippet 依狀態切換顯示內容與可否點擊",
+          "file": "ui/render.ts",
+          "startLine": 229,
+          "endLine": 230,
+          "anchor": "function renderSnippet(\n  item: Extract<CodewalkItem, { kind: 'snippet' }>,"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "question": "checkAnchorAgainstLines 判定某個 step 為 shifted 而不是 stale，代表什麼?",
+      "options": [
+        "該段內容逐字相同，只是在檔案裡找到「恰好一處」不同位置的匹配",
+        "git diff 推算出該段程式碼被搬到新的行號",
+        "該段內容有些微差異（如縮排），但系統判斷夠相似就接受",
+        "anchor 欄位本身是空字串，系統選擇忽略驗證"
+      ],
+      "correctIndex": 0,
+      "optionExplanations": [
+        "對： shifted 的判定條件是「現行 startLine-endLine 內容不等於 anchor，但 anchor 在整份檔案裡搜尋到恰好一處」，內容完全沒變，只是位置換了。",
+        "錯：這個變更明確否決了 git diff 校正方案（design.md 決策一），整套判定完全不呼叫 git，只靠字串搜尋。",
+        "錯：比對前只正規化換行（CRLF 轉 LF），刻意不 trim，縮排差一格就不算相同，會落到 stale 而非 shifted。",
+        "錯： anchor 是空字串（或去空白後為空）時，判定結果是 unanchored，不是 shifted，而且不會參與後續的失準判斷。"
+      ]
+    },
+    {
+      "question": "為什麼 findLineAlignedOffsets 要額外檢查匹配的起訖是否落在換行字元或檔案頭尾，而不是直接用 indexOf 數出現次數?",
+      "options": [
+        "避免恰好橫跨兩行邊界的子字串被誤判成一次有效匹配",
+        "純粹是效能考量，行邊界檢查比逐字元比對快",
+        "indexOf 在大檔案上會有編碼問題，行邊界檢查可以規避",
+        "為了同時支援 CRLF 與 LF 兩種換行符號"
+      ],
+      "correctIndex": 0,
+      "optionExplanations": [
+        "對：例如 anchor 是「b 換行 c」、檔案內容是「ab 換行 cd」時， indexOf 會在檔案裡找到這個子字串，但匹配起點在第一行 a 之後、終點在第二行 c 中間，不對應任何一段完整程式碼，行邊界檢查專門排除這種假匹配。",
+        "錯：兩者的時間複雜度差異不是這個檢查存在的理由，程式碼裡也沒有為了效能做特殊優化。",
+        "錯：這與字元編碼無關，是純粹的字串位置比對問題。",
+        "錯：換行正規化是另一個步驟（normalizeNewlines，在比對之前就做完了），跟這裡的行邊界檢查是兩件事。"
+      ]
+    },
+    {
+      "question": "失準（stale）的 snippet 項目，面板上的「開啟現行檔案」按鈕在什麼情況下不會出現?",
+      "options": [
+        "該項目的檔案已經不存在（reason 是 fileMissing）",
+        "該項目沒有提供 anchor 欄位",
+        "該項目的內容經比對後判定為 matched",
+        "讀者尚未展開這個 snippet 的預覽"
+      ],
+      "correctIndex": 0,
+      "optionExplanations": [
+        "對： renderSnippet 裡 canOpen 的判斷式明確排除「preview.ok 是 false 且 anchorContent 有值」這個組合，檔案不存在時沒有東西可開，提供一個永遠失敗的按鈕沒有意義。",
+        "錯：沒有 anchor 的項目狀態是 unanchored，走的是既有行為（一般可點擊跳轉），跟「開啟現行檔案」按鈕的顯示邏輯無關。",
+        "錯： matched 狀態下， snippet 本來就顯示現行內容並可正常點擊跳轉，不會走到「開啟現行檔案」這條特殊路徑。",
+        "錯：目前的 renderSnippet 沒有「先展開才能點擊」這種互動階段，按鈕與內容是一起渲染出來的。"
+      ]
+    },
+    {
+      "question": "這次變更完成後，一份「HEAD 跟 ref 不同，但該份導讀引用到的程式碼其實完全沒被動到」的舊導讀，面板會顯示什麼?",
+      "options": [
+        "什麼過期提示都不顯示，因為所有具備 anchor 的目標都驗證為 matched",
+        "照樣顯示整份「行號可能漂移」警告，因為 HEAD 與 ref 就是不同",
+        "顯示逐步失準標記，因為 HEAD 已經變了",
+        "顯示重生引導，建議讀者重新產生這份導讀"
+      ],
+      "correctIndex": 0,
+      "optionExplanations": [
+        "對： refDrifted 只看 commit 是否相同，但只要導讀含有 anchor 且全部驗證通過（matched、shifted）， render.ts 就不會顯示整份漂移警告，也不會有任何失準標記或重生引導，這是本次變更額外換到的收益， walk-player spec 特別為它加了一條 scenario。",
+        "錯：這正是這次變更要解決的假警報， commit 不同不代表這份導讀引用到的程式碼真的變了，舊的整份判定方式才會這樣誤報。",
+        "錯：失準標記只在個別 step 或 snippet 的 anchor 驗證結果是 stale 時才出現，全部驗證通過的情況下不會有任何一步被標記。",
+        "錯：重生引導只在 anchorReport.anyStale 為真（有任何一個目標判定失準）時才顯示，這個情境下沒有任何失準目標。"
+      ]
+    },
+    {
+      "question": "為什麼失準的 step 或 snippet 要顯示 anchor 記錄的舊內容，而不是現行檔案裡同一行號範圍的內容?",
+      "options": [
+        "narration 是對著 anchor 記錄的原文寫的，顯示現行內容會讓敘述跟程式碼對不上，還可能是完全不相干的一段",
+        "讀取現行檔案內容需要額外的磁碟 I/O，顯示 anchor 內容效能比較好",
+        "anchor 內容一定比現行內容更精簡，適合在有限的面板空間顯示",
+        "這是延續舊版 CodeTour 格式的既有慣例，兩者需要維持相容"
+      ],
+      "correctIndex": 0,
+      "optionExplanations": [
+        "對：這正是本次變更起心動念的原因，舊版無條件貼現行內容，漂移後貼出的是「外觀正常但完全不相干」的程式碼，比看起來明顯錯誤的東西更危險。顯示 anchor 原文至少保證敘述跟程式碼互相對得上。",
+        "錯：失準時本來就已經確定要讀取（或嘗試讀取）現行檔案來判定狀態，不存在的檔案分支也一樣要嘗試 existsSync，效能不是這裡的決策理由。",
+        "錯： anchor 內容的長短完全由產生器當初引用的行數決定，跟現行內容比誰精簡沒有必然關係。",
+        "錯： CodeWalk 是獨立格式，不需要跟 CodeTour 相容，這次變更甚至同時把 explain-change 的輸出從 CodeTour 改成了 CodeWalk。"
+      ]
+    }
+  ]
+}

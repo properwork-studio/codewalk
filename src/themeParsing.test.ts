@@ -27,7 +27,11 @@ describe('findThemeDefinition', () => {
     const result = findThemeDefinition('Eva Dark', [
       {
         extensionPath: '/ext/eva-theme',
-        packageJSON: { contributes: { themes: [{ label: 'Eva Dark', path: './themes/eva-dark.json', uiTheme: 'vs-dark' }] } },
+        packageJSON: {
+          contributes: {
+            themes: [{ label: 'Eva Dark', path: './themes/eva-dark.json', uiTheme: 'vs-dark' }],
+          },
+        },
       },
     ]);
     expect(result).toEqual({ file: '/ext/eva-theme/themes/eva-dark.json', uiTheme: 'vs-dark' });
@@ -38,7 +42,11 @@ describe('findThemeDefinition', () => {
       {
         extensionPath: '/builtin/theme-defaults',
         packageJSON: {
-          contributes: { themes: [{ id: 'Default Dark+', label: '深色+(預設)', path: './dark_plus.json', uiTheme: 'vs-dark' }] },
+          contributes: {
+            themes: [
+              { id: 'Default Dark+', label: '深色+(預設)', path: './dark_plus.json', uiTheme: 'vs-dark' },
+            ],
+          },
         },
       },
     ]);
@@ -54,7 +62,10 @@ describe('findThemeDefinition', () => {
 
   it('returns null when no extension defines a matching theme', () => {
     const result = findThemeDefinition('不存在的主題', [
-      { extensionPath: '/ext', packageJSON: { contributes: { themes: [{ label: 'Other', path: './x.json' }] } } },
+      {
+        extensionPath: '/ext',
+        packageJSON: { contributes: { themes: [{ label: 'Other', path: './x.json' }] } },
+      },
     ]);
     expect(result).toBeNull();
   });
@@ -130,7 +141,11 @@ describe('mergeIncludedTheme', () => {
 describe('loadRawTheme', () => {
   it('parses a JSONC theme file without include', async () => {
     const dir = await makeTmpDir();
-    await writeFile(join(dir, 'a.json'), '{\n  // 註解\n  "tokenColors": [{ "scope": "x", "settings": {} }]\n}', 'utf8');
+    await writeFile(
+      join(dir, 'a.json'),
+      '{\n  // 註解\n  "tokenColors": [{ "scope": "x", "settings": {} }]\n}',
+      'utf8',
+    );
     const result = await loadRawTheme(join(dir, 'a.json'));
     expect(result.tokenColors).toEqual([{ scope: 'x', settings: {} }]);
   });
@@ -138,7 +153,11 @@ describe('loadRawTheme', () => {
   it('resolves a single-level include relative to the including file', async () => {
     const dir = await makeTmpDir();
     await writeFile(join(dir, 'base.json'), '{ "tokenColors": [{ "scope": "base" }] }', 'utf8');
-    await writeFile(join(dir, 'child.json'), '{ "include": "./base.json", "tokenColors": [{ "scope": "child" }] }', 'utf8');
+    await writeFile(
+      join(dir, 'child.json'),
+      '{ "include": "./base.json", "tokenColors": [{ "scope": "child" }] }',
+      'utf8',
+    );
     const result = await loadRawTheme(join(dir, 'child.json'));
     expect(result.tokenColors).toEqual([{ scope: 'base' }, { scope: 'child' }]);
   });
@@ -146,8 +165,16 @@ describe('loadRawTheme', () => {
   it('resolves a chain of includes within the allowed depth', async () => {
     const dir = await makeTmpDir();
     await writeFile(join(dir, 'l0.json'), '{ "tokenColors": [{ "scope": "l0" }] }', 'utf8');
-    await writeFile(join(dir, 'l1.json'), '{ "include": "./l0.json", "tokenColors": [{ "scope": "l1" }] }', 'utf8');
-    await writeFile(join(dir, 'l2.json'), '{ "include": "./l1.json", "tokenColors": [{ "scope": "l2" }] }', 'utf8');
+    await writeFile(
+      join(dir, 'l1.json'),
+      '{ "include": "./l0.json", "tokenColors": [{ "scope": "l1" }] }',
+      'utf8',
+    );
+    await writeFile(
+      join(dir, 'l2.json'),
+      '{ "include": "./l1.json", "tokenColors": [{ "scope": "l2" }] }',
+      'utf8',
+    );
     const result = await loadRawTheme(join(dir, 'l2.json'));
     expect(result.tokenColors).toEqual([{ scope: 'l0' }, { scope: 'l1' }, { scope: 'l2' }]);
   });
@@ -155,8 +182,16 @@ describe('loadRawTheme', () => {
   it('throws when the include chain exceeds the depth limit (circular or excessively deep)', async () => {
     const dir = await makeTmpDir();
     // a → b → a:循環 include,深度會無限增加直到超過上限而拋出。
-    await writeFile(join(dir, 'a.json'), '{ "include": "./b.json", "tokenColors": [{ "scope": "a" }] }', 'utf8');
-    await writeFile(join(dir, 'b.json'), '{ "include": "./a.json", "tokenColors": [{ "scope": "b" }] }', 'utf8');
+    await writeFile(
+      join(dir, 'a.json'),
+      '{ "include": "./b.json", "tokenColors": [{ "scope": "a" }] }',
+      'utf8',
+    );
+    await writeFile(
+      join(dir, 'b.json'),
+      '{ "include": "./a.json", "tokenColors": [{ "scope": "b" }] }',
+      'utf8',
+    );
     await expect(loadRawTheme(join(dir, 'a.json'))).rejects.toThrow();
   });
 

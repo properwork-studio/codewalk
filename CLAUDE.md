@@ -31,8 +31,11 @@
 pnpm watch        # 編譯監看
 # F5 → Extension Development Host 除錯
 pnpm test         # Vitest
+pnpm format       # Prettier 全專案格式化(改完程式碼收工前一定要跑,見下方紀律)
 pnpm package      # vsce 打包 VSIX({起手後補})
 ```
+
+**格式化紀律**:專案已裝 Prettier(`.prettierrc.json`)並設定 VS Code format-on-save;AI 或人手改完 `.ts` 檔**收工前務必跑 `pnpm format`**——讓已提交的程式碼跟讀者存檔時觸發的格式化結果一致,否則讀者一開檔隨手存個檔,`git diff` 就會混進大量無意義的排版變動,連帶讓錨定驗證(見 stale-step-detection capability)誤判成內容改動。
 
 ## 開發流程
 

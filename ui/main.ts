@@ -65,7 +65,9 @@ function restoreFileListFocus(root: HTMLElement, state: FileListState): void {
  * 重建、把原始 target 逐出 DOM 影響——用它判斷「這次點擊是否發生在選單內」
  * 才不會撞上時序問題(design.md 決策 6)。 */
 function isInsideAttemptMenu(event: MouseEvent): boolean {
-  return event.composedPath().some((node) => node instanceof Element && node.classList.contains('codewalk-attempt-menu'));
+  return event
+    .composedPath()
+    .some((node) => node instanceof Element && node.classList.contains('codewalk-attempt-menu'));
 }
 
 function render(): void {
@@ -104,6 +106,8 @@ function render(): void {
           onOpenReference: onOpenReference,
           onJumpToSnippet: onJumpToSnippet,
           onBackToList: onBackToList,
+          onOpenStaleFile: onOpenStaleFile,
+          onCopyRegenerateHint: onCopyRegenerateHint,
         },
         stepJumpError,
         isStepTransition,
@@ -178,6 +182,18 @@ function onJumpToSnippet(itemIndex: number): void {
   }
 }
 
+/** 失準的主 step 沒有既有的點擊跳轉(只有 snippet 項目有),重用既有的
+ * jumpToStep 訊息重新觸發 host 端的自動跳轉——host 會依失準狀態走開檔不選取模式。 */
+function onOpenStaleFile(): void {
+  if (current.screen === 'walking') {
+    vscode.postMessage({ type: 'jumpToStep', stepIndex: current.stepIndex });
+  }
+}
+
+function onCopyRegenerateHint(): void {
+  vscode.postMessage({ type: 'copyRegenerateHint' });
+}
+
 function onToggleTerm(term: string): void {
   if (current.screen === 'walking') {
     current = toggleTerm(current, term);
@@ -247,7 +263,7 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
       current = createFileListState(msg.files);
       break;
     case 'walkLoaded':
-      current = createWalkingState(msg.walk, msg.refDrifted);
+      current = createWalkingState(msg.walk, msg.refDrifted, msg.anchorReport);
       stepJumpError = null;
       snippetPreviews = msg.snippetPreviews;
       break;

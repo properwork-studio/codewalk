@@ -1,6 +1,11 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { EXTENSION_LANGUAGE } from '../shared/language';
-import { highlightSnippetLines, isLanguageSupported, onHighlightReady, type HighlightToken } from './highlight';
+import {
+  highlightSnippetLines,
+  isLanguageSupported,
+  onHighlightReady,
+  type HighlightToken,
+} from './highlight';
 
 function waitForHighlightReady(): Promise<void> {
   return new Promise((resolve) => onHighlightReady(resolve));
@@ -48,7 +53,10 @@ describe('highlightSnippetLines', () => {
     ];
     for (const [content, language] of cases) {
       const tokens = flatten(highlightSnippetLines(content, language));
-      expect(tokens.some((t) => t.color !== undefined), `${language} 沒有任何 token 上色`).toBe(true);
+      expect(
+        tokens.some((t) => t.color !== undefined),
+        `${language} 沒有任何 token 上色`,
+      ).toBe(true);
     }
   });
 

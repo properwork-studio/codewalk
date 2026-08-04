@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
-import { parseWebviewToHostMessage, type HostToWebviewMessage } from '../shared/protocol';
+import { parseWebviewToHostMessage, type AnchorReport, type HostToWebviewMessage } from '../shared/protocol';
 import { scoreQuiz, type CodewalkFile } from '../shared/schema';
+import { buildAnchorReport, effectiveLineRange, emptyAnchorReport, jumpModeFor } from './anchorCheck';
 import { AttemptStore } from './attemptStore';
 import { jumpToStep } from './fileJump';
 import { getWorkspaceHead, isRefDrifted } from './refDrift';
@@ -20,6 +21,7 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
   private currentWalkPath: string | undefined;
   private stepIndex = 0;
   private refDrifted = false;
+  private anchorReport: AnchorReport | undefined;
   private readonly attemptStore: AttemptStore;
 
   constructor(private readonly context: vscode.ExtensionContext) {
@@ -82,7 +84,16 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
       case 'clearAttempt':
         await this.handleClearAttempt(msg.path);
         break;
+      case 'copyRegenerateHint':
+        await this.handleCopyRegenerateHint();
+        break;
     }
+  }
+
+  private async handleCopyRegenerateHint(): Promise<void> {
+    const hint = this.currentWalk?.regenerateHint;
+    if (!hint) return;
+    await vscode.env.clipboard.writeText(hint);
   }
 
   private async handleQuizSubmitted(answers: number[]): Promise<void> {
@@ -108,7 +119,12 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
     const step = this.currentWalk?.steps[stepIndex];
     const item = step?.items?.[itemIndex];
     if (!root || !item || (item.kind !== 'snippet' && item.kind !== 'diff')) return;
-    const result = await jumpToStep(root, item);
+    const status = this.anchorReport?.steps[stepIndex]?.items.find((s) => s.itemIndex === itemIndex)
+      ?.status ?? {
+      kind: 'unanchored' as const,
+    };
+    const target = effectiveLineRange(item, status);
+    const result = await jumpToStep(root, { ...item, ...target }, jumpModeFor(status));
     if (!result.ok) {
       this.post({ type: 'stepJumpError', message: result.message });
     }
@@ -145,6 +161,9 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
     if (root) {
       const head = await getWorkspaceHead(root);
       this.refDrifted = head !== null && isRefDrifted(head, result.value.ref);
+      this.anchorReport = buildAnchorReport(root, result.value);
+    } else {
+      this.anchorReport = emptyAnchorReport(result.value);
     }
 
     this.post({
@@ -152,6 +171,7 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
       walk: this.currentWalk,
       stepIndex: this.stepIndex,
       refDrifted: this.refDrifted,
+      anchorReport: this.anchorReport,
       snippetPreviews: await this.readCurrentSnippetPreviews(),
     });
     await this.jumpToCurrentStep();
@@ -178,13 +198,19 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
     const root = getWorkspaceRoot();
     const items = this.currentWalk?.steps[this.stepIndex]?.items;
     if (!root || !items) return [];
-    return readSnippetPreviews(root, items);
+    const itemStatuses = this.anchorReport?.steps[this.stepIndex]?.items ?? [];
+    return readSnippetPreviews(root, items, itemStatuses);
   }
 
   private async jumpToCurrentStep(): Promise<void> {
     const root = getWorkspaceRoot();
     if (!root || !this.currentWalk) return;
-    const result = await jumpToStep(root, this.currentWalk.steps[this.stepIndex]);
+    const step = this.currentWalk.steps[this.stepIndex];
+    const status = this.anchorReport?.steps[this.stepIndex]?.step ?? {
+      kind: 'unanchored' as const,
+    };
+    const target = effectiveLineRange(step, status);
+    const result = await jumpToStep(root, { ...step, ...target }, jumpModeFor(status));
     if (!result.ok) {
       this.post({ type: 'stepJumpError', message: result.message });
     }
@@ -195,9 +221,15 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
   }
 
   private getHtml(webview: vscode.Webview): string {
-    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview.js'));
-    const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview.css'));
-    const codiconUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'codicon.css'));
+    const scriptUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview.js'),
+    );
+    const styleUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview.css'),
+    );
+    const codiconUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'codicon.css'),
+    );
     const nonce = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
 
     return `<!DOCTYPE html>

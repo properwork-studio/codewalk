@@ -12,6 +12,14 @@
   - **snippet**:額外引用另一段相關程式碼(如「呼叫端在這裡」)。`{ kind: 'snippet'; label: string; file: string; startLine: number; endLine: number }`。面板上預設展開預覽實際程式碼內容(Shiki 高亮,配色跟隨讀者當前的 VS Code 主題,無法解析時降級為內建的 dark-plus/light-plus,依編輯器深/淺色選用);點擊會重用既有 jumpToLocation 機制跳轉編輯器,不記錄「正在查看 snippet」的額外狀態。
   - **diff**:呈現既有檔案內一段程式碼「改了什麼」的說明元件(前後差異對照),用於區塊性改動——整檔新增或整檔刪除不適用,應改用 `snippet`(整檔新增)或文字說明(整檔刪除)。`{ kind: 'diff'; label: string; file: string; startLine: number; endLine: number; diffText: string }`。`diffText` 只存 diff 的 hunk 本體(不含 `diff --git`/`---`/`+++`/`@@ @@` 等檔頭行),逐行依開頭字元(`+`/`-`/空白)判斷新增/刪除/context,驗證階段要求至少一行加減行(否則不算 diff,退化情境應改用 `snippet`)。`startLine`/`endLine` 一律代表**新版(現在檔案)**的行號範圍,供點擊跳轉使用,與舊版行號無關;純刪除 hunk 時兩者相同,指向刪除位置在新版檔案中的插入點。渲染時依每行開頭字元疊加紅/綠背景色,並重用 Shiki 對去除開頭字元後的內容做語法高亮(配色來源與 snippet 相同,跟隨編輯器主題)。點擊行為與 `snippet` 完全相同,跳轉編輯器、不額外記錄狀態。
 
+## 失準偵測(stale-step-detection)
+
+- **漂移(drift)**:`ref`(產出當下釘住的 commit)與目前 workspace 的 HEAD **不一致**的整份訊號——只比對 commit,不看實際程式碼內容有沒有變。無錨導讀唯一的過期訊號,顯示為整份「行號可能漂移」警告。
+- **錨(anchor)**:`CodewalkStep` 與 `kind: 'snippet'` 的可選欄位 `anchor?: string`,存該 `file`:`startLine`-`endLine` 範圍在導讀產出當下的程式碼**逐字原文**。`kind: 'diff'` 不使用 `anchor`——它已有 `diffText` 作為原文快照。
+- **失準(stale)**:**單一 step 或 snippet 層級**的內容判定,獨立於漂移之外——即使 HEAD 與 `ref` 相同,理論上也可能因工作區未提交的改動而失準;反之 HEAD 與 `ref` 不同,但該 step 引用的程式碼恰好沒被動到,則不算失準。判定依序:目標檔案不存在 → 失準;現行內容與 `anchor` 逐字相同 → 相符;否則在整份檔案內搜尋 `anchor`,找到恰好一處 → 位移,找不到或找到多處 → 失準。**漂移的導讀不一定有失準的 step**,兩者是不同粒度的獨立訊號。
+- **位移跟隨**:`anchor` 在檔案內找到唯一匹配、但位置與 `.codewalk.json` 記錄的行號不同時,系統自動改用新行號預覽與跳轉。**刻意不稱「校正」**——校正暗示系統在猜測或修補,而位移跟隨只在內容**逐字相同**時生效,對讀者沒有任何可能出錯的推測成分,因此也不對讀者顯示任何「已調整」的提示。
+- **`regenerateHint`**:`CodewalkFile` 的頂層可選欄位,由產生器自述「如何重新產生這份導讀」的指令文字。播放器只負責顯示與提供「複製」動作,**不解讀、不執行**——維持播放器與產生器分離的紀律(見 `openspec/decisions.md`「播放器與產生器分離」)。
+
 ## 作答紀錄(attempt record)
 
 - **定位**:讀者某份導讀**最後一次**完成 quiz 的快照,含作答時間、答對題數、總題數、是否通過門檻。**不屬於 `.codewalk.json` 格式**——不寫入導讀檔案本身,存於 VS Code 的 workspace 狀態(`workspaceState`),經 `WalkFileSummary.lastAttempt`(`shared/protocol.ts`)送到 webview 顯示。統一用詞為「作答紀錄」,不用「成績」「進度」等說法。

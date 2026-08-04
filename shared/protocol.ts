@@ -14,8 +14,53 @@ export interface WalkFileSummary {
 }
 
 export type SnippetPreviewResult =
-  | { itemIndex: number; ok: true; content: string; language: string }
-  | { itemIndex: number; ok: false; message: string };
+  | { itemIndex: number; ok: true; content: string; language: string; source: 'current' | 'anchor' }
+  | { itemIndex: number; ok: false; message: string; anchorContent?: string; language?: string };
+
+/**
+ * 單一 step 或 snippet 相對於其 `anchor` 的驗證結果。`shifted` 只在整份檔案內
+ * 找到「恰好一處」逐字相同的內容時成立,`startLine`/`endLine` 為新位置——
+ * 見 stale-step-detection capability「單純位移時跟隨新行號」。
+ */
+export type AnchorStatus =
+  | { kind: 'unanchored' }
+  | { kind: 'matched' }
+  | { kind: 'shifted'; startLine: number; endLine: number }
+  | { kind: 'stale'; reason: 'notFound' | 'ambiguous' | 'fileMissing' };
+
+export interface AnchorItemStatus {
+  itemIndex: number;
+  status: AnchorStatus;
+}
+
+export interface AnchorStepReport {
+  step: AnchorStatus;
+  items: AnchorItemStatus[];
+}
+
+/**
+ * 整份導讀的錨驗證結果,載入時一次計算、隨 walkLoaded 送出(design.md 決策 3)。
+ * `anyAnchored` 只要有任一目標提供了非空白 anchor 就是 true——不論驗證結果是
+ * matched/shifted/stale,用來決定是否改以逐步狀態取代整份 refDrifted 警告。
+ */
+export interface AnchorReport {
+  anyAnchored: boolean;
+  anyStale: boolean;
+  staleCount: number;
+  steps: AnchorStepReport[];
+}
+
+/**
+ * 位移時採用新行號,否則沿用原本記錄的行號。純函式,host(跳轉、預覽)與
+ * webview(面板上顯示的行號文字)共用同一份邏輯,避免兩邊各自實作而失準
+ * (design.md 決策 3、5)。
+ */
+export function effectiveLineRange(
+  original: { startLine: number; endLine: number },
+  status: AnchorStatus,
+): { startLine: number; endLine: number } {
+  return status.kind === 'shifted' ? { startLine: status.startLine, endLine: status.endLine } : original;
+}
 
 /** VS Code 主題 JSON 的 tokenColors 條目;scope 可以是單一字串或字串陣列。 */
 export interface ThemeTokenColorRule {
@@ -41,6 +86,7 @@ export type HostToWebviewMessage =
       walk: CodewalkFile;
       stepIndex: number;
       refDrifted: boolean;
+      anchorReport: AnchorReport;
       snippetPreviews: SnippetPreviewResult[];
     }
   | { type: 'stepChanged'; stepIndex: number; snippetPreviews: SnippetPreviewResult[] }
@@ -62,7 +108,8 @@ export type WebviewToHostMessage =
   | { type: 'quizSubmitted'; answers: number[] }
   | { type: 'openReference'; url: string }
   | { type: 'jumpToSnippet'; stepIndex: number; itemIndex: number }
-  | { type: 'clearAttempt'; path: string };
+  | { type: 'clearAttempt'; path: string }
+  | { type: 'copyRegenerateHint' };
 
 function isStringArrayLike(value: unknown): value is number[] {
   return Array.isArray(value) && value.every((v) => typeof v === 'number');
@@ -95,6 +142,8 @@ export function parseWebviewToHostMessage(data: unknown): WebviewToHostMessage |
         : null;
     case 'clearAttempt':
       return typeof d.path === 'string' ? { type: 'clearAttempt', path: d.path } : null;
+    case 'copyRegenerateHint':
+      return { type: 'copyRegenerateHint' };
     default:
       return null;
   }

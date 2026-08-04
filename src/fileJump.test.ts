@@ -15,7 +15,11 @@ describe('jumpToStep', () => {
     const dir = await mkdtemp(join(tmpdir(), 'codewalk-jump-'));
     dirsToClean.push(dir);
 
-    const result = await jumpToStep(dir, { file: 'does/not/exist.ts', startLine: 1, endLine: 1 });
+    const result = await jumpToStep(dir, {
+      file: 'does/not/exist.ts',
+      startLine: 1,
+      endLine: 1,
+    });
 
     expect(result).toEqual({
       ok: false,

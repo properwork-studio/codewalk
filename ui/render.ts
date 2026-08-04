@@ -1,6 +1,13 @@
 import { detectLanguage } from '../shared/language';
-import type { AttemptSummary, SnippetPreviewResult, WalkFileSummary } from '../shared/protocol';
-import type { CodewalkItem, CodewalkQuizQuestion } from '../shared/schema';
+import {
+  effectiveLineRange,
+  type AnchorStatus,
+  type AnchorStepReport,
+  type AttemptSummary,
+  type SnippetPreviewResult,
+  type WalkFileSummary,
+} from '../shared/protocol';
+import type { CodewalkItem, CodewalkQuizQuestion, CodewalkStep } from '../shared/schema';
 import { highlightSnippetLines, type HighlightToken } from './highlight';
 import { formatAbsoluteDateTime, formatRelativeTime } from './relativeTime';
 import { isAtLastStep, type QuizResult, type QuizState, type WalkingState } from './state';
@@ -90,7 +97,9 @@ export function renderFileList(
   const container = el('div', 'codewalk-file-list');
   container.appendChild(el('h2', undefined, '選擇導讀'));
   if (files.length === 0) {
-    container.appendChild(el('p', 'codewalk-empty', '找不到導讀檔案(workspace 內沒有 .codewalk/*.codewalk.json)'));
+    container.appendChild(
+      el('p', 'codewalk-empty', '找不到導讀檔案(workspace 內沒有 .codewalk/*.codewalk.json)'),
+    );
     return container;
   }
   const list = el('ul');
@@ -135,6 +144,8 @@ export interface WalkingHandlers {
   onOpenReference: (url: string) => void;
   onJumpToSnippet: (itemIndex: number) => void;
   onBackToList: () => void;
+  onOpenStaleFile: () => void;
+  onCopyRegenerateHint: () => void;
 }
 
 function renderAnnotation(kind: 'tip' | 'todo', iconName: string, text: string): HTMLElement {
@@ -206,32 +217,57 @@ function renderSnippetCode(content: string, language: string, startLine: number)
   return code;
 }
 
+/** 產出當時內容的說明標籤——不與系統層級警告(.codewalk-warning)共用樣式,
+ * 避免讀者把「這是舊內容」跟「系統錯誤」搞混,但沿用同一套告警色階(design.md 決策 8)。 */
+function renderStaleLabel(): HTMLElement {
+  const label = el('div', 'codewalk-stale-label');
+  label.appendChild(icon('history'));
+  label.appendChild(el('span', undefined, '以下為產出當時的內容,現行版本已不同'));
+  return label;
+}
+
 function renderSnippet(
   item: Extract<CodewalkItem, { kind: 'snippet' }>,
   itemIndex: number,
   snippetPreviews: SnippetPreviewResult[],
+  status: AnchorStatus,
   onJumpToSnippet: (itemIndex: number) => void,
 ): HTMLElement {
-  const container = el('div', 'codewalk-snippet');
-  const header = el('button', 'codewalk-snippet-header');
-  header.appendChild(icon('code'));
+  const isStale = status.kind === 'stale';
+  const container = el('div', `codewalk-snippet${isStale ? ' codewalk-snippet--stale' : ''}`);
+  const { startLine, endLine } = effectiveLineRange(item, status);
+  const preview = snippetPreviews.find((p) => p.itemIndex === itemIndex);
+
+  // 檔案不存在時不提供「開啟現行檔案」動作——沒有東西可開(stale-step-detection
+  // capability「目標檔案不存在時的開啟動作」scenario)。
+  const canOpen = !(preview && !preview.ok && preview.anchorContent !== undefined);
+  const header = el(canOpen ? 'button' : 'div', 'codewalk-snippet-header');
+  header.appendChild(icon(isStale ? 'warning' : 'code'));
   const headerText = el('span', 'codewalk-snippet-header-text');
-  headerText.appendChild(el('span', 'codewalk-snippet-label', item.label));
   headerText.appendChild(
-    el('span', 'codewalk-snippet-file-ref', `${item.file}:${item.startLine}-${item.endLine}`),
+    el('span', 'codewalk-snippet-label', isStale && canOpen ? '開啟現行檔案' : item.label),
   );
+  headerText.appendChild(el('span', 'codewalk-snippet-file-ref', `${item.file}:${startLine}-${endLine}`));
   header.appendChild(headerText);
-  header.addEventListener('click', () => onJumpToSnippet(itemIndex));
+  if (canOpen && header instanceof HTMLButtonElement) {
+    header.addEventListener('click', () => onJumpToSnippet(itemIndex));
+  }
   container.appendChild(header);
 
-  const preview = snippetPreviews.find((p) => p.itemIndex === itemIndex);
+  if (isStale) {
+    container.appendChild(renderStaleLabel());
+  }
+
   if (preview && preview.ok) {
-    container.appendChild(renderSnippetCode(preview.content, preview.language, item.startLine));
+    container.appendChild(renderSnippetCode(preview.content, preview.language, startLine));
   } else if (preview && !preview.ok) {
     const warning = el('div', 'codewalk-warning');
     warning.appendChild(icon('warning'));
     warning.appendChild(el('span', undefined, preview.message));
     container.appendChild(warning);
+    if (preview.anchorContent !== undefined && preview.language) {
+      container.appendChild(renderSnippetCode(preview.anchorContent, preview.language, startLine));
+    }
   }
   return container;
 }
@@ -277,10 +313,18 @@ function renderDiffCode(diffLines: DiffLine[], language: string): HTMLElement {
     const row = el('div', `codewalk-diff-line codewalk-diff-line-${diffLine.type}`);
     row.appendChild(el('span', 'codewalk-diff-line-marker', DIFF_MARKER[diffLine.type]));
     row.appendChild(
-      el('span', 'codewalk-diff-line-number', diffLine.oldLineNumber === null ? '' : String(diffLine.oldLineNumber)),
+      el(
+        'span',
+        'codewalk-diff-line-number',
+        diffLine.oldLineNumber === null ? '' : String(diffLine.oldLineNumber),
+      ),
     );
     row.appendChild(
-      el('span', 'codewalk-diff-line-number', diffLine.newLineNumber === null ? '' : String(diffLine.newLineNumber)),
+      el(
+        'span',
+        'codewalk-diff-line-number',
+        diffLine.newLineNumber === null ? '' : String(diffLine.newLineNumber),
+      ),
     );
     const lineCode = document.createElement('span');
     lineCode.className = 'codewalk-diff-line-code';
@@ -301,7 +345,9 @@ function renderDiff(
   header.appendChild(icon('diff'));
   const headerText = el('span', 'codewalk-diff-header-text');
   headerText.appendChild(el('span', 'codewalk-diff-label', item.label));
-  headerText.appendChild(el('span', 'codewalk-diff-file-ref', `${item.file}:${item.startLine}-${item.endLine}`));
+  headerText.appendChild(
+    el('span', 'codewalk-diff-file-ref', `${item.file}:${item.startLine}-${item.endLine}`),
+  );
   header.appendChild(headerText);
   header.addEventListener('click', () => onJumpToSnippet(itemIndex));
   container.appendChild(header);
@@ -314,6 +360,7 @@ function renderDiff(
 function renderItems(
   items: CodewalkItem[],
   snippetPreviews: SnippetPreviewResult[],
+  itemAnchorStatuses: AnchorStepReport['items'],
   handlers: Pick<WalkingHandlers, 'onOpenReference' | 'onJumpToSnippet'>,
 ): HTMLElement {
   const container = el('div', 'codewalk-items');
@@ -331,14 +378,66 @@ function renderItems(
       case 'reference':
         container.appendChild(renderReference(item.label, item.url, handlers.onOpenReference));
         break;
-      case 'snippet':
-        container.appendChild(renderSnippet(item, itemIndex, snippetPreviews, handlers.onJumpToSnippet));
+      case 'snippet': {
+        const status = itemAnchorStatuses.find((s) => s.itemIndex === itemIndex)?.status ?? {
+          kind: 'unanchored',
+        };
+        container.appendChild(
+          renderSnippet(item, itemIndex, snippetPreviews, status, handlers.onJumpToSnippet),
+        );
         break;
+      }
       case 'diff':
         container.appendChild(renderDiff(item, itemIndex, handlers.onJumpToSnippet));
         break;
     }
   });
+  return container;
+}
+
+/** 導讀含任一失準目標時顯示,提示與 refDrifted 使用同一套系統層級警告樣式
+ * (stale-step-detection capability「重生引導」)。 */
+function renderRegeneratePrompt(
+  regenerateHint: string | undefined,
+  onCopyRegenerateHint: () => void,
+): HTMLElement {
+  const warning = el('div', 'codewalk-warning codewalk-regenerate-prompt');
+  warning.appendChild(icon('warning'));
+  const text = el('div', 'codewalk-regenerate-prompt-text');
+  text.appendChild(el('span', undefined, '這份導讀有步驟已與現行程式碼不符,建議重新產生'));
+  warning.appendChild(text);
+  if (regenerateHint) {
+    const copyButton = el('button', 'codewalk-regenerate-copy');
+    copyButton.appendChild(icon('copy'));
+    copyButton.appendChild(el('span', undefined, '複製重生指令'));
+    copyButton.addEventListener('click', onCopyRegenerateHint);
+    warning.appendChild(copyButton);
+  }
+  return warning;
+}
+
+/** step 本身沒有既有的預覽 UI,只在失準時插入(design.md 決策 4)。 */
+function renderStepStaleBlock(
+  step: CodewalkStep,
+  status: Extract<AnchorStatus, { kind: 'stale' }>,
+  onOpenStaleFile: () => void,
+): HTMLElement {
+  const container = el('div', 'codewalk-snippet codewalk-snippet--stale');
+  const canOpen = status.reason !== 'fileMissing';
+  const header = el(canOpen ? 'button' : 'div', 'codewalk-snippet-header');
+  header.appendChild(icon('warning'));
+  const headerText = el('span', 'codewalk-snippet-header-text');
+  headerText.appendChild(el('span', 'codewalk-snippet-label', canOpen ? '開啟現行檔案' : '找不到檔案'));
+  headerText.appendChild(el('span', 'codewalk-snippet-file-ref', step.file));
+  header.appendChild(headerText);
+  if (canOpen && header instanceof HTMLButtonElement) {
+    header.addEventListener('click', onOpenStaleFile);
+  }
+  container.appendChild(header);
+  container.appendChild(renderStaleLabel());
+  if (step.anchor && step.anchor.trim().length > 0) {
+    container.appendChild(renderSnippetCode(step.anchor, detectLanguage(step.file), step.startLine));
+  }
   return container;
 }
 
@@ -365,6 +464,10 @@ export function renderWalking(
   snippetPreviews: SnippetPreviewResult[] = [],
 ): HTMLElement {
   const step = state.walk.steps[state.stepIndex];
+  const stepReport = state.anchorReport.steps[state.stepIndex] ?? {
+    step: { kind: 'unanchored' as const },
+    items: [],
+  };
   const container = el('div', `codewalk-walking${animateStepChange ? ' is-step-transition' : ''}`);
 
   const backButton = el('button', 'codewalk-back-to-list');
@@ -373,11 +476,17 @@ export function renderWalking(
   backButton.addEventListener('click', handlers.onBackToList);
   container.appendChild(backButton);
 
-  if (state.refDrifted) {
+  // 導讀含任一具備有效 anchor 的目標時,改以逐步失準狀態取代整份漂移警告
+  // (walk-player capability「ref 漂移偵測」MODIFIED requirement)。
+  if (state.refDrifted && !state.anchorReport.anyAnchored) {
     const warning = el('div', 'codewalk-warning');
     warning.appendChild(icon('warning'));
     warning.appendChild(el('span', undefined, '目前 commit 與導讀釘住的版本不同,行號可能漂移'));
     container.appendChild(warning);
+  }
+
+  if (state.anchorReport.anyStale) {
+    container.appendChild(renderRegeneratePrompt(state.walk.regenerateHint, handlers.onCopyRegenerateHint));
   }
 
   if (jumpError) {
@@ -393,13 +502,18 @@ export function renderWalking(
   );
   container.appendChild(createStepDots(state.stepIndex, state.walk.steps.length));
   container.appendChild(el('h3', undefined, step.title));
-  container.appendChild(el('p', 'codewalk-file-ref', `${step.file}:${step.startLine}-${step.endLine}`));
+  const { startLine: stepStartLine, endLine: stepEndLine } = effectiveLineRange(step, stepReport.step);
+  container.appendChild(el('p', 'codewalk-file-ref', `${step.file}:${stepStartLine}-${stepEndLine}`));
+
+  if (stepReport.step.kind === 'stale') {
+    container.appendChild(renderStepStaleBlock(step, stepReport.step, handlers.onOpenStaleFile));
+  }
 
   container.appendChild(el('p', 'codewalk-narration', step.narration));
 
   if (step.items && step.items.length > 0) {
     container.appendChild(
-      renderItems(step.items, snippetPreviews, {
+      renderItems(step.items, snippetPreviews, stepReport.items, {
         onOpenReference: handlers.onOpenReference,
         onJumpToSnippet: handlers.onJumpToSnippet,
       }),
@@ -613,7 +727,11 @@ function createQuizBreakdown(state: QuizResult): HTMLElement {
     item.appendChild(el('p', 'codewalk-quiz-breakdown-your-answer', `你的答案:${yourAnswerText}`));
     if (!isCorrect) {
       item.appendChild(
-        el('p', 'codewalk-quiz-breakdown-correct-answer', `正確答案:${question.options[question.correctIndex]}`),
+        el(
+          'p',
+          'codewalk-quiz-breakdown-correct-answer',
+          `正確答案:${question.options[question.correctIndex]}`,
+        ),
       );
     }
     const optionExplanations = question.optionExplanations;
@@ -640,9 +758,7 @@ export function renderQuizResult(state: QuizResult, handlers: QuizResultHandlers
   status.appendChild(document.createTextNode(state.passed ? '通過' : '未通過'));
   container.appendChild(status);
   if (!state.passed) {
-    container.appendChild(
-      el('p', 'codewalk-suggestion', '建議重走本導讀,或選擇更詳細版本的導讀再試一次'),
-    );
+    container.appendChild(el('p', 'codewalk-suggestion', '建議重走本導讀,或選擇更詳細版本的導讀再試一次'));
   }
   container.appendChild(createQuizBreakdown(state));
 

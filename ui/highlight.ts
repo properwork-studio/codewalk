@@ -32,8 +32,29 @@ import type { ResolvedEditorTheme } from '../shared/protocol';
 // switch-to-shiki-highlighter/design.md 決策 1 與 scripts/compare-shiki-engines.mjs),
 // 差異為 0——新增語言時應重跑該腳本再決定引擎是否仍夠用。
 const LANGS = [
-  bash, c, cpp, csharp, css, dart, go, groovy, html, java, javascript, json, kotlin, markdown, php, python, ruby,
-  rust, scala, sql, swift, typescript, yaml,
+  bash,
+  c,
+  cpp,
+  csharp,
+  css,
+  dart,
+  go,
+  groovy,
+  html,
+  java,
+  javascript,
+  json,
+  kotlin,
+  markdown,
+  php,
+  python,
+  ruby,
+  rust,
+  scala,
+  sql,
+  swift,
+  typescript,
+  yaml,
 ];
 
 const DARK_FALLBACK_THEME = 'dark-plus';
@@ -70,7 +91,10 @@ function themeToShikiRegistration(theme: ResolvedEditorTheme): ThemeRegistration
  * 對同名主題重載是無操作(no-op,已實測),要讓「切換主題後重繪」生效,
  * 只能用新名稱註冊,不能覆蓋舊名稱。
  */
-export async function applyEditorTheme(theme: ResolvedEditorTheme | null, kind: 'light' | 'dark'): Promise<void> {
+export async function applyEditorTheme(
+  theme: ResolvedEditorTheme | null,
+  kind: 'light' | 'dark',
+): Promise<void> {
   await ready;
   if (!highlighter) return;
   if (theme) {

@@ -99,7 +99,10 @@ export function findThemeDefinition(
     if (!Array.isArray(themes)) continue;
     for (const t of themes) {
       if ((t.label === label || t.id === label) && typeof t.path === 'string') {
-        return { file: join(ext.extensionPath, t.path), uiTheme: typeof t.uiTheme === 'string' ? t.uiTheme : 'vs-dark' };
+        return {
+          file: join(ext.extensionPath, t.path),
+          uiTheme: typeof t.uiTheme === 'string' ? t.uiTheme : 'vs-dark',
+        };
       }
     }
   }

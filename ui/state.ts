@@ -1,4 +1,4 @@
-import type { WalkFileSummary } from '../shared/protocol';
+import type { AnchorReport, WalkFileSummary } from '../shared/protocol';
 import { scoreQuiz, type CodewalkFile } from '../shared/schema';
 
 export interface FileListState {
@@ -35,6 +35,7 @@ export interface WalkingState {
   walk: CodewalkFile;
   stepIndex: number;
   refDrifted: boolean;
+  anchorReport: AnchorReport;
   expandedTerms: Set<string>;
 }
 
@@ -42,6 +43,7 @@ export interface QuizState {
   screen: 'quiz';
   walk: CodewalkFile;
   refDrifted: boolean;
+  anchorReport: AnchorReport;
   answers: (number | null)[];
 }
 
@@ -49,13 +51,18 @@ export interface QuizResult {
   screen: 'quizResult';
   walk: CodewalkFile;
   refDrifted: boolean;
+  anchorReport: AnchorReport;
   answers: (number | null)[];
   score: number;
   passed: boolean;
 }
 
-export function createWalkingState(walk: CodewalkFile, refDrifted: boolean): WalkingState {
-  return { screen: 'walking', walk, stepIndex: 0, refDrifted, expandedTerms: new Set() };
+export function createWalkingState(
+  walk: CodewalkFile,
+  refDrifted: boolean,
+  anchorReport: AnchorReport,
+): WalkingState {
+  return { screen: 'walking', walk, stepIndex: 0, refDrifted, anchorReport, expandedTerms: new Set() };
 }
 
 export function isAtLastStep(state: WalkingState): boolean {
@@ -86,12 +93,13 @@ export function enterQuiz(state: WalkingState): QuizState {
     screen: 'quiz',
     walk: state.walk,
     refDrifted: state.refDrifted,
+    anchorReport: state.anchorReport,
     answers: state.walk.quiz.map(() => null),
   };
 }
 
 export function cancelQuiz(state: QuizState): WalkingState {
-  const walking = createWalkingState(state.walk, state.refDrifted);
+  const walking = createWalkingState(state.walk, state.refDrifted, state.anchorReport);
   return { ...walking, stepIndex: state.walk.steps.length - 1 };
 }
 
@@ -102,11 +110,11 @@ export function selectQuizAnswer(state: QuizState, questionIndex: number, option
 }
 
 export function restartWalk(state: QuizResult): WalkingState {
-  return createWalkingState(state.walk, state.refDrifted);
+  return createWalkingState(state.walk, state.refDrifted, state.anchorReport);
 }
 
 export function retryQuiz(state: QuizResult): QuizState {
-  return enterQuiz(createWalkingState(state.walk, state.refDrifted));
+  return enterQuiz(createWalkingState(state.walk, state.refDrifted, state.anchorReport));
 }
 
 export function submitQuiz(state: QuizState): QuizResult {
@@ -118,6 +126,7 @@ export function submitQuiz(state: QuizState): QuizResult {
     screen: 'quizResult',
     walk: state.walk,
     refDrifted: state.refDrifted,
+    anchorReport: state.anchorReport,
     answers: state.answers,
     score,
     passed,

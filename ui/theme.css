@@ -428,6 +428,7 @@ button.codewalk-back-to-list:hover:not(:disabled) {
 .codewalk-quiz-breakdown-explanation-body {
   color: var(--vscode-descriptionForeground);
   font-size: 0.92em;
+  white-space: pre-line;
 }
 
 .codewalk-quiz-breakdown-explanation.is-your-answer {
@@ -662,6 +663,10 @@ button.codewalk-attempt-menu-item:hover:not(:disabled) {
 
 .codewalk-narration {
   line-height: 1.5;
+  /* 保留內容裡的換行(分段、條列的純文字標號)——textContent 塞進 <p> 預設會
+     把換行當空白吃掉,多段落敘述會擠成一坨。用 pre-line 不用 pre-wrap:只保留
+     換行,但仍把連續空白/縮排壓成一個,避免來源格式化留下的空白被原樣呈現。 */
+  white-space: pre-line;
 }
 
 .codewalk-walk-complete {
@@ -784,6 +789,7 @@ button.codewalk-attempt-menu-item:hover:not(:disabled) {
 .codewalk-annotation-text {
   margin: 0;
   line-height: 1.4;
+  white-space: pre-line;
 }
 
 .codewalk-annotation-tip {
@@ -828,6 +834,7 @@ button.codewalk-attempt-menu-item:hover:not(:disabled) {
 .codewalk-pitfall-line {
   margin: 0.3rem 0 0;
   line-height: 1.4;
+  white-space: pre-line;
 }
 
 .codewalk-pitfall-label {
@@ -890,6 +897,45 @@ button.codewalk-attempt-menu-item:hover:not(:disabled) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 失準的 step/snippet——邊框改用系統層級警告色階,呼應 .codewalk-warning,
+   讓讀者一眼認出「這是系統偵測到的狀態」,而非作者寫的內容型提示
+   (design.md 決策 8)。找不到檔案時 header 是不可點擊的 <div>,不需要額外
+   樣式:全域 button reset 本來就只作用在 <button> 上,<div> 天然不可點擊。 */
+.codewalk-snippet--stale {
+  border-color: var(--vscode-editorWarning-foreground);
+}
+
+.codewalk-snippet--stale .codewalk-snippet-header {
+  color: var(--vscode-editorWarning-foreground);
+}
+
+.codewalk-stale-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--vscode-editorWarning-foreground);
+  font-size: 0.85em;
+  opacity: 0.85;
+  padding: 0 0.6rem 0.4rem;
+}
+
+.codewalk-regenerate-prompt {
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.codewalk-regenerate-prompt-text {
+  flex: 1;
+}
+
+.codewalk-regenerate-copy {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
 }
 
 /* 背景與預設前景色直接用 VS Code CSS 變數——Shiki 只替「有對應到 scope」

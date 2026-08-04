@@ -73,6 +73,10 @@ describe('parseWebviewToHostMessage', () => {
     expect(parseWebviewToHostMessage({ type: 'clearAttempt' })).toBeNull();
   });
 
+  it('parses a copyRegenerateHint message', () => {
+    expect(parseWebviewToHostMessage({ type: 'copyRegenerateHint' })).toEqual({ type: 'copyRegenerateHint' });
+  });
+
   it('rejects an unknown message type', () => {
     expect(parseWebviewToHostMessage({ type: 'unknown' })).toBeNull();
   });

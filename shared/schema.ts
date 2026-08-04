@@ -8,7 +8,7 @@ export type CodewalkItem =
   | { kind: 'pitfall'; misconception: string; reality: string }
   | { kind: 'todo'; text: string }
   | { kind: 'reference'; label: string; url: string }
-  | { kind: 'snippet'; label: string; file: string; startLine: number; endLine: number }
+  | { kind: 'snippet'; label: string; file: string; startLine: number; endLine: number; anchor?: string }
   | {
       kind: 'diff';
       label: string;
@@ -25,6 +25,8 @@ export interface CodewalkStep {
   startLine: number;
   endLine: number;
   narration: string;
+  /** 產出當下該行段的程式碼原文,用於失準偵測(見 stale-step-detection capability)。 */
+  anchor?: string;
   terms?: CodewalkTerm[];
   items?: CodewalkItem[];
 }
@@ -43,6 +45,8 @@ export interface CodewalkFile {
   quiz: CodewalkQuizQuestion[];
   /** 過關門檻(答對題數)。省略時預設為簡單多數(ceil(題數/2))。 */
   passThreshold?: number;
+  /** 重新產生本導讀的方式,由產生器自述;播放器只顯示與複製,不解讀內容。 */
+  regenerateHint?: string;
 }
 
 /**
@@ -71,9 +75,7 @@ export function scoreQuiz(walk: CodewalkFile, answers: readonly number[]): QuizS
   return { score, total, passed: score >= resolvePassThreshold(walk) };
 }
 
-export type ValidationResult =
-  | { valid: true; value: CodewalkFile }
-  | { valid: false; errors: string[] };
+export type ValidationResult = { valid: true; value: CodewalkFile } | { valid: false; errors: string[] };
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
@@ -81,6 +83,10 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0;
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === 'string';
 }
 
 function isHttpUrl(value: unknown): value is string {
@@ -106,11 +112,7 @@ function hasAtLeastOneChangedLine(diffText: string): boolean {
   return lines.some((line) => line.startsWith('+') || line.startsWith('-'));
 }
 
-function validateLineRange(
-  obj: Record<string, unknown>,
-  path: string,
-  errors: string[],
-): void {
+function validateLineRange(obj: Record<string, unknown>, path: string, errors: string[]): void {
   if (!isPositiveInteger(obj.startLine)) {
     errors.push(`${path}.startLine 必須是正整數`);
   }
@@ -150,6 +152,9 @@ function validateStep(step: unknown, path: string, errors: string[]): void {
   validateLineRange(s, path, errors);
   if (!isNonEmptyString(s.narration)) {
     errors.push(`${path}.narration 必須是非空字串`);
+  }
+  if (!isOptionalString(s.anchor)) {
+    errors.push(`${path}.anchor 必須是字串`);
   }
   if (s.terms !== undefined) {
     if (!Array.isArray(s.terms)) {
@@ -204,6 +209,9 @@ function validateItem(item: unknown, path: string, errors: string[]): void {
         errors.push(`${path}.file 必須是非空字串`);
       }
       validateLineRange(it, path, errors);
+      if (!isOptionalString(it.anchor)) {
+        errors.push(`${path}.anchor 必須是字串`);
+      }
       break;
     case 'diff':
       if (!isNonEmptyString(it.label)) {
@@ -298,6 +306,10 @@ export function validateCodewalk(data: unknown): ValidationResult {
     ) {
       errors.push('passThreshold 必須是 1 到 quiz 題數之間的整數');
     }
+  }
+
+  if (d.regenerateHint !== undefined && !isNonEmptyString(d.regenerateHint)) {
+    errors.push('regenerateHint 必須是非空字串');
   }
 
   if (errors.length > 0) {
