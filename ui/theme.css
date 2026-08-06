@@ -12,14 +12,23 @@ body {
    半透明,前景色完全不動,適用任何主題。VS Code 會在 webview 的 <body> 上
    加 vscode-light / vscode-dark / vscode-high-contrast(-light)class,靠它
    判斷深淺,不靠猜測哪個 token 夠對比。 */
+/* --codewalk-surface-overlay 系列沿用上面同一個理由:不挑特定主題色票,疊加
+   相對主背景淺/深的半透明,任何主題下都只是「比背景稍微浮起一點」,不會有
+   單一主題看順眼、換一個主題就突兀的問題(見 add-markdown-rendering 之後的
+   手動驗收回饋)。-strong 給需要比一般列表項目更凸顯的區塊(如 quiz 作答
+   紀錄的每題結果框)用,同一底色疊更高的不透明度,天然比 -overlay 更明顯。 */
 body.vscode-light,
 body.vscode-high-contrast-light {
   --codewalk-hover-overlay: rgba(0, 0, 0, 0.08);
+  --codewalk-surface-overlay: rgba(0, 0, 0, 0.05);
+  --codewalk-surface-overlay-strong: rgba(0, 0, 0, 0.1);
 }
 
 body.vscode-dark,
 body.vscode-high-contrast {
   --codewalk-hover-overlay: rgba(255, 255, 255, 0.14);
+  --codewalk-surface-overlay: rgba(255, 255, 255, 0.05);
+  --codewalk-surface-overlay-strong: rgba(255, 255, 255, 0.12);
 }
 
 /* #app 只是用來接收鍵盤事件的隱形焦點容器,不是給使用者導覽用的可視元件,
@@ -343,6 +352,11 @@ button.codewalk-back-to-list:hover:not(:disabled) {
   border-radius: 0 8px 8px 0;
   padding: 0.35rem 0.6rem;
   margin-bottom: 0.5rem;
+  /* 原本沒設背景,跟 body 的 editor-background 完全相同色,只靠 1px 邊框
+     分隔——弱主題對比下容易被「吃掉」。疊 -strong 版本的半透明覆蓋,比
+     一般列表項目(.codewalk-file-item)更凸顯,呼應這是使用者要特別注意
+     的作答結果區塊。 */
+  background-color: var(--codewalk-surface-overlay-strong, rgba(128, 128, 128, 0.16));
 }
 
 .codewalk-quiz-breakdown-item.is-correct {
@@ -452,25 +466,31 @@ button.codewalk-back-to-list:hover:not(:disabled) {
 
 .codewalk-file-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   text-align: left;
-  margin-bottom: 0.35rem;
   padding: 0.5rem 0.75rem;
-  border-left: 3px solid transparent;
-  color: var(--vscode-button-secondaryForeground);
-  background-color: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-foreground);
+  background-color: transparent;
 }
 
-.codewalk-file-item:hover:not(:disabled) {
-  border-left-color: var(--vscode-focusBorder);
-  background-color: var(--vscode-button-secondaryHoverBackground);
-  transform: translateX(2px);
+/* .codewalk-file-item 是 <button>,全域的 button:hover:not(:disabled) 規則
+   (specificity: 1 個型別 + 2 個 pseudo-class)會把 hover 背景蓋成主題的
+   --vscode-button-hoverBackground 實色,贏過 .codewalk-file-item-row:hover
+  (specificity: 2 個 class/pseudo-class,少一階)。加型別選擇器把 specificity
+   拉高,強制按鈕本身在 hover 時維持透明,讓整列唯一的 hover 效果只剩
+   row 上那層半透明疊加——不然按鈕會變成跟主題色掛勾的實色塊,跟本次
+   「hover 只能靠透明度變化、不能換色」的要求衝突(同一顆坑 .codewalk-back-
+   to-list 那條規則已經踩過一次,見上面的說明)。 */
+button.codewalk-file-item:hover:not(:disabled) {
+  background-color: transparent;
 }
 
 .codewalk-file-item .codicon {
   opacity: 0.85;
+  margin-top: 0.1rem;
 }
 
 .codewalk-file-item-title {
@@ -479,18 +499,32 @@ button.codewalk-back-to-list:hover:not(:disabled) {
   overflow-wrap: anywhere;
 }
 
+/* 背景與 hover 高亮都掛在整個 row(含右側的作答紀錄與「更多動作」選單),
+   不只掛在左邊的 .codewalk-file-item 按鈕上——否則沒有作答紀錄的列(按鈕
+   撐滿整列)看起來正常,一旦某份導讀有作答紀錄、按鈕讓出空間給右側區塊,
+   右側就會露出未上色的頁面底色,跟左邊的按鈕顏色不連續。CSS 的 :hover
+   本來就會因為滑鼠停在子元素(按鈕)上而連帶匹配到父元素,不需要額外的
+   JS 或 :has() 選擇器。 */
 .codewalk-file-item-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
   margin-bottom: 0.35rem;
+  padding-right: 0.75rem;
+  border-left: 3px solid transparent;
+  background-color: var(--codewalk-surface-overlay, rgba(128, 128, 128, 0.08));
 }
 
-.codewalk-file-item-row .codewalk-file-item {
-  margin-bottom: 0;
-  flex: 1;
+.codewalk-file-item-row:hover {
+  border-left-color: var(--vscode-focusBorder);
+  background-color: var(--codewalk-hover-overlay, rgba(128, 128, 128, 0.2));
+  transform: translateX(2px);
 }
 
+/* 疊上跟 row 同一個 --codewalk-surface-overlay token,而不是換一個新色——
+   兩層相同的半透明疊在一起,自然比只有一層的 row 底色深一點,跟左邊按鈕
+   區分開來,但仍是同一套灰階透明疊加系統,不會因為主題不同而長出額外的
+   色相。 */
 .codewalk-attempt-summary {
   position: relative;
   display: flex;
@@ -499,6 +533,10 @@ button.codewalk-back-to-list:hover:not(:disabled) {
   flex-shrink: 0;
   font-size: 0.85em;
   color: var(--vscode-descriptionForeground);
+  margin-top: 0.23rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  background-color: var(--codewalk-surface-overlay, rgba(128, 128, 128, 0.08));
 }
 
 .codewalk-attempt-summary.is-passed .codicon {
@@ -541,6 +579,7 @@ button.codewalk-back-to-list:hover:not(:disabled) {
 .codewalk-attempt-menu {
   position: relative;
   flex-shrink: 0;
+  margin-top: 0.23rem;
 }
 
 /* 蓋掉瀏覽器預設的 :focus outline,改用 :focus-visible + --vscode-focusBorder
