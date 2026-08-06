@@ -48,6 +48,11 @@
         "command": "codewalk.prevStep",
         "title": "CodeWalk: 上一步",
         "category": "CodeWalk"
+      },
+      {
+        "command": "codewalk.revealCurrentStep",
+        "title": "CodeWalk: 回到本步專案位置",
+        "category": "CodeWalk"
       }
     ]
   },

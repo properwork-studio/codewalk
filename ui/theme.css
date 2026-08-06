@@ -458,6 +458,24 @@ button.codewalk-back-to-list:hover:not(:disabled) {
   opacity: 0.8;
 }
 
+/* 恢復閱讀進度後把編輯器帶回目前步驟的顯式入口——沿用 .codewalk-back-to-list
+   同一套「透明底、hover 疊加半透明」視覺語言,不跟主題按鈕色掛勾(見該處說明)。 */
+.codewalk-reveal-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 0 0.6rem;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.85em;
+  color: var(--vscode-descriptionForeground);
+  background: transparent;
+  border: 1px solid var(--vscode-panel-border);
+}
+
+button.codewalk-reveal-step:hover:not(:disabled) {
+  background-color: var(--codewalk-hover-overlay, rgba(128, 128, 128, 0.2));
+}
+
 .codewalk-file-list ul {
   list-style: none;
   margin: 0;
@@ -506,6 +524,7 @@ button.codewalk-file-item:hover:not(:disabled) {
    本來就會因為滑鼠停在子元素(按鈕)上而連帶匹配到父元素,不需要額外的
    JS 或 :has() 選擇器。 */
 .codewalk-file-item-row {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
@@ -515,28 +534,32 @@ button.codewalk-file-item:hover:not(:disabled) {
   background-color: var(--codewalk-surface-overlay, rgba(128, 128, 128, 0.08));
 }
 
+/* 選單展開時,整列的堆疊層級明確拉到比下一列高——修掉「第一次開啟選單被
+   下一列蓋住,hover 過下一列(觸發它的 transform)才恢復正常」的問題:
+   兩列本來都是 z-index:auto,DOM 順序在後的贏,選單的 z-index:1 只在
+   row 自己內部有效,贏不了整列(見上方 renderFileList 的說明)。 */
+.codewalk-file-item-row.has-open-menu {
+  z-index: 2;
+}
+
 .codewalk-file-item-row:hover {
   border-left-color: var(--vscode-focusBorder);
   background-color: var(--codewalk-hover-overlay, rgba(128, 128, 128, 0.2));
   transform: translateX(2px);
 }
 
-/* 疊上跟 row 同一個 --codewalk-surface-overlay token,而不是換一個新色——
-   兩層相同的半透明疊在一起,自然比只有一層的 row 底色深一點,跟左邊按鈕
-   區分開來,但仍是同一套灰階透明疊加系統,不會因為主題不同而長出額外的
-   色相。 */
+/* 只留通過/未通過圖示,分數與時間收進 hover 才顯示的 tooltip——原本常駐
+   的色塊徽章(圖示+分數+時間)在列表項目一多時視覺過重,搶了標題的版面
+   (人工回饋)。不挑底色,跟 .codewalk-attempt-menu-trigger 同一套「純圖示、
+   hover 才有背景疊加」的視覺語言。 */
 .codewalk-attempt-summary {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 0.3rem;
   flex-shrink: 0;
-  font-size: 0.85em;
-  color: var(--vscode-descriptionForeground);
+  padding: 0.2rem 0.3rem;
+  border-radius: 3px;
   margin-top: 0.23rem;
-  padding: 0.35rem 0.5rem;
-  border-radius: 4px;
-  background-color: var(--codewalk-surface-overlay, rgba(128, 128, 128, 0.08));
 }
 
 .codewalk-attempt-summary.is-passed .codicon {
@@ -549,12 +572,14 @@ button.codewalk-file-item:hover:not(:disabled) {
 
 /* 原生 title 屬性在 webview 裡實測不會顯示 tooltip,改用純 CSS 自製 tooltip
    (見 ui/render.ts renderAttemptSummary 的說明)。row 本身設了 tabIndex,
-   :focus-within 讓鍵盤操作者(Tab 過去)也看得到完整時間,不只滑鼠 hover。 */
+   :focus-within 讓鍵盤操作者(Tab 過去)也看得到完整時間,不只滑鼠 hover。
+   貼齊觸發圖示的右緣往左展開(right:0),不用置中(left:50% + translateX)——
+   圖示現在只是無底色小圖示,常常擠在列表右側,置中的 tooltip 有一半會直接
+   超出面板邊界(人工回饋);右緣對齊時只要面板夠寬容納 tooltip 本身就不會溢出。 */
 .codewalk-attempt-tooltip {
   position: absolute;
   bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
+  right: 0;
   margin-bottom: 0.3rem;
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
@@ -657,6 +682,31 @@ button.codewalk-attempt-menu-item:hover:not(:disabled) {
 .codewalk-attempt-menu-item.is-pending:hover {
   color: var(--vscode-inputValidation-errorForeground, #ffffff);
   background-color: var(--vscode-inputValidation-errorBackground);
+}
+
+/* 跨重啟的接續入口——併入既有的作答紀錄版位(design.md 決策 10)。純圖示,
+   不挑底色,跟 .codewalk-attempt-menu-trigger 同一套視覺語言:平常只是個
+   低調小圖示,hover 才浮現背景疊加(人工回饋:原本的色塊徽章太搶標題版面)。
+   接續是常用的主要動作,所以維持可直接點擊,不像分數細節/清除紀錄那樣
+   收進「更多動作」選單。 */
+.codewalk-continue-button {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex-shrink: 0;
+  font-size: 0.85em;
+  color: var(--vscode-icon-foreground);
+  margin-top: 0.23rem;
+  padding: 0.2rem 0.3rem;
+  border-radius: 3px;
+  border: none;
+  background: transparent;
+  opacity: 0.85;
+}
+
+button.codewalk-continue-button:hover:not(:disabled) {
+  opacity: 1;
+  background-color: var(--codewalk-hover-overlay, rgba(128, 128, 128, 0.2));
 }
 
 .codewalk-step-dots {

@@ -7,10 +7,16 @@ export interface AttemptSummary {
   passed: boolean;
 }
 
+/** 留存的閱讀進度摘要,隨 walkFileList 送到 webview(reading-progress capability「導讀列表顯示接續入口」)。 */
+export interface WalkProgressSummary {
+  stepIndex: number;
+}
+
 export interface WalkFileSummary {
   path: string;
   title: string;
   lastAttempt?: AttemptSummary;
+  progress?: WalkProgressSummary;
 }
 
 export type SnippetPreviewResult =
@@ -97,6 +103,21 @@ export type HostToWebviewMessage =
       /** host 無法解析讀者當前主題時為 null,webview 改依 kind 選用內建主題。 */
       theme: ResolvedEditorTheme | null;
       kind: 'light' | 'dark';
+    }
+  | {
+      /**
+       * webview 在同一個 session 內真的被重建(非常態的面板隱藏/顯示,例如
+       * view 被拖到別的容器)時,host 依然持有的導讀內容回灌——webview 收到
+       * 後只帶 walk 與 host 端的 stepIndex,細部畫面(walking/quiz/quizResult)
+       * 由 webview 自己保留的 setState 決定(reading-progress capability
+       * 「面板重建後還原閱讀位置」,design.md 決策 1、4)。
+       */
+      type: 'walkRestored';
+      walk: CodewalkFile;
+      stepIndex: number;
+      refDrifted: boolean;
+      anchorReport: AnchorReport;
+      snippetPreviews: SnippetPreviewResult[];
     };
 
 export type WebviewToHostMessage =
@@ -109,7 +130,15 @@ export type WebviewToHostMessage =
   | { type: 'openReference'; url: string }
   | { type: 'jumpToSnippet'; stepIndex: number; itemIndex: number }
   | { type: 'clearAttempt'; path: string }
-  | { type: 'copyRegenerateHint' };
+  | { type: 'copyRegenerateHint' }
+  | { type: 'resumeWalk'; path: string }
+  | { type: 'revealCurrentStep' }
+  /**
+   * 從走讀/quiz 結果畫面返回列表——與 webviewReady 分開,因為 host 用
+   * currentWalk 是否存在判斷「該不該回灌 walkRestored」(design.md 決策 1);
+   * 若沿用 webviewReady 讓 host 誤以為仍在同一份導讀,回列表會被立刻拉回去。
+   */
+  | { type: 'backToList' };
 
 function isStringArrayLike(value: unknown): value is number[] {
   return Array.isArray(value) && value.every((v) => typeof v === 'number');
@@ -144,6 +173,12 @@ export function parseWebviewToHostMessage(data: unknown): WebviewToHostMessage |
       return typeof d.path === 'string' ? { type: 'clearAttempt', path: d.path } : null;
     case 'copyRegenerateHint':
       return { type: 'copyRegenerateHint' };
+    case 'resumeWalk':
+      return typeof d.path === 'string' ? { type: 'resumeWalk', path: d.path } : null;
+    case 'revealCurrentStep':
+      return { type: 'revealCurrentStep' };
+    case 'backToList':
+      return { type: 'backToList' };
     default:
       return null;
   }

@@ -4,10 +4,12 @@ import { scoreQuiz, type CodewalkFile } from '../shared/schema';
 import { buildAnchorReport, effectiveLineRange, emptyAnchorReport, jumpModeFor } from './anchorCheck';
 import { AttemptStore } from './attemptStore';
 import { jumpToStep } from './fileJump';
+import { ProgressStore } from './progressStore';
 import { getWorkspaceHead, isRefDrifted } from './refDrift';
 import { readSnippetPreviews } from './snippetPreview';
 import { currentThemeKind, resolveEditorTheme } from './themeSource';
 import { listWalkFiles, loadCodewalkFile } from './walkLoader';
+import { buildWalkRestoredMessage } from './webviewReadyPlan';
 
 function getWorkspaceRoot(): string | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -23,9 +25,11 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
   private refDrifted = false;
   private anchorReport: AnchorReport | undefined;
   private readonly attemptStore: AttemptStore;
+  private readonly progressStore: ProgressStore;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.attemptStore = new AttemptStore(context.workspaceState);
+    this.progressStore = new ProgressStore(context.workspaceState);
   }
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -51,6 +55,10 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
     await this.moveStep(-1);
   }
 
+  public async handleRevealCurrentStep(): Promise<void> {
+    await this.jumpToCurrentStep();
+  }
+
   private async handleMessage(raw: unknown): Promise<void> {
     const msg = parseWebviewToHostMessage(raw);
     if (!msg) return;
@@ -59,9 +67,16 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
       case 'webviewReady':
         await this.sendTheme();
         await this.sendFileList();
+        await this.sendRestoreIfActive();
         break;
       case 'selectWalkFile':
         await this.loadWalk(msg.path);
+        break;
+      case 'resumeWalk':
+        await this.loadWalk(msg.path, { resume: true });
+        break;
+      case 'revealCurrentStep':
+        await this.jumpToCurrentStep();
         break;
       case 'nextStep':
         await this.moveStep(1);
@@ -87,7 +102,21 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
       case 'copyRegenerateHint':
         await this.handleCopyRegenerateHint();
         break;
+      case 'backToList':
+        this.clearActiveWalk();
+        await this.sendFileList();
+        break;
     }
+  }
+
+  /** 返回列表時清掉 currentWalk 等 in-memory 狀態,讓下一次 webviewReady
+   * 判斷「該不該回灌」時視同尚未選擇導讀(design.md 決策 1)。 */
+  private clearActiveWalk(): void {
+    this.currentWalk = undefined;
+    this.currentWalkPath = undefined;
+    this.anchorReport = undefined;
+    this.refDrifted = false;
+    this.stepIndex = 0;
   }
 
   private async handleCopyRegenerateHint(): Promise<void> {
@@ -104,6 +133,11 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
       await this.attemptStore.record(root, this.currentWalkPath, this.currentWalk.ref, Date.now(), score);
     } catch {
       // 作答紀錄是輔助功能,留存失敗不打斷讀者已完成的作答流程(design.md 決策 8)
+    }
+    try {
+      await this.progressStore.clear(root, this.currentWalkPath);
+    } catch {
+      // 清除進度失敗不影響作答紀錄的留存,也不打斷讀者流程(design.md 決策 7)
     }
   }
 
@@ -141,11 +175,39 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
       this.post({ type: 'loadError', message: '未開啟任何 workspace' });
       return;
     }
-    const files = await listWalkFiles(root, (filePath, ref) => this.attemptStore.get(root, filePath, ref));
+    const files = await listWalkFiles(
+      root,
+      (filePath, ref) => this.attemptStore.get(root, filePath, ref),
+      (filePath, ref) => this.progressStore.get(root, filePath, ref),
+    );
     this.post({ type: 'walkFileList', files });
   }
 
-  private async loadWalk(path: string): Promise<void> {
+  /** host 仍持有目前導讀時,webview 真的被重建(而非常態的面板隱藏/顯示)
+   * 就靠這則訊息回灌——不呼叫 jumpToCurrentStep(),恢復動作不動編輯器
+   * (reading-progress capability「恢復閱讀位置不改動編輯器」)。 */
+  private async sendRestoreIfActive(): Promise<void> {
+    if (!this.currentWalk || !this.anchorReport) return;
+    const message = buildWalkRestoredMessage(
+      {
+        walk: this.currentWalk,
+        stepIndex: this.stepIndex,
+        refDrifted: this.refDrifted,
+        anchorReport: this.anchorReport,
+      },
+      await this.readCurrentSnippetPreviews(),
+    );
+    if (message) {
+      this.post(message);
+    }
+  }
+
+  /**
+   * `resume: true` 時起始步驟取自留存進度(接續上次)、且不 reveal 編輯器;
+   * 一般選擇導讀(resume 省略)一律從第一步開始並照常跳轉(design.md 決策
+   * 5、6,walk-player capability「Quiz 作答紀錄的留存」MODIFIED requirement)。
+   */
+  private async loadWalk(path: string, options: { resume?: boolean } = {}): Promise<void> {
     const result = await loadCodewalkFile(path);
     if (!result.valid) {
       this.post({ type: 'loadError', message: result.errors.join('; ') });
@@ -154,7 +216,6 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
 
     this.currentWalk = result.value;
     this.currentWalkPath = path;
-    this.stepIndex = 0;
     this.refDrifted = false;
 
     const root = getWorkspaceRoot();
@@ -166,6 +227,11 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
       this.anchorReport = emptyAnchorReport(result.value);
     }
 
+    const maxIndex = this.currentWalk.steps.length - 1;
+    const progress =
+      options.resume && root ? this.progressStore.get(root, path, result.value.ref) : undefined;
+    this.stepIndex = Math.min(Math.max(progress?.stepIndex ?? 0, 0), maxIndex);
+
     this.post({
       type: 'walkLoaded',
       walk: this.currentWalk,
@@ -174,7 +240,9 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
       anchorReport: this.anchorReport,
       snippetPreviews: await this.readCurrentSnippetPreviews(),
     });
-    await this.jumpToCurrentStep();
+    if (!options.resume) {
+      await this.jumpToCurrentStep();
+    }
   }
 
   private async moveStep(delta: number): Promise<void> {
@@ -186,12 +254,24 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
     if (!this.currentWalk) return;
     const maxIndex = this.currentWalk.steps.length - 1;
     this.stepIndex = Math.min(Math.max(index, 0), maxIndex);
+    await this.saveProgress();
     this.post({
       type: 'stepChanged',
       stepIndex: this.stepIndex,
       snippetPreviews: await this.readCurrentSnippetPreviews(),
     });
     await this.jumpToCurrentStep();
+  }
+
+  private async saveProgress(): Promise<void> {
+    const root = getWorkspaceRoot();
+    if (!root || !this.currentWalk || !this.currentWalkPath) return;
+    try {
+      await this.progressStore.record(root, this.currentWalkPath, this.currentWalk.ref, this.stepIndex);
+    } catch {
+      // 進度是輔助功能,留存失敗不打斷讀者當下的閱讀流程(reading-progress
+      // capability「閱讀進度跨工作階段留存」)
+    }
   }
 
   private async readCurrentSnippetPreviews() {

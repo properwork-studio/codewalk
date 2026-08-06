@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { validateCodewalk, type ValidationResult } from '../shared/schema';
-import type { AttemptSummary, WalkFileSummary } from '../shared/protocol';
+import type { AttemptSummary, WalkFileSummary, WalkProgressSummary } from '../shared/protocol';
 
 export function filterCodewalkFileNames(fileNames: string[]): string[] {
   return fileNames.filter((name) => name.endsWith('.codewalk.json')).sort();
@@ -32,6 +32,7 @@ export async function loadCodewalkFile(filePath: string): Promise<ValidationResu
 export async function listWalkFiles(
   workspaceRoot: string,
   getAttempt?: (filePath: string, ref: string) => AttemptSummary | undefined,
+  getProgress?: (filePath: string, ref: string) => WalkProgressSummary | undefined,
 ): Promise<WalkFileSummary[]> {
   const filePaths = await findCodewalkFiles(workspaceRoot);
   // 並行讀取:Promise.all 保證回傳順序等同 filePaths,與檔案讀完的先後無關
@@ -46,6 +47,12 @@ export async function listWalkFiles(
         const lastAttempt = getAttempt(filePath, result.value.ref);
         if (lastAttempt) {
           summary.lastAttempt = lastAttempt;
+        }
+      }
+      if (result.valid && getProgress) {
+        const progress = getProgress(filePath, result.value.ref);
+        if (progress) {
+          summary.progress = progress;
         }
       }
       return summary;

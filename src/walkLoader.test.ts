@@ -133,4 +133,19 @@ describe('listWalkFiles', () => {
     const summaries = await listWalkFiles(workspaceRoot);
     expect(summaries.map((s) => s.title)).toEqual(['大導讀', '乙導讀', '丙導讀']);
   });
+
+  it('attaches progress for files with a matching-ref entry, omits it otherwise', async () => {
+    const workspaceRoot = await makeWorkspace();
+    const codewalkDir = join(workspaceRoot, '.codewalk');
+    await mkdir(codewalkDir);
+    await writeFile(join(codewalkDir, 'a.codewalk.json'), validSampleJson('甲導讀'));
+    await writeFile(join(codewalkDir, 'b.codewalk.json'), validSampleJson('乙導讀'));
+
+    const summaries = await listWalkFiles(workspaceRoot, undefined, (filePath, ref) =>
+      filePath.endsWith('a.codewalk.json') && ref === 'a1b2c3d4' ? { stepIndex: 3 } : undefined,
+    );
+
+    expect(summaries.find((s) => s.title === '甲導讀')?.progress).toEqual({ stepIndex: 3 });
+    expect(summaries.find((s) => s.title === '乙導讀')?.progress).toBeUndefined();
+  });
 });

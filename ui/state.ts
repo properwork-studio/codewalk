@@ -132,3 +132,52 @@ export function submitQuiz(state: QuizState): QuizResult {
     passed,
   };
 }
+
+/**
+ * webview 自行保留的細節狀態(捲動位置以外的畫面內容)——quiz 答案、展開中的
+ * 術語、當時所在畫面。用 `ref` 而非導讀路徑判斷是否屬於同一份導讀,因為
+ * `walkRestored` 訊息只帶 CodewalkFile 本身(design.md 決策 4)。
+ */
+export interface PersistedUiState {
+  ref: string;
+  screen: 'walking' | 'quiz' | 'quizResult';
+  stepIndex: number;
+  expandedTerms: string[];
+  answers: (number | null)[];
+  scrollTop: number;
+}
+
+/**
+ * 面板重建回灌(`walkRestored`)時,把 webview 自行保留的細節狀態套用到
+ * host 送來的內容上——只在同一份導讀(`ref` 相符)時採用,否則捨棄改用
+ * 預設狀態(reading-progress capability「閱讀位置的細節狀態保留」)。
+ */
+export function applyPersistedUiState(
+  walk: CodewalkFile,
+  hostStepIndex: number,
+  refDrifted: boolean,
+  anchorReport: AnchorReport,
+  persisted: PersistedUiState | null,
+): WalkingState | QuizState | QuizResult {
+  const base = createWalkingState(walk, refDrifted, anchorReport);
+  if (!persisted || persisted.ref !== walk.ref) {
+    return { ...base, stepIndex: hostStepIndex };
+  }
+
+  const maxIndex = walk.steps.length - 1;
+  const walking: WalkingState = {
+    ...base,
+    stepIndex: Math.min(Math.max(persisted.stepIndex, 0), maxIndex),
+    expandedTerms: new Set(persisted.expandedTerms),
+  };
+  if (persisted.screen === 'walking') {
+    return walking;
+  }
+
+  const quiz = enterQuiz(walking);
+  const restoredQuiz: QuizState = {
+    ...quiz,
+    answers: walk.quiz.map((_, i) => persisted.answers[i] ?? null),
+  };
+  return persisted.screen === 'quiz' ? restoredQuiz : submitQuiz(restoredQuiz);
+}

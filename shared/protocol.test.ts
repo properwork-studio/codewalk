@@ -77,6 +77,25 @@ describe('parseWebviewToHostMessage', () => {
     expect(parseWebviewToHostMessage({ type: 'copyRegenerateHint' })).toEqual({ type: 'copyRegenerateHint' });
   });
 
+  it('parses a resumeWalk message with a path', () => {
+    expect(parseWebviewToHostMessage({ type: 'resumeWalk', path: 'a.codewalk.json' })).toEqual({
+      type: 'resumeWalk',
+      path: 'a.codewalk.json',
+    });
+  });
+
+  it('rejects resumeWalk without a path', () => {
+    expect(parseWebviewToHostMessage({ type: 'resumeWalk' })).toBeNull();
+  });
+
+  it('parses a revealCurrentStep message', () => {
+    expect(parseWebviewToHostMessage({ type: 'revealCurrentStep' })).toEqual({ type: 'revealCurrentStep' });
+  });
+
+  it('parses a backToList message', () => {
+    expect(parseWebviewToHostMessage({ type: 'backToList' })).toEqual({ type: 'backToList' });
+  });
+
   it('rejects an unknown message type', () => {
     expect(parseWebviewToHostMessage({ type: 'unknown' })).toBeNull();
   });

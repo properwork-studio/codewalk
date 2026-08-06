@@ -27,6 +27,9 @@
 - Quiz 作答紀錄:送出後留存該導讀最後一次的時間與結果(不寫入 `.codewalk.json`,存於 workspace 狀態),導讀列表顯示通過圖示、分數與相對時間,無紀錄不顯示;`ref` 變更(導讀重新產生)後舊紀錄失效;不阻擋重新走讀或重新作答 → [spec](../../openspec/specs/walk-player/spec.md)
 - 列表上每筆作答紀錄可透過 `⋮`「更多動作」選單清除,選單內「清除 Quiz 紀錄」文字明確、兩段式確認(點兩下才真的刪)避免誤觸,同時只有一份導讀的選單能展開 → [spec](../../openspec/specs/walk-player/spec.md)
 - 走讀畫面可隨時透過「返回列表」按鈕或 Esc 直接回到導讀選擇畫面,不需先走完全部步驟,也不會留下作答紀錄 → [spec](../../openspec/specs/walk-player/spec.md)
+- 走讀畫面提供「回到本步專案位置」動作(按鈕與 Home 鍵),把編輯器帶回目前步驟對應的程式碼位置,規則與自動跳轉一致(位移跟新行號、失準只開檔不選取)→ [spec](../../openspec/specs/walk-player/spec.md)
+- 面板因側邊面板隱藏/重建而暫離導讀畫面時,自動還原到離開前的畫面與位置(走讀 step、quiz 作答中的已選答案、quiz 結果頁),不會被誤帶回導讀列表;連帶保留捲動位置與已展開的術語註解 → [spec](../../openspec/specs/reading-progress/spec.md)
+- 每份導讀各自留存讀者最後讀到的步驟,跨 VS Code 重啟仍在;導讀列表為有進度的項目顯示接續入口,觸發後直接停在留存的步驟(沿用既有錨驗證流程,超出範圍時夾到最後一步),不會自動搶走編輯器;`ref` 變更(導讀重新產生)後視同無進度;走完 quiz 後自動清除該份進度 → [spec](../../openspec/specs/reading-progress/spec.md)
 - 產生器可為每個 step 與 `kind: 'snippet'` 項目存入錨(產出當下的程式碼原文);載入時逐一驗證錨與現行程式碼,判定為相符/位移/失準/未錨定四態之一 → [spec](../../openspec/specs/stale-step-detection/spec.md)
 - 失準的 step/snippet 顯示產出當時的錨定原文(明確標示非現行版本),並提供「開啟現行檔案」動作(只開檔、不選取任何行),不中斷導覽與 Quiz 作答 → [spec](../../openspec/specs/stale-step-detection/spec.md)
 - 導讀含任一失準步驟時面板顯示重生提示;`.codewalk.json` 提供 `regenerateHint` 時額外顯示「複製重生指令」動作,一鍵複製到剪貼簿(extension 本身不執行任何產生行為)→ [spec](../../openspec/specs/stale-step-detection/spec.md)
@@ -42,14 +45,14 @@
 
 ## E2E 覆蓋
 
-無自動化 E2E——VS Code extension 的 host↔webview↔vscode API 整合行為改走 Extension Development Host 手動驗證 checklist(見 `openspec/changes/archive/2026-08-01-walk-player/tasks.md` 第 10、11 節,`items` 相關 checklist 見 `openspec/changes/archive/2026-08-01-add-step-items/tasks.md`,`diff` 相關 checklist 見 `openspec/changes/archive/2026-08-01-add-diff-item/tasks.md` 第 6、7 節,語法高亮換 Shiki 與跟隨編輯器主題相關 checklist 見 `openspec/changes/archive/2026-08-03-switch-to-shiki-highlighter/tasks.md`,失準偵測相關 checklist 見 `openspec/changes/archive/2026-08-05-add-stale-step-detection/tasks.md` 第 9 節,markdown 渲染相關 checklist 見 `openspec/changes/archive/2026-08-06-add-markdown-rendering/tasks.md` 第 6、7 節);純邏輯(schema 驗證、協定序列化、quiz 計分、ref 比對、錨驗證與失準判定、snippet 讀檔、Shiki 語言註冊、主題檔 JSONC 解析與 `include` 繼承、diff 逐行分類與雙欄行號計算、markdown 子集解析與降級規則)由 Vitest 單元測試覆蓋。
+無自動化 E2E——VS Code extension 的 host↔webview↔vscode API 整合行為改走 Extension Development Host 手動驗證 checklist(見 `openspec/changes/archive/2026-08-01-walk-player/tasks.md` 第 10、11 節,`items` 相關 checklist 見 `openspec/changes/archive/2026-08-01-add-step-items/tasks.md`,`diff` 相關 checklist 見 `openspec/changes/archive/2026-08-01-add-diff-item/tasks.md` 第 6、7 節,語法高亮換 Shiki 與跟隨編輯器主題相關 checklist 見 `openspec/changes/archive/2026-08-03-switch-to-shiki-highlighter/tasks.md`,失準偵測相關 checklist 見 `openspec/changes/archive/2026-08-05-add-stale-step-detection/tasks.md` 第 9 節,markdown 渲染相關 checklist 見 `openspec/changes/archive/2026-08-06-add-markdown-rendering/tasks.md` 第 6、7 節,閱讀進度還原/接續相關 checklist 見 `openspec/changes/archive/2026-08-06-resume-walk-progress/tasks.md` 第 8 節);純邏輯(schema 驗證、協定序列化、quiz 計分、ref 比對、錨驗證與失準判定、snippet 讀檔、Shiki 語言註冊、主題檔 JSONC 解析與 `include` 繼承、diff 逐行分類與雙欄行號計算、markdown 子集解析與降級規則、閱讀進度儲存與 ref 比對、面板重建回灌訊息的建構)由 Vitest 單元測試覆蓋。
 
 ## 已知限制與技術債
 
 - Quiz 選擇題與結果頁尚未做視覺美化(目前是 vanilla TS 的陽春樣式),使用者已確認排入下一步待辦(2026-08-01)
 - schema 的 `startLine`/`endLine` 目前僅支援單行高亮(`startLine === endLine`),多行反白渲染邏輯尚未實作,欄位形狀已預留(2026-07-31)
 - 沒有 `@vscode/test-electron` 整合測試,MVP 階段刻意選擇手動驗證 checklist(design.md 決策 4),回頭條件:出現第二個貢獻者或手動測試單輪超過 ~15 分鐘
-- 作答紀錄存於 VS Code workspace 狀態,換機器、重裝 VS Code 或清除 extension 狀態即歸零,且無法手動編輯;導讀 `ref` 變更後舊紀錄不再顯示,但不做垃圾回收(殘留量級是每份導讀一筆、幾十 bytes,不值得處理)
+- 作答紀錄與閱讀進度都存於 VS Code workspace 狀態,換機器、重裝 VS Code 或清除 extension 狀態即歸零,且無法手動編輯;導讀 `ref` 變更後舊紀錄/舊進度不再顯示,但不做垃圾回收(殘留量級是每份導讀一筆、幾十 bytes,不值得處理;`.codewalk.json` 被刪除後兩者殘留條目的清理留待日後與此問題一併處理,見 2026-08-06 resume-walk-progress design.md Open Questions)
 - 產生器(`.claude/skills/explain-change/` 或其他來源)未寫入 `anchor` 時,失準偵測形同未啟用,全部判為未錨定、行為與加入前完全相同;短或高度重複的錨(如只錨一行 `}`)容易被判為失準(ambiguous),是刻意保守的設計取捨(2026-08-05)
 
 ## 變更歷史
@@ -62,3 +65,4 @@
 - 2026-08-03 `switch-to-shiki-highlighter` 新增 `syntax-highlighting` capability,語法高亮引擎由 highlight.js 換成 Shiki(與 VS Code 編輯器同源的 TextMate grammar):snippet/diff 配色改讀讀者當前 VS Code 主題的 tokenColors,無法解析時降級為內建 dark-plus/light-plus,讀者切換主題時即時重繪、不需重開面板;**BREAKING**:移除 `codewalk.snippetTheme` 設定(MVP 未發佈無實際使用者)。不追求與編輯器 100% 一致——semantic tokens(語言伺服器提供的細分色)落在 TextMate 方案能力範圍外,已實測確認換 grammar 來源也無法解決,判定為長期限制
 - 2026-08-05 `add-stale-step-detection` 新增 `stale-step-detection` capability:以產出當下存下的程式碼原文(錨)在載入時逐 step 驗證是否與現行程式碼相符(相符/位移/失準/未錨定四態);位移(內容逐字相同但位置改變)時自動跟隨新行號,不顯示任何提示;失準時顯示產出當時的原文並標示非現行版本,提供「開啟現行檔案」動作(只開檔不選取),不中斷導覽與 Quiz 作答。導讀含任一失準步驟時面板顯示重生提示,`.codewalk.json` 提供 `regenerateHint` 時額外顯示「複製重生指令」動作(extension 本身不執行任何產生行為)。同時修改既有 `ref` 漂移偵測、檔案行號跳轉、程式碼片段引用三條 requirement 以支援位移跟隨與失準呈現——導讀含錨時整份 `refDrifted` 警告降為退路,僅在完全無錨時顯示;無錨導讀(含既有 5 份)行為完全不變。產生器(`.claude/skills/explain-change/`)同批更新為輸出含 `anchor`/`regenerateHint` 的 CodeWalk 格式
 - 2026-08-06 `add-markdown-rendering` 新增 `markdown-rendering` capability:敘述欄位支援封閉子集 markdown 語法(行內程式碼、粗體、連結、無序/有序清單含巢狀、二級小標 `##`),依長文欄位(`narration`、`term.explanation`、`tip.text`、`todo.text`、`pitfall.misconception`/`.reality`、`quiz.optionExplanations[]`)/短欄位(`quiz.question`、`quiz.options[]`、`item.label`、`term.term`、`walk.title`、`step.title`)分級,短欄位只吃行內語法;不支援或格式錯誤的語法一律原樣顯示為純文字,不中止導讀可播放性。內嵌連結沿用既有 `openReference` 外部連結路徑(限 http/https,渲染為按鈕而非 `<a href>`),非法網址原樣顯示不可點擊;單一換行維持斷行語意。解析只用 marked 的 Lexer 取 token、手動建 DOM,維持全檔零 `innerHTML` 的既有紀律。非 BREAKING,既有 6 份導讀檔零遷移成本;`.codewalk/2026-08-03-codebase-tour.codewalk.json` 同批重生 10 個 step 作為 dogfooding 驗收
+- 2026-08-06 `resume-walk-progress` 新增 `reading-progress` capability,解決「切走側邊面板再回來被彈回導讀列表」的痛點:webview 因面板隱藏而重建時(`retainContextWhenHidden` 生效前的既有行為),同 session 內自動回灌並還原離開前的畫面(走讀 step、quiz 作答中答案、quiz 結果頁)與細節狀態(捲動位置、展開中的術語),不搶編輯器;每份導讀的閱讀進度另存 workspace 狀態,跨 VS Code 重啟仍在,導讀列表為有進度的項目顯示接續入口,`ref` 變更後視同無進度,走完 quiz 即清除。同批修改 `walk-player` 新增「回到本步專案位置」動作(按鈕 + Home 鍵,`R` 備用鍵——實測中文輸入法作用中時字母鍵快捷鍵會被攔截組字,故不用字母鍵當主鍵)。手動驗收過程中一併修掉三個既有/新增 bug:`walkLoaded` 訊息處理未使用 host 送出的 `stepIndex` 導致接續一律跳回第一步、導讀列表「更多動作」選單首次展開被下一列項目蓋住(既有 bug,無明確堆疊層級)、作答狀態徽章的自製 tooltip 置中對齊在面板右側會超出邊界

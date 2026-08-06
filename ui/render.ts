@@ -35,19 +35,48 @@ export interface FileListHandlers {
   onSelect: (path: string) => void;
   onToggleMenu: (path: string) => void;
   onTriggerClear: (path: string) => void;
+  onResume: (path: string) => void;
 }
 
+/**
+ * 跨重啟的接續入口——併入既有的作答紀錄版位,沒有進度時不顯示、不保留
+ * 空白版位(reading-progress capability「導讀列表顯示接續入口」,design.md
+ * 決策 10)。只顯示圖示+步數(不帶「接續上次」文字),避免跟標題按鈕搶
+ * 寬度、把中文標題擠成逐字換行;完整說明改放 title/aria-label。
+ */
+function renderContinueButton(
+  path: string,
+  stepIndex: number,
+  onResume: (path: string) => void,
+): HTMLElement {
+  const label = `接續上次(第 ${stepIndex + 1} 步)`;
+  const button = el('button', 'codewalk-continue-button');
+  button.appendChild(icon('debug-continue'));
+  button.appendChild(el('span', undefined, String(stepIndex + 1)));
+  button.title = label;
+  button.setAttribute('aria-label', label);
+  button.addEventListener('click', () => onResume(path));
+  return button;
+}
+
+/**
+ * 只留一顆通過/未通過的小圖示,分數與時間收進 hover/focus 才顯示的自製
+ * tooltip——原本常駐顯示的「3/5 5小時前」文字讓整列右側視覺過重,列表
+ * 項目一多就很擁擠(人工回饋)。原生 title 屬性在 webview 裡實測不會顯示,
+ * 所以沿用既有的純 CSS tooltip 機制,只是把「一直看得到」改成「需要才看」。
+ */
 function renderAttemptSummary(attempt: AttemptSummary): HTMLElement {
   const row = el('div', `codewalk-attempt-summary ${attempt.passed ? 'is-passed' : 'is-failed'}`);
-  // 原本只掛原生 title 屬性,但在 webview 裡實測不會顯示原生 tooltip(VS Code
-  // webview 環境的已知限制)。改用純 CSS 的自製 tooltip(:hover / :focus-within
-  // 控制顯示),同時保留 title 作為其他環境(如瀏覽器獨立開啟)的後備手段。
-  row.title = formatAbsoluteDateTime(attempt.at);
   row.tabIndex = 0;
+  // 原生 title:webview 內不會顯示(已知限制),留給其他環境(如瀏覽器獨立
+  // 開啟)與輔助工具用,不是本體。
+  row.title = formatAbsoluteDateTime(attempt.at);
   row.appendChild(icon(attempt.passed ? 'pass' : 'error'));
-  row.appendChild(el('span', undefined, `${attempt.score}/${attempt.total}`));
-  row.appendChild(el('span', 'codewalk-attempt-time', formatRelativeTime(attempt.at, Date.now())));
-  const tooltip = el('span', 'codewalk-attempt-tooltip', formatAbsoluteDateTime(attempt.at));
+  const tooltip = el(
+    'span',
+    'codewalk-attempt-tooltip',
+    `${attempt.score}/${attempt.total} · ${formatRelativeTime(attempt.at, Date.now())}`,
+  );
   tooltip.setAttribute('role', 'tooltip');
   row.appendChild(tooltip);
   return row;
@@ -105,7 +134,12 @@ export function renderFileList(
   }
   const list = el('ul');
   for (const file of files) {
-    const item = el('li', 'codewalk-file-item-row');
+    // 展開中的選單用 position:absolute 溢出到下一列的視覺範圍——row 本身若
+    // 沒有明確的 z-index,DOM 順序在後的下一列會蓋過它(row 沒有自己的堆疊
+    // 層級,絕對定位子元素只能在 row 內部比較 z-index,贏不了「後面的整列」)。
+    // 這顆 class 讓目前開著選單的那一列明確拿到較高的堆疊層級。
+    const isMenuOpen = state.openMenuPath === file.path;
+    const item = el('li', `codewalk-file-item-row${isMenuOpen ? ' has-open-menu' : ''}`);
     item.dataset.walkPath = file.path;
 
     const button = el('button', 'codewalk-file-item');
@@ -117,8 +151,18 @@ export function renderFileList(
     button.addEventListener('click', () => handlers.onSelect(file.path));
     item.appendChild(button);
 
+    // 順序:通過/未通過狀態 → 接續(可直接點擊觸發,常用動作不藏進選單)
+    // → 更多動作選單(分數細節、清除紀錄收在裡面,次要/破壞性操作才需要
+    // 多一步)。三者都是無底色純圖示,人工回饋:原本的色塊徽章太搶標題版面。
     if (file.lastAttempt) {
       item.appendChild(renderAttemptSummary(file.lastAttempt));
+    }
+
+    if (file.progress) {
+      item.appendChild(renderContinueButton(file.path, file.progress.stepIndex, handlers.onResume));
+    }
+
+    if (file.lastAttempt) {
       item.appendChild(
         renderAttemptMenu(file.path, state.openMenuPath === file.path, state.pendingClearPath === file.path, {
           onToggleMenu: handlers.onToggleMenu,
@@ -150,6 +194,7 @@ export interface WalkingHandlers {
   onBackToList: () => void;
   onOpenStaleFile: () => void;
   onCopyRegenerateHint: () => void;
+  onRevealCurrentStep: () => void;
 }
 
 function renderAnnotation(
@@ -556,6 +601,18 @@ export function renderWalking(
   container.appendChild(stepTitle);
   const { startLine: stepStartLine, endLine: stepEndLine } = effectiveLineRange(step, stepReport.step);
   container.appendChild(el('p', 'codewalk-file-ref', `${step.file}:${stepStartLine}-${stepEndLine}`));
+
+  // 每個 step 都必定有對應的程式碼位置(schema 的 file/startLine/endLine 為必填),
+  // 所以這顆按鈕一律顯示——恢復閱讀進度後,把編輯器帶回目前步驟的顯式入口
+  // (walk-player capability「回到本步專案位置」,design.md 決策 8)。
+  const revealButton = el('button', 'codewalk-reveal-step');
+  revealButton.appendChild(icon('go-to-file'));
+  revealButton.appendChild(el('span', undefined, '回到本步專案位置'));
+  // 快捷鍵主鍵是 Home,不是字母鍵——中文輸入法作用中時字母鍵的 keydown 可能
+  // 被攔截去組字(實測結果),Home 不受影響;英文鍵盤環境另外保留 R 當備用鍵。
+  revealButton.title = '回到本步專案位置(Home)';
+  revealButton.addEventListener('click', handlers.onRevealCurrentStep);
+  container.appendChild(revealButton);
 
   if (stepReport.step.kind === 'stale') {
     container.appendChild(renderStepStaleBlock(step, stepReport.step, handlers.onOpenStaleFile));
