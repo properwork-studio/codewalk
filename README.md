@@ -70,3 +70,7 @@ code --install-extension codewalk.vsix
 ```
 
 `quiz` 至少需要 1 題;可選填 `passThreshold`(答對題數門檻,省略時預設為題數的簡單多數,例如 5 題預設門檻是 3 題)。每題可選填 `optionExplanations`(字串陣列,索引需與 `options` 一一對應,長度必須相同),用來在結果頁列出每個選項為什麼對或為什麼錯;省略時結果頁維持只顯示你的答案與正確答案。圖解資產請放在 `.codewalk/assets/` 並以相對路徑參照。
+
+### Markdown 支援
+
+`narration` 等敘述欄位支援一個封閉的 markdown 子集(行內程式碼、粗體、連結、清單、二級小標 `##`),不支援的語法(表格、圖片、`#`/`###` 以下標題等)一律原樣顯示為純文字,不會中止載入。哪些欄位支援哪些語法、短欄位與長文欄位的差異,見 `shared/schema.ts` 各欄位的 JSDoc 註解。

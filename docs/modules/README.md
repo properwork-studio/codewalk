@@ -6,7 +6,7 @@
 
 | 模組 | 狀態 | 一句話 | E2E 覆蓋 | 最後更新 |
 |---|---|---|---|---|
-| [walk-player](./walk-player.md) | 開發中 | 側邊面板播放 `.codewalk/` 導讀 JSON,帶讀者逐步走 code | 無(手動 checklist) | 2026-08-05 |
+| [walk-player](./walk-player.md) | 開發中 | 側邊面板播放 `.codewalk/` 導讀 JSON,帶讀者逐步走 code | 無(手動 checklist) | 2026-08-06 |
 
 ---
 

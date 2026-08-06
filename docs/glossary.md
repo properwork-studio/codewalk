@@ -27,6 +27,15 @@
 - **只留最後一次**:再次作答會覆蓋舊紀錄,不保留歷史、不記最佳成績。
 - **不阻擋任何流程**:有紀錄的導讀仍可正常重新走讀、重新作答;紀錄留存失敗也不中斷讀者剛完成的作答流程。
 
+## Markdown 渲染(markdown-rendering)
+
+- **敘述欄位**:泛指 `.codewalk.json` 裡會被播放器依 markdown 子集解析、而非顯示原始標記字元的字串欄位——分成兩類,分類依渲染位置而非欄位語意:
+  - **長文欄位**:`narration`、`terms[].explanation`、`tip`/`todo` 的 `text`、`pitfall` 的 `misconception`/`reality`、`optionExplanations`。支援完整六種語法:行內程式碼、粗體、連結、無序清單(含巢狀)、有序清單、二級小標(僅 `##`)
+  - **短欄位**:`CodewalkFile.title`、`CodewalkStep.title`、`CodewalkTerm.term`、`CodewalkQuizQuestion.question`/`options`、`items[].label`。只支援行內三種(程式碼/粗體/連結)——清單與小標在按鈕、`<summary>` 這類元件裡本來就會破壞版面,原樣顯示為純文字
+  - 完整語法清單與各欄位分類定義住 `shared/schema.ts` 的 JSDoc(單點,不在此重複維護)
+- **降級為純文字(graceful degradation)**:認不得或不合法的語法(表格、圖片、引用區塊、程式碼區塊、`#`/`###` 以下標題、原始 HTML、格式錯誤的標記),一律原樣顯示為純文字——不中止導讀載入、不影響同一欄位其餘內容或同一份導讀其他部分的呈現。統一規則,不是逐語法各自處理的特例。內嵌連結網址非 http/https 時走同一條路徑(原樣顯示、不可點擊)。
+- **連結不可點擊的另一種情況**:短欄位若顯示在另一個已有點擊行為的元素內(`item.label` 在按鈕內、`term.term` 在有點擊事件的 `<summary>` 內、quiz 作答畫面的選項在包著 radio 的 `<label>` 內),即使網址合法也不渲染成可點擊元素,同樣原樣顯示——避免巢狀互動元素(無效 HTML,且點擊語意會打架)。同一欄位在不同渲染位置可能分屬不同判定,規則綁的是渲染位置而非欄位本身。
+
 ## `CodewalkQuizQuestion.optionExplanations`
 
 - **定位**:quiz 每題的選填欄位,`string[]`,索引與 `options` 一一對應,長度必須與 `options` 完全相同(驗證階段強制,長度不符會拒絕載入)。第 i 個字串說明第 i 個選項為什麼對或為什麼錯。

@@ -1,0 +1,194 @@
+{
+  "title": "`add-markdown-rendering`:敘述欄位的封閉 markdown 子集渲染",
+  "ref": "37bd14f4da5a6dba5240d080be7044367eec7cf6",
+  "steps": [
+    {
+      "title": "為什麼要用 Lexer,不是 `marked()`",
+      "file": "ui/markdown.ts",
+      "startLine": 1,
+      "endLine": 27,
+      "narration": "## 背景:敘述文字為什麼要「渲染」\n\nCodeWalk 的 `narration` 這類欄位以前一律用純文字顯示——作者其實已經在寫 markdown 語法(像 `1.` `2.` `3.` 的有序清單),但因為沒有渲染器,只能靠 `white-space: pre-line` 硬撐成看起來像清單的純文字。這份 change(`add-markdown-rendering`)補上一個**封閉子集**的 markdown 渲染器,只認 6 種語法:行內程式碼、粗體、連結、無序/有序清單、`##` 小標。\n\n`ui/render.ts` 全檔立有明文紀律:一律用 `textContent`(非 `innerHTML`)逐一附加內容,不需要跳脫 HTML。這是本專案處理「不受信任內容」的既有防線——`.codewalk.json` 可能來自任何產生器,敘述字串不能被信任。一般 markdown 套件的 renderer 會直接吐出 HTML 字串,要嘛違反這條紀律,要嘛得自己消毒字串,而消毒字串正是這條紀律當初要避免的事。\n\n## 直覺:只取 token,不取 HTML\n\n`marked` 除了會吐 HTML 字串的 `marked()`,還有一個較少人用的 `Lexer` API:給它一段字串,只回傳「結構化的 token 陣列」,不產生任何 HTML。舉例,輸入「這是 `code`,**很重要**」,`Lexer` 會給出類似這樣的 token 陣列(簡化過):\n\n- `{ type: 'text', raw: '這是 ' }`\n- `{ type: 'codespan', raw: '`code`', text: 'code' }`\n- `{ type: 'strong', raw: '**很重要**', tokens: [...] }`\n\n`ui/markdown.ts` 拿到這些 token 後,自己用 `document.createElement` + `textContent` 一個個組回 DOM——`<code>`、`<strong>` 都是手動建的元素,從頭到尾沒有一行 HTML 字串。這跟本專案處理 Shiki 語法高亮 token 的模式完全一樣,只是換一種內容套用同一招。\n\n每個 token 都帶一個關鍵欄位 `raw`——產生該 token 的原始字元。這個欄位同時解決兩個問題:不支援的語法(表格、引用區塊……)直接輸出 `raw` 就是「原樣呈現」;輸出走的是 `textContent`,天然無注入面,不需要額外消毒。",
+      "terms": [
+        {
+          "term": "marked 的 Lexer",
+          "explanation": "`marked` 是一套成熟的 markdown 函式庫,一般人熟悉的用法是 `marked(text)`,直接吐出一段 HTML 字串。`Lexer` 是它比較少人用的另一個 API:`new Lexer(options).lex(text)` 或 `Lexer.lexInline(text)`,只回傳結構化的 token 陣列,完全不碰 HTML 字串。本次變更只走這條路,因為 `ui/render.ts` 全檔有零 `innerHTML` 的紀律,不能接受任何會產出 HTML 字串的 API。"
+        },
+        {
+          "term": "gfm: false",
+          "explanation": "GFM(GitHub Flavored Markdown)是 CommonMark 之外,GitHub 額外加的一批擴充語法——表格、裸網址自動變連結(autolink)、刪除線都屬於它。`marked` 預設會開啟 GFM;關掉(`gfm: false`)之後,這些語法在 Lexer 這一層就直接不會被辨識成對應的 token,退化成普通文字,是本專案封閉子集的第一層防線。"
+        },
+        {
+          "term": "DocumentFragment",
+          "explanation": "瀏覽器內建的一種輕量容器,可以先在裡面組裝一批 DOM 節點,最後一次性掛到頁面上。有個容易忽略的行為:把 DocumentFragment 掛到另一個元素時,裡面的節點是被移動過去,不是複製——fragment 本身用完就空了(下一步會看到一個因此踩到的實測坑)。"
+        }
+      ],
+      "anchor": "import { Lexer, type MarkedToken, type Tokens } from 'marked';\nimport { isHttpUrl } from '../shared/schema';\n\n/**\n * 只用 marked 的 Lexer 取 token,永不呼叫 marked() 或 Renderer——token 皆帶 `raw`\n * 欄位(產生該 token 的原始字元),不支援的語法直接輸出 raw 即是「原樣呈現」,\n * 而輸出一律經 textContent/createTextNode,天然沒有注入疑慮(見 design.md D1)。\n * gfm: false 讓表格、裸網址 autolink、刪除線在 lexer 這層就不成 token。\n *\n * 型別一律用 MarkedToken(而非 marked 匯出的 Token),因為 Token = MarkedToken |\n * Tokens.Generic,而 Generic.type 是寬鬆的 string——switch (token.type) 在每個\n * case 裡都窄不掉 Generic,連帶讓 `.tokens` 被推成 `Token[] | undefined`。專案\n * 不使用任何自訂 tokenizer 擴充,Generic 不會真的出現,MarkedToken 排除它後\n * 窄化才會正確運作,不需要到處補 `?? []`。\n */\nconst LEXER_OPTIONS = { gfm: false } as const;\n\nexport type OpenLinkHandler = (url: string) => void;\n\n/**\n * `null` 表示「此處連結不可點擊」:呼叫端若把渲染結果放進另一個已有點擊行為\n * 的元素(`<button>`、有 click handler 的 `<summary>`、包著 radio 的 `<label>`),\n * 傳 null 讓 link token 一律降級為原始文字——巢狀互動元素既是無效 HTML,點擊\n * 語意也會打架(例如 <label> 內的巢狀按鈕仍可能觸發外層 radio 切換)。程式碼與\n * 粗體不受影響,一律照常渲染。\n */\nexport type MaybeOpenLinkHandler = OpenLinkHandler | null;"
+    },
+    {
+      "title": "兩個對外函式:`renderMarkdownBlock` / `renderMarkdownInline`",
+      "file": "ui/markdown.ts",
+      "startLine": 29,
+      "endLine": 43,
+      "narration": "兩個對外函式,回傳型別都是 `DocumentFragment` 而不是字串——這讓「這個模組不可能產出 HTML 字串」變成型別層面的事實,不用靠 code review 把關。\n\n- `renderMarkdownBlock(source, onOpenLink)`:給**長文欄位**用(`narration`、`term.explanation`……),呼叫 `new Lexer(LEXER_OPTIONS).lex(source)`,六種語法全開\n- `renderMarkdownInline(source, onOpenLink)`:給**短欄位**用(`quiz.question`、`step.title`……),呼叫 `Lexer.lexInline(source, LEXER_OPTIONS)`,只解析行內三種(程式碼/粗體/連結)\n\n分級不是靠額外的過濾程式碼,而是選對入口就是規格——`lexInline()` 眼中 `- 項目` 或 `## 標題` 本來就不成清單或小標的 token,自然落為普通文字。這對應 spec 的「短欄位中的區塊語法不生效」情境:`item.label` 塞「- 項目」會原樣顯示成帶 `- ` 字元的純文字,不會被解析成清單。",
+      "items": [
+        {
+          "kind": "pitfall",
+          "misconception": "`DocumentFragment` 可以像陣列一樣重複讀取,對同一個 fragment 先後呼叫兩次不同的檢查函式,兩邊都能拿到完整內容",
+          "reality": "`appendChild` 是**移動**,不是複製。第一次 `div.appendChild(fragment)` 之後,`fragment` 本身就變空的了——`ui/markdown.test.ts` 最初的寫法正是這樣踩到坑,第二個檢查函式永遠拿到空結果。後來改成先呼叫一次 `mount()` 掛載,所有斷言都從掛載後的 `div` 讀取,才修正這個問題。"
+        }
+      ],
+      "anchor": "export function renderMarkdownBlock(source: string, onOpenLink: MaybeOpenLinkHandler): DocumentFragment {\n  const fragment = document.createDocumentFragment();\n  const tokens = new Lexer(LEXER_OPTIONS).lex(source) as MarkedToken[];\n  for (const token of tokens) {\n    appendBlockToken(fragment, token, onOpenLink);\n  }\n  return fragment;\n}\n\nexport function renderMarkdownInline(source: string, onOpenLink: MaybeOpenLinkHandler): DocumentFragment {\n  const fragment = document.createDocumentFragment();\n  const tokens = Lexer.lexInline(source, LEXER_OPTIONS) as MarkedToken[];\n  appendInlineTokens(fragment, tokens, onOpenLink);\n  return fragment;\n}"
+    },
+    {
+      "title": "白名單機制與降級為預設分支",
+      "file": "ui/markdown.ts",
+      "startLine": 45,
+      "endLine": 77,
+      "narration": "這是白名單機制的核心:`switch (token.type)` 只有 `space`(略過,區塊間距交給 CSS margin)、`paragraph`、`heading`、`list` 三種進入真正的渲染分支,其餘一律落進 `default`。\n\n`default` 分支只做一件事:把原始字元包成 `<p>` 塞回去。這代表 marked 能辨識、但本專案不支援的語法——表格、引用區塊、程式碼區塊、原始 HTML——全部自動走這條路,不需要為每一種寫一個 case 說「不支援」。新增支援語法等於新增一個 case,沒加 case 的一切自動安全降級,這是本 change 的核心設計原則。\n\n`heading` 分支特別檢查 `token.depth !== 2` 就直接丟去 fallback——`# 一級標題`、`### 三級標題` 跟 `## 二級標題` 在 marked 眼中同屬 `heading` 型別,只靠 `depth` 分流。這對應「不支援的標題階層與支援的階層並存」情境:同一段 narration 裡 `# 一級標題` 和 `## 二級標題` 可以並存,前者原樣顯示、後者變成小標,兩行判斷就做到。",
+      "anchor": "function appendBlockToken(\n  parent: DocumentFragment | HTMLElement,\n  token: MarkedToken,\n  onOpenLink: MaybeOpenLinkHandler,\n): void {\n  switch (token.type) {\n    case 'space':\n      return;\n    case 'paragraph': {\n      const p = document.createElement('p');\n      p.className = 'codewalk-md-p';\n      appendInlineTokens(p, token.tokens as MarkedToken[], onOpenLink);\n      parent.appendChild(p);\n      return;\n    }\n    case 'heading': {\n      if (token.depth !== 2) {\n        appendBlockFallback(parent, token.raw);\n        return;\n      }\n      const heading = document.createElement('h3');\n      heading.className = 'codewalk-md-h';\n      appendInlineTokens(heading, token.tokens as MarkedToken[], onOpenLink);\n      parent.appendChild(heading);\n      return;\n    }\n    case 'list':\n      parent.appendChild(renderList(token, onOpenLink));\n      return;\n    default:\n      appendBlockFallback(parent, token.raw);\n  }\n}"
+    },
+    {
+      "title": "清單的巢狀支援是免費的",
+      "file": "ui/markdown.ts",
+      "startLine": 79,
+      "endLine": 117,
+      "narration": "清單的巢狀支援幾乎是免費的:marked 的 `list` token,其 `items[].tokens` 內含巢狀的 `list` token,`renderList()` 遞迴呼叫自己就天然處理了。設計階段記錄了這個判斷:要限制成單一層級反而得寫額外的深度檢查程式碼,不為了縮小規格範圍而增加程式碼複雜度。\n\n`appendListItemToken()` 的註解列出清單項目內三種可能的 block token:\n\n- `text`:緊湊清單(項目間沒有空行),內容是一串 inline token\n- `paragraph`:寬鬆清單(項目間有空行)\n- `list`:巢狀清單,遞迴呼叫 `renderList()`\n\n`token.ordered` 決定產出 `<ol>` 還是 `<ul>`,巢狀子項目在視覺上靠 CSS 縮排與父項目分辨層級。",
+      "anchor": "function renderList(\n  token: Tokens.List,\n  onOpenLink: MaybeOpenLinkHandler,\n): HTMLUListElement | HTMLOListElement {\n  const listEl = document.createElement(token.ordered ? 'ol' : 'ul');\n  listEl.className = 'codewalk-md-list';\n  for (const item of token.items) {\n    const li = document.createElement('li');\n    for (const itemToken of item.tokens as MarkedToken[]) {\n      appendListItemToken(li, itemToken, onOpenLink);\n    }\n    listEl.appendChild(li);\n  }\n  return listEl;\n}\n\n/**\n * 清單項目內的 block token 只會是 'text'(緊湊清單,含 inline tokens)、\n * 'paragraph'(寬鬆清單,項目間有空行)或 'list'(巢狀清單)——皆實測確認。\n */\nfunction appendListItemToken(li: HTMLLIElement, token: MarkedToken, onOpenLink: MaybeOpenLinkHandler): void {\n  switch (token.type) {\n    case 'text':\n      appendInlineTokens(li, (token.tokens ?? []) as MarkedToken[], onOpenLink);\n      return;\n    case 'paragraph': {\n      const p = document.createElement('p');\n      p.className = 'codewalk-md-p';\n      appendInlineTokens(p, token.tokens as MarkedToken[], onOpenLink);\n      li.appendChild(p);\n      return;\n    }\n    case 'list':\n      li.appendChild(renderList(token, onOpenLink));\n      return;\n    default:\n      appendBlockFallback(li, token.raw);\n  }\n}"
+    },
+    {
+      "title": "行內語法與連結的安全邊界",
+      "file": "ui/markdown.ts",
+      "startLine": 119,
+      "endLine": 167,
+      "narration": "行內語法的四個分支:`text`(直接塞文字節點)、`codespan`(包成 `<code>`)、`strong`(遞迴處理內部 token,包成 `<strong>`)、`link`(最複雜的一個)。\n\n`link` 分支的判斷式是整份 change 裡最關鍵的一行——`if (onOpenLink === null || !isHttpUrl(token.href))`,兩個條件都會讓連結降級為純文字:\n\n1. **網址不合法**:`isHttpUrl()` 檢查通不過(`command:`、`javascript:` 這類非 http/https 網址)\n2. **`onOpenLink` 是 `null`**:呼叫端主動選擇的降級,見下一步的巢狀互動元素說明\n\n通過檢查的連結渲染成 `<button class=\"codewalk-md-link\">`(不是 `<a href>`)——與既有的 `renderReference()` 手法一致,因為 webview 內的 `<a href>` 有導航離開面板的風險。點擊呼叫 `onOpenLink(token.href)`,最終走既有的 `openReference` postMessage 協定,交給 extension host 用系統瀏覽器開啟。",
+      "terms": [
+        {
+          "term": "MaybeOpenLinkHandler",
+          "explanation": "型別是 `OpenLinkHandler | null`。傳真正的函式代表「這裡的連結可以點擊」;傳 `null` 代表「這裡的連結一律降級為純文字」。用途是避免巢狀互動元素——如果 markdown 連結渲染成 `<button>`,而這個 `<button>` 又被放進另一個本來就有點擊行為的元素(比如已包著 radio 的 `<label>`),會產生無效的巢狀可點擊結構,且點擊語意會打架,內層按鈕的點擊可能一路冒泡觸發外層的 radio 切換。"
+        }
+      ],
+      "anchor": "function appendInlineTokens(\n  parent: DocumentFragment | HTMLElement,\n  tokens: MarkedToken[],\n  onOpenLink: MaybeOpenLinkHandler,\n): void {\n  for (const token of tokens) {\n    appendInlineToken(parent, token, onOpenLink);\n  }\n}\n\nfunction appendInlineToken(\n  parent: DocumentFragment | HTMLElement,\n  token: MarkedToken,\n  onOpenLink: MaybeOpenLinkHandler,\n): void {\n  switch (token.type) {\n    case 'text':\n      parent.appendChild(document.createTextNode(token.raw));\n      return;\n    case 'codespan': {\n      const code = document.createElement('code');\n      code.className = 'codewalk-md-code';\n      code.textContent = token.text;\n      parent.appendChild(code);\n      return;\n    }\n    case 'strong': {\n      const strong = document.createElement('strong');\n      appendInlineTokens(strong, token.tokens as MarkedToken[], onOpenLink);\n      parent.appendChild(strong);\n      return;\n    }\n    case 'link': {\n      if (onOpenLink === null || !isHttpUrl(token.href)) {\n        parent.appendChild(document.createTextNode(token.raw));\n        return;\n      }\n      const button = document.createElement('button');\n      button.type = 'button';\n      button.className = 'codewalk-md-link';\n      appendInlineTokens(button, token.tokens as MarkedToken[], onOpenLink);\n      button.addEventListener('click', () => onOpenLink(token.href));\n      parent.appendChild(button);\n      return;\n    }\n    default:\n      parent.appendChild(document.createTextNode(token.raw));\n  }\n}"
+    },
+    {
+      "title": "`isHttpUrl` 為什麼要 `export`",
+      "file": "shared/schema.ts",
+      "startLine": 120,
+      "endLine": 129,
+      "narration": "`isHttpUrl()` 原本是 `shared/schema.ts` 的 module-private 函式,只給 `reference.url` 的格式驗證用。這次 change 幫它加上 `export`,`ui/markdown.ts` 直接引用同一份判定,而不是在 webview 端重新寫一次「什麼算合法網址」。\n\n這個決定呼應 CLAUDE.md 的硬規則——「`.codewalk.json` 格式=對外合約,schema 住 `shared/schema.ts` 單點」。複製一份等於埋下「validator 與渲染層對合法性看法分歧」的伏筆:未來如果有人只改了其中一處的判斷邏輯,兩邊就會悄悄不一致,而且不會有任何測試失敗來提醒你。`export` 不改變函式本身的任何行為,純粹是可見度的調整。",
+      "anchor": "/** 判定是否為合法 http/https 網址;`reference.url` 驗證與 ui/markdown.ts 的內嵌連結降級共用同一判定。 */\nexport function isHttpUrl(value: unknown): value is string {\n  if (typeof value !== 'string') return false;\n  try {\n    const url = new URL(value);\n    return url.protocol === 'http:' || url.protocol === 'https:';\n  } catch {\n    return false;\n  }\n}"
+    },
+    {
+      "title": "巢狀互動元素:實作中才浮現的缺口",
+      "file": "ui/render.ts",
+      "startLine": 155,
+      "endLine": 219,
+      "narration": "## 巢狀互動元素:實作到一半才浮現的設計缺口\n\n連結的判定與開啟方式在設計階段就定案了,但沒處理一種情況:連結渲染出的 `<button>` 落在另一個「已經有點擊行為」的元素裡面。實作到短欄位接線的任務才發現這個問題——`item.label` 顯示在 `renderReference()`(見本步下半段)的 `<button>` 內,`term.term` 顯示在有 click handler 的 `<summary>` 內。如果這些位置的連結也渲染成 `<button>`,會產生巢狀 `<button>`,不只是無效 HTML,點擊語意也會打架。\n\n解法就是上一步看到的 `MaybeOpenLinkHandler`:呼叫端傳 `null` 時,`link` token 一律降級為原始文字,跟非法網址走同一條路徑。`renderReference()`(215 行)就是一個例子——`label` 顯示在 `<button>` 內部,呼叫 `renderMarkdownInline(label, null)`,注解直接寫明理由。\n\n## `appendLabeledMarkdown`:一個不起眼但關鍵的 DOM 技巧\n\n`pitfall` 的「誤解:」/「其實:」標籤原本是純文字時代的 `<p>` 前綴,直接塞文字就好。改成 `renderMarkdownBlock` 之後,回傳的是可能含多個獨立區塊元素的 `DocumentFragment`——如果把標籤當成一個獨立的前置 sibling 硬塞進去,會被瀏覽器排版推到自己一行,跟原本「標籤與內容首行同行顯示」的視覺不一致。\n\n`appendLabeledMarkdown()` 的解法:抓 `content.firstElementChild`,如果它是 `<p>`,就把標籤 `prepend` 進這個段落內部,讓標籤跟內容首行共處一個 `<p>`;如果內容一開頭就是清單或小標(沒有起始段落),才退回讓標籤自己佔一行。",
+      "anchor": "function renderAnnotation(\n  kind: 'tip' | 'todo',\n  iconName: string,\n  text: string,\n  onOpenLink: OpenLinkHandler,\n): HTMLElement {\n  const box = el('div', `codewalk-annotation codewalk-annotation-${kind}`);\n  box.appendChild(icon(iconName, 'codewalk-annotation-icon'));\n  const textBox = el('div', 'codewalk-annotation-text');\n  textBox.appendChild(renderMarkdownBlock(text, onOpenLink));\n  box.appendChild(textBox);\n  return box;\n}\n\n/**\n * 標籤(「誤解:」/「其實:」)插進 markdown 內容的第一個段落內部,維持與內容\n * 首行同行顯示——renderMarkdownBlock 回傳的是獨立區塊元素,標籤若當成單純的\n * 前置 sibling 會被推到自己一行,跟改動前「同一個 <p>」的排版不一致。內容以\n * 清單或小標開頭(無起始段落)時,退回標籤獨立一行。\n */\nfunction appendLabeledMarkdown(\n  container: HTMLElement,\n  labelText: string,\n  source: string,\n  onOpenLink: OpenLinkHandler,\n): void {\n  const label = el('span', 'codewalk-pitfall-label', labelText);\n  const content = renderMarkdownBlock(source, onOpenLink);\n  const firstParagraph = content.firstElementChild;\n  if (firstParagraph instanceof HTMLParagraphElement) {\n    firstParagraph.prepend(label);\n  } else {\n    container.appendChild(label);\n  }\n  container.appendChild(content);\n}\n\nfunction renderPitfall(misconception: string, reality: string, onOpenLink: OpenLinkHandler): HTMLElement {\n  const box = el('div', 'codewalk-annotation codewalk-annotation-pitfall');\n  const header = el('div', 'codewalk-annotation-header');\n  header.appendChild(icon('alert', 'codewalk-annotation-icon'));\n  header.appendChild(el('span', undefined, '容易誤解的地方'));\n  box.appendChild(header);\n  const misconceptionRow = el('div', 'codewalk-pitfall-line');\n  appendLabeledMarkdown(misconceptionRow, '誤解:', misconception, onOpenLink);\n  const realityRow = el('div', 'codewalk-pitfall-line');\n  appendLabeledMarkdown(realityRow, '其實:', reality, onOpenLink);\n  box.appendChild(misconceptionRow);\n  box.appendChild(realityRow);\n  return box;\n}\n\n/**\n * label 顯示在 <button> 內部——渲染時 onOpenLink 傳 null,連結降級為原始文字\n * (見 ui/markdown.ts 的 MaybeOpenLinkHandler),避免巢狀 <button>。\n */\nfunction renderReference(label: string, url: string, onOpenReference: (url: string) => void): HTMLElement {\n  const button = el('button', 'codewalk-reference');\n  button.appendChild(icon('link-external'));\n  const labelSpan = el('span', 'codewalk-reference-label');\n  labelSpan.appendChild(renderMarkdownInline(label, null));\n  button.appendChild(labelSpan);\n  button.addEventListener('click', () => onOpenReference(url));\n  return button;\n}"
+    },
+    {
+      "title": "接線:哪裡傳 `null`,哪裡傳真實 handler",
+      "file": "ui/render.ts",
+      "startLine": 547,
+      "endLine": 605,
+      "narration": "這段是上一步規則在實際畫面上的落地——把規則對照到具體呼叫點:\n\n- `walk.title`(548 行):`<h2>`,無點擊行為 → 真實 `handlers.onOpenReference`\n- `step.title`(555 行):`<h3>`,無點擊行為 → 真實 handler\n- `narration`(565 行):`<div>`,無點擊行為 → 真實 handler\n- `term.term`(588 行):`<summary>`,**有**點擊行為(收合展開)→ `null`\n- `term.explanation`(600 行):`<div>`,無點擊行為 → 真實 handler\n\n規則綁的是**渲染位置**,不是欄位本身——這也是為什麼同一個欄位(比如 `quiz.options[]`)在不同畫面會有不同的 `onOpenLink` 值:live 作答時選項包在 `<label>` 裡(有 radio 點擊行為),結果頁的選項只是純顯示。\n\n第 594-597 行還有一個跟本次 change 無直接關係、但剛好在旁邊的雷:`<summary>` 用 `click` + `preventDefault()` 而不是監聽 `toggle` 事件——設定 `details.open` 本身就會非同步觸發 `toggle`,同時監聽的話會被自己觸發的事件二次呼叫,造成「點開又立刻收合」的無窮迴圈。",
+      "anchor": "  const walkTitle = document.createElement('h2');\n  walkTitle.appendChild(renderMarkdownInline(state.walk.title, handlers.onOpenReference));\n  container.appendChild(walkTitle);\n  container.appendChild(\n    el('p', 'codewalk-progress', `第 ${state.stepIndex + 1} / ${state.walk.steps.length} 步`),\n  );\n  container.appendChild(createStepDots(state.stepIndex, state.walk.steps.length));\n  const stepTitle = document.createElement('h3');\n  stepTitle.appendChild(renderMarkdownInline(step.title, handlers.onOpenReference));\n  container.appendChild(stepTitle);\n  const { startLine: stepStartLine, endLine: stepEndLine } = effectiveLineRange(step, stepReport.step);\n  container.appendChild(el('p', 'codewalk-file-ref', `${step.file}:${stepStartLine}-${stepEndLine}`));\n\n  if (stepReport.step.kind === 'stale') {\n    container.appendChild(renderStepStaleBlock(step, stepReport.step, handlers.onOpenStaleFile));\n  }\n\n  const narration = el('div', 'codewalk-narration');\n  narration.appendChild(renderMarkdownBlock(step.narration, handlers.onOpenReference));\n  container.appendChild(narration);\n\n  if (step.items && step.items.length > 0) {\n    container.appendChild(\n      renderItems(step.items, snippetPreviews, stepReport.items, {\n        onOpenReference: handlers.onOpenReference,\n        onJumpToSnippet: handlers.onJumpToSnippet,\n      }),\n    );\n  }\n\n  if (step.terms && step.terms.length > 0) {\n    const termsContainer = el('div', 'codewalk-terms');\n    for (const term of step.terms) {\n      const details = document.createElement('details');\n      details.className = 'codewalk-term';\n      details.open = state.expandedTerms.has(term.term);\n      const summary = document.createElement('summary');\n      summary.appendChild(icon('symbol-keyword', 'codewalk-term-icon'));\n      const termLabel = el('span', 'codewalk-term-label');\n      // term.term 顯示在有 click handler 的 <summary> 內,onOpenLink 傳 null\n      // 避免巢狀可點擊元素(見 renderReference 的說明)。\n      termLabel.appendChild(renderMarkdownInline(term.term, null));\n      summary.appendChild(termLabel);\n      summary.appendChild(icon('chevron-right', 'codewalk-term-chevron'));\n      // 用 click + preventDefault 取代監聽 'toggle':設定 details.open 本身就會非同步觸發\n      // 'toggle' 事件,若同時監聽 'toggle' 會在下一輪重繪時被自己觸發的事件二次呼叫,\n      // 造成「點開又立刻收合」的無窮迴圈。\n      summary.addEventListener('click', (event) => {\n        event.preventDefault();\n        handlers.onToggleTerm(term.term);\n      });\n      details.appendChild(summary);\n      const explanation = el('div');\n      explanation.appendChild(renderMarkdownBlock(term.explanation, handlers.onOpenReference));\n      details.appendChild(explanation);\n      termsContainer.appendChild(details);\n    }\n    container.appendChild(termsContainer);\n  }"
+    },
+    {
+      "title": "樣式與一次窄面板破版的教訓",
+      "file": "ui/theme.css",
+      "startLine": 670,
+      "endLine": 745,
+      "narration": "## 樣式:全部取 VS Code 主題變數,不自帶色票\n\n- 行內程式碼背景 `--vscode-textCodeBlock-background`、前景 `--vscode-textPreformat-foreground`(fallback 編輯器前景色)、字體 `--vscode-editor-font-family`\n- 連結前景/hover `--vscode-textLink-foreground` / `--vscode-textLink-activeForeground`\n\n`--vscode-textCodeBlock-background` 這個變數曾在 Shiki 那次 change 被否決過(用在整塊 snippet 底色上,跟編輯器背景不同色),但這次用途是句中的小塊行內程式碼——正是這個變數在 VS Code 自己的 hover 提示與 markdown 預覽裡的原始用途,情境相反,採用沒問題。\n\n## 踩雷記錄:窄面板破版,兩個原因疊加\n\n面板拉到最窄時,清單內容跟長識別字(像 `shared/schema.ts`)會被裁切。根因有兩個:\n\n1. **flex 子元素的 `min-width` 預設是 `auto`**:`.codewalk-annotation` 是 `display: flex`,裡面的 `.codewalk-annotation-text` 沒設 `min-width: 0`,瀏覽器預設不讓 flex 子元素縮小到比內容本身還窄,面板越窄就越擠不下\n2. **`overflow-wrap` 沒設**:像 `shared/schema.ts` 這種只有斜線、沒有空白的字串,瀏覽器找不到天然的斷行點,只能整段撐開容器\n\n修法是幫 `.codewalk-md-p`/`.codewalk-md-h`/`.codewalk-md-list li`/`.codewalk-md-code` 加 `overflow-wrap: anywhere`,並幫幾個 flex 容器補上 `min-width: 0`。\n\n這裡還有一個開發時的教訓:第一次修完 CSS、測試也全綠,但沒跑 `node esbuild.js` 重建 `dist/webview.css` 就要使用者驗收——結果使用者看到的還是修 CSS 之前的舊 bundle,回報「還是破版」。改完 `.ts`/`.css` 檔案後,webview 不會自動重載新的樣式,一定要重新建置並重開面板/重載視窗才看得到效果。",
+      "items": [
+        {
+          "kind": "tip",
+          "text": "單一換行為什麼會斷行,靠的不是 `marked` 的 `breaks` 選項——那個選項只影響 `marked` 的 Renderer(把換行轉成 `<br>`),而本專案完全不呼叫 Renderer。`text` token 的 `raw` 欄位本來就完整保留原始的換行字元,`textContent` 塞進 DOM 時也會保留;只要目標元素的 CSS 有 `white-space: pre-line`,斷行就自然發生。**這條設計在 token 路線下是零成本的**,不是特別新增的行為。"
+        }
+      ],
+      "anchor": ".codewalk-narration {\n  line-height: 1.5;\n}\n\n/* narration 等敘述欄位改由 ui/markdown.ts 解析成 <p>/<h3>/<ul>/<ol> 等真正的區塊\n   元素,不再是單一 <p> 塞全部內容——pre-line 因此從容器本身下移到 .codewalk-md-p\n   / .codewalk-md-li,只保留「段落或項目內部的單一換行維持斷行」這一件事;\n   區塊之間的間距改由 margin 負責,不隨來源連續空行數量累加。 */\n/* overflow-wrap: anywhere——敘述裡常見的識別字/路徑(如 shared/schema.ts)只有\n   斜線、句點,沒有空白這種瀏覽器預設的斷行點,窄面板下會撐開整個容器而非換行。\n   套在三個文字承載元素上,不管外層容器是不是 flex 都能自行斷行。 */\n.codewalk-md-p {\n  margin: 0 0 0.5rem;\n  white-space: pre-line;\n  overflow-wrap: anywhere;\n}\n\n.codewalk-md-p:last-child {\n  margin-bottom: 0;\n}\n\n.codewalk-md-h {\n  margin: 0.9rem 0 0.35rem;\n  font-size: 1.1em;\n  font-weight: 600;\n  color: var(--vscode-foreground);\n  overflow-wrap: anywhere;\n}\n\n.codewalk-md-list {\n  margin: 0 0 0.5rem;\n  padding-left: 1.4rem;\n}\n\n.codewalk-md-list:last-child {\n  margin-bottom: 0;\n}\n\n.codewalk-md-list li {\n  white-space: pre-line;\n  overflow-wrap: anywhere;\n  margin-bottom: 0.2rem;\n}\n\n.codewalk-md-list li > .codewalk-md-list {\n  margin-top: 0.2rem;\n}\n\n/* 用途是句中的小塊行內程式碼,正是 --vscode-textCodeBlock-background 原本設計\n   要給的場景(hover 提示框、markdown 預覽)——與 .codewalk-snippet-code 刻意\n   不用它的理由(那裡要跟編輯器背景完全一致)不衝突,見該處註解。overflow-wrap\n   讓單一 code span 在容器不夠寬時能自己斷行,不需要仰賴外層容器夠寬。 */\n.codewalk-md-code {\n  background-color: var(--vscode-textCodeBlock-background);\n  color: var(--vscode-textPreformat-foreground, var(--vscode-editor-foreground));\n  font-family: var(--vscode-editor-font-family);\n  font-size: 0.9em;\n  padding: 0.1rem 0.3rem;\n  border-radius: 3px;\n  overflow-wrap: anywhere;\n}\n\n.codewalk-md-link {\n  display: inline;\n  color: var(--vscode-textLink-foreground);\n  background: none;\n  border: none;\n  padding: 0;\n  font: inherit;\n  cursor: pointer;\n}\n\n.codewalk-md-link:hover {\n  color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground));\n  text-decoration: underline;\n}"
+    }
+  ],
+  "quiz": [
+    {
+      "question": "為什麼 `ui/markdown.ts` 只用 marked 的 `Lexer`,不用 `marked()` 或 Renderer?",
+      "options": [
+        "因為 Renderer 效能較差,Lexer 執行速度比較快",
+        "因為要維持零 `innerHTML` 紀律——Lexer 給結構化 token(帶 `raw`),渲染端可以手動建 DOM、逐一 `textContent` 附加,不需要輸出 HTML 字串",
+        "因為 marked 的 Renderer API 已經被官方棄用",
+        "因為 Lexer 支援比 Renderer 更多的 GFM 語法"
+      ],
+      "correctIndex": 1,
+      "optionExplanations": [
+        "錯。效能不是本次決策的理由,narration 字串很短,兩種 API 的成本都在微秒級,design.md 明寫「不做解析結果快取或效能最佳化」。",
+        "對。`ui/render.ts` 全檔立有明文紀律,一律用 `textContent` 而非 `innerHTML`。Renderer 會吐出 HTML 字串,要嘛違反這條紀律,要嘛得自己消毒字串;Lexer 只給結構化 token,天然沒有這個問題。",
+        "錯。marked 的 Renderer API 目前仍是官方支援的正式功能,沒有被棄用。",
+        "錯。GFM 語法(表格、autolink、刪除線)的開關是 `gfm` 選項,跟用 Lexer 還是 Renderer 無關;本次變更反而是把 `gfm` 關掉。"
+      ]
+    },
+    {
+      "question": "`renderMarkdownInline`(用在 `quiz.question`、`term.term` 這類短欄位)為什麼能讓區塊語法(清單、`##` 小標)自動失效,不用額外寫過濾程式碼?",
+      "options": [
+        "因為它會把粗體語法自動改判成小標語法",
+        "因為它呼叫 `Lexer.lexInline()`,這個入口眼中 `- 項目`、`## 標題` 本來就不成清單或小標的 token,自然落為一般文字",
+        "因為短欄位在傳進渲染函式之前,會先被另一個函式過濾掉開頭的符號",
+        "因為短欄位的內容長度限制讓清單語法無法成立"
+      ],
+      "correctIndex": 1,
+      "optionExplanations": [
+        "錯。粗體語法在 inline 模式下依然正常渲染成 `<strong>`,不會被改判成任何其他語法。",
+        "對。`Lexer.lexInline()` 只解析行內語法,`- ` 開頭或 `## ` 開頭在它眼中就是普通文字的一部分,不會被 tokenize 成 list 或 heading——選對入口就是規格,不需要額外的過濾程式碼。",
+        "錯。程式碼裡沒有這樣的前置過濾函式,短欄位跟長文欄位共用同一份 `appendInlineToken` 渲染邏輯,差別只在 Lexer 入口。",
+        "錯。scenario 明寫「短欄位中的區塊語法不生效」是行為保證,跟字串長度無關,再短的清單語法一樣不會生效。"
+      ]
+    },
+    {
+      "question": "`term.term`(顯示在 `<summary>` 內)呼叫 `renderMarkdownInline` 時,為什麼傳 `null` 而不是真正的 `onOpenReference`?",
+      "options": [
+        "term.term 這個欄位本來就不支援連結語法,傳什麼都一樣",
+        "傳 `null` 是效能優化,可以省去建立 event listener 的成本",
+        "`<summary>` 本身已經有 click handler 負責收合展開,若連結渲染成 `<button>` 會產生巢狀可點擊元素,點擊語意會打架,所以用 `null` 讓連結一律降級為原始文字",
+        "term.term 的內容通常很短,長度上不可能寫出完整的連結語法"
+      ],
+      "correctIndex": 2,
+      "optionExplanations": [
+        "錯。`term.term` 是短欄位,支援行內三種語法(程式碼/粗體/連結),連結語法本身是支援的,問題出在「這裡」能不能點擊。",
+        "錯。省下的 event listener 成本微不足道,不是這個決策的理由;決策動機是避免巢狀互動元素這個結構性問題。",
+        "對。`<summary>` 已綁了收合展開的 click handler,若內部再放一個可點擊的 `<button>`,會是無效的巢狀互動元素,而且內層按鈕的點擊可能連帶觸發外層的收合展開——傳 `null` 讓連結降級為純文字,徹底避開這個衝突。",
+        "錯。連結語法的長度跟 `term.term` 通常較短沒有必然關係,理論上短欄位裡一樣寫得出 `[文字](https://...)`。"
+      ]
+    },
+    {
+      "question": "某 step 的 `narration` 含一段 markdown 表格語法,系統的行為是?",
+      "options": [
+        "拋出錯誤,該 step 無法載入,整份導讀中止播放",
+        "表格語法原樣顯示為包含符號的純文字,不影響同一份導讀其他部分的呈現,因為不在白名單內的 token 型別一律走 default 分支輸出原始字元",
+        "自動把表格轉換成無序清單顯示",
+        "跳過該 step,直接進到下一步"
+      ],
+      "correctIndex": 1,
+      "optionExplanations": [
+        "錯。降級為純文字是統一原則,不會拋出錯誤或中止載入——這是本次變更刻意設計的「認不得就原樣輸出」行為。",
+        "對。`appendBlockToken` 的 `switch` 只有 `space`/`paragraph`/`heading`/`list` 進入白名單分支,`table` 這個 token 型別會落進 `default`,直接輸出 `token.raw`,包成 `<p>` 顯示,不影響其他內容。",
+        "錯。程式裡沒有任何邏輯把表格語法轉成清單,兩者是完全不同的 token 型別,不會互相轉換。",
+        "錯。降級只影響「該欄位裡不支援的那一段語法」,不會連帶跳過整個 step——這正是 scenario 明寫的「該 step 其餘內容正常呈現」。"
+      ]
+    },
+    {
+      "question": "`appendLabeledMarkdown()` 為什麼要把「誤解:」標籤塞進 `renderMarkdownBlock` 回傳內容的第一個 `<p>` 裡面,而不是直接在前面 `appendChild` 一個獨立的標籤元素?",
+      "options": [
+        "因為 `renderMarkdownBlock` 回傳的是含多個獨立區塊元素的 `DocumentFragment`,把標籤當成獨立的前置 sibling 會被排版推到自己一行,跟原本「標籤與內容首行同行顯示」的視覺不一致,所以要 `prepend` 進第一個段落內部",
+        "因為 `DocumentFragment` 這個型別本身不支援 `appendChild` 方法",
+        "因為這樣寫可以順便避免產生巢狀 `<button>`",
+        "因為 CSS 的 flex 排版規則強制要求標籤元素必須是內容元素的子節點,否則版面會整個跑掉"
+      ],
+      "correctIndex": 0,
+      "optionExplanations": [
+        "對。改成 `renderMarkdownBlock` 之前,內容是塞進單一 `<p>` 的純文字,標籤自然跟內容同一行;改成回傳多個區塊元素之後,若不特別處理,標籤會被排版推開,`prepend` 進第一個 `<p>` 才能維持原本的視覺呈現。",
+        "錯。`DocumentFragment` 完全支援 `appendChild`,這不是限制的來源。",
+        "錯。巢狀 `<button>` 的問題由 `MaybeOpenLinkHandler` 傳 `null` 解決,跟標籤要不要塞進第一個段落是兩件獨立的事。",
+        "錯。CSS 排版不會強制規定 DOM 結構的父子關係,這是 JS 層面主動選擇的組裝方式,不是 CSS 逼出來的。"
+      ]
+    }
+  ],
+  "regenerateHint": "在本 repo 執行 /explain-change,change 名稱:add-markdown-rendering(archived,見 openspec/changes/archive/2026-08-06-add-markdown-rendering/)"
+}

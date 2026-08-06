@@ -1,9 +1,12 @@
 export interface CodewalkTerm {
+  /** 短欄位,markdown 子集僅行內三種——見 CodewalkStep.narration 的說明。 */
   term: string;
+  /** 長文欄位,markdown 子集完整六種——見 CodewalkStep.narration 的說明。 */
   explanation: string;
 }
 
 export type CodewalkItem =
+  // tip/todo.text、pitfall.misconception/reality 為長文欄位;reference/snippet/diff.label 為短欄位——見 CodewalkStep.narration 的說明。
   | { kind: 'tip'; text: string }
   | { kind: 'pitfall'; misconception: string; reality: string }
   | { kind: 'todo'; text: string }
@@ -20,10 +23,31 @@ export type CodewalkItem =
     };
 
 export interface CodewalkStep {
+  /** 短欄位,markdown 子集僅行內三種——見下方 narration 的說明。 */
   title: string;
   file: string;
   startLine: number;
   endLine: number;
+  /**
+   * 播放器將此欄位依封閉的 markdown 子集渲染(markdown-rendering capability),
+   * 而非顯示原始標記字元。**長文欄位**(narration、term.explanation、tip/todo.text、
+   * pitfall.misconception/reality、quiz.optionExplanations)支援全部六種語法:
+   *
+   * - 行內程式碼:`` `code` ``
+   * - 粗體:`**text**`
+   * - 連結:`[文字](https://...)`——僅 http/https 生效,其餘網址原樣顯示、不可點擊
+   * - 無序清單:`- 項目`(支援縮排巢狀)
+   * - 有序清單:`1. 項目`
+   * - 二級小標:`## 標題`(僅 depth 2;`#`、`###` 以下不支援)
+   *
+   * **短欄位**(walk.title、step.title、term.term、quiz.question、quiz.options、
+   * item.label)只支援行內三種(程式碼/粗體/連結),清單與小標不生效、原樣顯示為
+   * 純文字(在按鈕、`<summary>` 這類元件裡放區塊語法本來就會破壞版面)。
+   *
+   * **降級規則統一**:表格、圖片、引用區塊、程式碼區塊(```)、`#`/`###` 以下標題、
+   * 原始 HTML、格式錯誤的語法——一律原樣顯示為純文字,不影響同一份導讀其餘部分
+   * 的載入與播放。單一換行維持斷行(不會被合併成一行),空行才分段落。
+   */
   narration: string;
   /** 產出當下該行段的程式碼原文,用於失準偵測(見 stale-step-detection capability)。 */
   anchor?: string;
@@ -32,13 +56,17 @@ export interface CodewalkStep {
 }
 
 export interface CodewalkQuizQuestion {
+  /** 短欄位,markdown 子集僅行內三種——見 CodewalkStep.narration 的說明。 */
   question: string;
+  /** 短欄位,markdown 子集僅行內三種——見 CodewalkStep.narration 的說明。 */
   options: string[];
   correctIndex: number;
+  /** 長文欄位,markdown 子集完整六種——見 CodewalkStep.narration 的說明。 */
   optionExplanations?: string[];
 }
 
 export interface CodewalkFile {
+  /** 短欄位,markdown 子集僅行內三種——見 CodewalkStep.narration 的說明。 */
   title: string;
   ref: string;
   steps: CodewalkStep[];
@@ -89,7 +117,8 @@ function isOptionalString(value: unknown): boolean {
   return value === undefined || typeof value === 'string';
 }
 
-function isHttpUrl(value: unknown): value is string {
+/** 判定是否為合法 http/https 網址;`reference.url` 驗證與 ui/markdown.ts 的內嵌連結降級共用同一判定。 */
+export function isHttpUrl(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   try {
     const url = new URL(value);

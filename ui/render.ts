@@ -9,6 +9,7 @@ import {
 } from '../shared/protocol';
 import type { CodewalkItem, CodewalkQuizQuestion, CodewalkStep } from '../shared/schema';
 import { highlightSnippetLines, type HighlightToken } from './highlight';
+import { renderMarkdownBlock, renderMarkdownInline, type OpenLinkHandler } from './markdown';
 import { formatAbsoluteDateTime, formatRelativeTime } from './relativeTime';
 import { isAtLastStep, type QuizResult, type QuizState, type WalkingState } from './state';
 
@@ -109,7 +110,10 @@ export function renderFileList(
 
     const button = el('button', 'codewalk-file-item');
     button.appendChild(icon('book'));
-    button.appendChild(el('span', 'codewalk-file-item-title', file.title));
+    const titleSpan = el('span', 'codewalk-file-item-title');
+    // 顯示在 <button> 內部,onOpenLink 傳 null 避免巢狀 <button>(見 renderReference 的說明)。
+    titleSpan.appendChild(renderMarkdownInline(file.title, null));
+    button.appendChild(titleSpan);
     button.addEventListener('click', () => handlers.onSelect(file.path));
     item.appendChild(button);
 
@@ -148,34 +152,68 @@ export interface WalkingHandlers {
   onCopyRegenerateHint: () => void;
 }
 
-function renderAnnotation(kind: 'tip' | 'todo', iconName: string, text: string): HTMLElement {
+function renderAnnotation(
+  kind: 'tip' | 'todo',
+  iconName: string,
+  text: string,
+  onOpenLink: OpenLinkHandler,
+): HTMLElement {
   const box = el('div', `codewalk-annotation codewalk-annotation-${kind}`);
   box.appendChild(icon(iconName, 'codewalk-annotation-icon'));
-  box.appendChild(el('p', 'codewalk-annotation-text', text));
+  const textBox = el('div', 'codewalk-annotation-text');
+  textBox.appendChild(renderMarkdownBlock(text, onOpenLink));
+  box.appendChild(textBox);
   return box;
 }
 
-function renderPitfall(misconception: string, reality: string): HTMLElement {
+/**
+ * 標籤(「誤解:」/「其實:」)插進 markdown 內容的第一個段落內部,維持與內容
+ * 首行同行顯示——renderMarkdownBlock 回傳的是獨立區塊元素,標籤若當成單純的
+ * 前置 sibling 會被推到自己一行,跟改動前「同一個 <p>」的排版不一致。內容以
+ * 清單或小標開頭(無起始段落)時,退回標籤獨立一行。
+ */
+function appendLabeledMarkdown(
+  container: HTMLElement,
+  labelText: string,
+  source: string,
+  onOpenLink: OpenLinkHandler,
+): void {
+  const label = el('span', 'codewalk-pitfall-label', labelText);
+  const content = renderMarkdownBlock(source, onOpenLink);
+  const firstParagraph = content.firstElementChild;
+  if (firstParagraph instanceof HTMLParagraphElement) {
+    firstParagraph.prepend(label);
+  } else {
+    container.appendChild(label);
+  }
+  container.appendChild(content);
+}
+
+function renderPitfall(misconception: string, reality: string, onOpenLink: OpenLinkHandler): HTMLElement {
   const box = el('div', 'codewalk-annotation codewalk-annotation-pitfall');
   const header = el('div', 'codewalk-annotation-header');
   header.appendChild(icon('alert', 'codewalk-annotation-icon'));
   header.appendChild(el('span', undefined, '容易誤解的地方'));
   box.appendChild(header);
-  const misconceptionRow = el('p', 'codewalk-pitfall-line');
-  misconceptionRow.appendChild(el('span', 'codewalk-pitfall-label', '誤解:'));
-  misconceptionRow.appendChild(document.createTextNode(misconception));
-  const realityRow = el('p', 'codewalk-pitfall-line');
-  realityRow.appendChild(el('span', 'codewalk-pitfall-label', '其實:'));
-  realityRow.appendChild(document.createTextNode(reality));
+  const misconceptionRow = el('div', 'codewalk-pitfall-line');
+  appendLabeledMarkdown(misconceptionRow, '誤解:', misconception, onOpenLink);
+  const realityRow = el('div', 'codewalk-pitfall-line');
+  appendLabeledMarkdown(realityRow, '其實:', reality, onOpenLink);
   box.appendChild(misconceptionRow);
   box.appendChild(realityRow);
   return box;
 }
 
+/**
+ * label 顯示在 <button> 內部——渲染時 onOpenLink 傳 null,連結降級為原始文字
+ * (見 ui/markdown.ts 的 MaybeOpenLinkHandler),避免巢狀 <button>。
+ */
 function renderReference(label: string, url: string, onOpenReference: (url: string) => void): HTMLElement {
   const button = el('button', 'codewalk-reference');
   button.appendChild(icon('link-external'));
-  button.appendChild(el('span', undefined, label));
+  const labelSpan = el('span', 'codewalk-reference-label');
+  labelSpan.appendChild(renderMarkdownInline(label, null));
+  button.appendChild(labelSpan);
   button.addEventListener('click', () => onOpenReference(url));
   return button;
 }
@@ -244,9 +282,14 @@ function renderSnippet(
   const header = el(canOpen ? 'button' : 'div', 'codewalk-snippet-header');
   header.appendChild(icon(isStale ? 'warning' : 'code'));
   const headerText = el('span', 'codewalk-snippet-header-text');
-  headerText.appendChild(
-    el('span', 'codewalk-snippet-label', isStale && canOpen ? '開啟現行檔案' : item.label),
-  );
+  const labelSpan = el('span', 'codewalk-snippet-label');
+  if (isStale && canOpen) {
+    labelSpan.textContent = '開啟現行檔案';
+  } else {
+    // label 顯示在 <button> 內部,onOpenLink 傳 null 避免巢狀 <button>(見 renderReference 的說明)。
+    labelSpan.appendChild(renderMarkdownInline(item.label, null));
+  }
+  headerText.appendChild(labelSpan);
   headerText.appendChild(el('span', 'codewalk-snippet-file-ref', `${item.file}:${startLine}-${endLine}`));
   header.appendChild(headerText);
   if (canOpen && header instanceof HTMLButtonElement) {
@@ -344,7 +387,10 @@ function renderDiff(
   const header = el('button', 'codewalk-diff-header');
   header.appendChild(icon('diff'));
   const headerText = el('span', 'codewalk-diff-header-text');
-  headerText.appendChild(el('span', 'codewalk-diff-label', item.label));
+  const labelSpan = el('span', 'codewalk-diff-label');
+  // label 顯示在 <button> 內部,onOpenLink 傳 null 避免巢狀 <button>(見 renderReference 的說明)。
+  labelSpan.appendChild(renderMarkdownInline(item.label, null));
+  headerText.appendChild(labelSpan);
   headerText.appendChild(
     el('span', 'codewalk-diff-file-ref', `${item.file}:${item.startLine}-${item.endLine}`),
   );
@@ -367,13 +413,15 @@ function renderItems(
   items.forEach((item, itemIndex) => {
     switch (item.kind) {
       case 'tip':
-        container.appendChild(renderAnnotation('tip', 'lightbulb', item.text));
+        container.appendChild(renderAnnotation('tip', 'lightbulb', item.text, handlers.onOpenReference));
         break;
       case 'todo':
-        container.appendChild(renderAnnotation('todo', 'circle-large-outline', item.text));
+        container.appendChild(
+          renderAnnotation('todo', 'circle-large-outline', item.text, handlers.onOpenReference),
+        );
         break;
       case 'pitfall':
-        container.appendChild(renderPitfall(item.misconception, item.reality));
+        container.appendChild(renderPitfall(item.misconception, item.reality, handlers.onOpenReference));
         break;
       case 'reference':
         container.appendChild(renderReference(item.label, item.url, handlers.onOpenReference));
@@ -496,12 +544,16 @@ export function renderWalking(
     container.appendChild(warning);
   }
 
-  container.appendChild(el('h2', undefined, state.walk.title));
+  const walkTitle = document.createElement('h2');
+  walkTitle.appendChild(renderMarkdownInline(state.walk.title, handlers.onOpenReference));
+  container.appendChild(walkTitle);
   container.appendChild(
     el('p', 'codewalk-progress', `第 ${state.stepIndex + 1} / ${state.walk.steps.length} 步`),
   );
   container.appendChild(createStepDots(state.stepIndex, state.walk.steps.length));
-  container.appendChild(el('h3', undefined, step.title));
+  const stepTitle = document.createElement('h3');
+  stepTitle.appendChild(renderMarkdownInline(step.title, handlers.onOpenReference));
+  container.appendChild(stepTitle);
   const { startLine: stepStartLine, endLine: stepEndLine } = effectiveLineRange(step, stepReport.step);
   container.appendChild(el('p', 'codewalk-file-ref', `${step.file}:${stepStartLine}-${stepEndLine}`));
 
@@ -509,7 +561,9 @@ export function renderWalking(
     container.appendChild(renderStepStaleBlock(step, stepReport.step, handlers.onOpenStaleFile));
   }
 
-  container.appendChild(el('p', 'codewalk-narration', step.narration));
+  const narration = el('div', 'codewalk-narration');
+  narration.appendChild(renderMarkdownBlock(step.narration, handlers.onOpenReference));
+  container.appendChild(narration);
 
   if (step.items && step.items.length > 0) {
     container.appendChild(
@@ -528,7 +582,11 @@ export function renderWalking(
       details.open = state.expandedTerms.has(term.term);
       const summary = document.createElement('summary');
       summary.appendChild(icon('symbol-keyword', 'codewalk-term-icon'));
-      summary.appendChild(el('span', 'codewalk-term-label', term.term));
+      const termLabel = el('span', 'codewalk-term-label');
+      // term.term 顯示在有 click handler 的 <summary> 內,onOpenLink 傳 null
+      // 避免巢狀可點擊元素(見 renderReference 的說明)。
+      termLabel.appendChild(renderMarkdownInline(term.term, null));
+      summary.appendChild(termLabel);
       summary.appendChild(icon('chevron-right', 'codewalk-term-chevron'));
       // 用 click + preventDefault 取代監聽 'toggle':設定 details.open 本身就會非同步觸發
       // 'toggle' 事件,若同時監聽 'toggle' 會在下一輪重繪時被自己觸發的事件二次呼叫,
@@ -538,7 +596,9 @@ export function renderWalking(
         handlers.onToggleTerm(term.term);
       });
       details.appendChild(summary);
-      details.appendChild(el('p', undefined, term.explanation));
+      const explanation = el('div');
+      explanation.appendChild(renderMarkdownBlock(term.explanation, handlers.onOpenReference));
+      details.appendChild(explanation);
       termsContainer.appendChild(details);
     }
     container.appendChild(termsContainer);
@@ -576,6 +636,7 @@ export interface QuizHandlers {
   onSelectAnswer: (questionIndex: number, optionIndex: number) => void;
   onSubmitQuiz: () => void;
   onCancelQuiz: () => void;
+  onOpenReference: OpenLinkHandler;
 }
 
 export function renderQuiz(state: QuizState, handlers: QuizHandlers): HTMLElement {
@@ -600,7 +661,9 @@ export function renderQuiz(state: QuizState, handlers: QuizHandlers): HTMLElemen
     const block = el('div', 'codewalk-quiz-question');
     const header = el('div', 'codewalk-quiz-question-header');
     header.appendChild(el('span', 'codewalk-quiz-question-number', String(qIndex + 1)));
-    header.appendChild(el('p', 'codewalk-quiz-question-title', question.question));
+    const questionTitle = el('p', 'codewalk-quiz-question-title');
+    questionTitle.appendChild(renderMarkdownInline(question.question, handlers.onOpenReference));
+    header.appendChild(questionTitle);
     block.appendChild(header);
     const optionsList = el('ul', 'codewalk-quiz-options');
     question.options.forEach((option, optIndex) => {
@@ -615,7 +678,9 @@ export function renderQuiz(state: QuizState, handlers: QuizHandlers): HTMLElemen
       radio.addEventListener('change', () => handlers.onSelectAnswer(qIndex, optIndex));
       const indicator = el('span', 'codewalk-quiz-option-indicator');
       indicator.appendChild(icon('check'));
-      const text = el('span', 'codewalk-quiz-option-text', option);
+      const text = el('span', 'codewalk-quiz-option-text');
+      // 顯示在包著 radio 的 <label> 內部,onOpenLink 傳 null(見 renderReference 的說明)。
+      text.appendChild(renderMarkdownInline(option, null));
       label.appendChild(radio);
       label.appendChild(indicator);
       label.appendChild(text);
@@ -694,6 +759,7 @@ function createOptionExplanations(
   question: CodewalkQuizQuestion,
   optionExplanations: string[],
   userAnswer: number | null,
+  onOpenLink: OpenLinkHandler,
 ): HTMLElement {
   const list = el('div', 'codewalk-quiz-breakdown-explanations');
   question.options.forEach((optionText, optIndex) => {
@@ -705,15 +771,19 @@ function createOptionExplanations(
     const row = el('div', classes.join(' '));
     row.appendChild(icon(isCorrectOption ? 'pass' : 'close', 'codewalk-quiz-breakdown-explanation-icon'));
     const text = el('div', 'codewalk-quiz-breakdown-explanation-text');
-    text.appendChild(el('span', 'codewalk-quiz-breakdown-explanation-option', optionText));
-    text.appendChild(el('span', 'codewalk-quiz-breakdown-explanation-body', optionExplanations[optIndex]));
+    const optionSpan = el('span', 'codewalk-quiz-breakdown-explanation-option');
+    optionSpan.appendChild(renderMarkdownInline(optionText, onOpenLink));
+    const bodyDiv = el('div', 'codewalk-quiz-breakdown-explanation-body');
+    bodyDiv.appendChild(renderMarkdownBlock(optionExplanations[optIndex], onOpenLink));
+    text.appendChild(optionSpan);
+    text.appendChild(bodyDiv);
     row.appendChild(text);
     list.appendChild(row);
   });
   return list;
 }
 
-function createQuizBreakdown(state: QuizResult): HTMLElement {
+function createQuizBreakdown(state: QuizResult, onOpenLink: OpenLinkHandler): HTMLElement {
   const breakdown = el('div', 'codewalk-quiz-breakdown');
   state.walk.quiz.forEach((question, qIndex) => {
     const userAnswer = state.answers[qIndex];
@@ -721,22 +791,26 @@ function createQuizBreakdown(state: QuizResult): HTMLElement {
     const item = el('div', `codewalk-quiz-breakdown-item ${isCorrect ? 'is-correct' : 'is-incorrect'}`);
     const questionRow = el('p', 'codewalk-quiz-breakdown-question');
     questionRow.appendChild(icon(isCorrect ? 'pass' : 'error', 'codewalk-quiz-breakdown-icon'));
-    questionRow.appendChild(document.createTextNode(`${qIndex + 1}. ${question.question}`));
+    questionRow.appendChild(document.createTextNode(`${qIndex + 1}. `));
+    questionRow.appendChild(renderMarkdownInline(question.question, onOpenLink));
     item.appendChild(questionRow);
-    const yourAnswerText = userAnswer !== null ? question.options[userAnswer] : '(未作答)';
-    item.appendChild(el('p', 'codewalk-quiz-breakdown-your-answer', `你的答案:${yourAnswerText}`));
+    const yourAnswerRow = el('p', 'codewalk-quiz-breakdown-your-answer');
+    yourAnswerRow.appendChild(document.createTextNode('你的答案:'));
+    if (userAnswer !== null) {
+      yourAnswerRow.appendChild(renderMarkdownInline(question.options[userAnswer], onOpenLink));
+    } else {
+      yourAnswerRow.appendChild(document.createTextNode('(未作答)'));
+    }
+    item.appendChild(yourAnswerRow);
     if (!isCorrect) {
-      item.appendChild(
-        el(
-          'p',
-          'codewalk-quiz-breakdown-correct-answer',
-          `正確答案:${question.options[question.correctIndex]}`,
-        ),
-      );
+      const correctAnswerRow = el('p', 'codewalk-quiz-breakdown-correct-answer');
+      correctAnswerRow.appendChild(document.createTextNode('正確答案:'));
+      correctAnswerRow.appendChild(renderMarkdownInline(question.options[question.correctIndex], onOpenLink));
+      item.appendChild(correctAnswerRow);
     }
     const optionExplanations = question.optionExplanations;
     if (optionExplanations) {
-      item.appendChild(createOptionExplanations(question, optionExplanations, userAnswer));
+      item.appendChild(createOptionExplanations(question, optionExplanations, userAnswer, onOpenLink));
     }
     breakdown.appendChild(item);
   });
@@ -747,6 +821,7 @@ export interface QuizResultHandlers {
   onRetryQuiz: () => void;
   onRestartWalk: () => void;
   onBackToList: () => void;
+  onOpenReference: OpenLinkHandler;
 }
 
 export function renderQuizResult(state: QuizResult, handlers: QuizResultHandlers): HTMLElement {
@@ -760,7 +835,7 @@ export function renderQuizResult(state: QuizResult, handlers: QuizResultHandlers
   if (!state.passed) {
     container.appendChild(el('p', 'codewalk-suggestion', '建議重走本導讀,或選擇更詳細版本的導讀再試一次'));
   }
-  container.appendChild(createQuizBreakdown(state));
+  container.appendChild(createQuizBreakdown(state, handlers.onOpenReference));
 
   const actions = el('div', 'codewalk-quiz-result-actions');
   const retryButton = el('button');

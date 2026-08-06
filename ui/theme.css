@@ -190,6 +190,8 @@ button.codewalk-back-to-list:hover:not(:disabled) {
   font-weight: 600;
   margin: 0;
   padding-top: 0.15rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .codewalk-quiz-options {
@@ -353,10 +355,12 @@ button.codewalk-back-to-list:hover:not(:disabled) {
 
 .codewalk-quiz-breakdown-question {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem;
   margin: 0 0 0.15rem;
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .codewalk-quiz-breakdown-icon {
@@ -471,6 +475,8 @@ button.codewalk-back-to-list:hover:not(:disabled) {
 
 .codewalk-file-item-title {
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .codewalk-file-item-row {
@@ -663,10 +669,79 @@ button.codewalk-attempt-menu-item:hover:not(:disabled) {
 
 .codewalk-narration {
   line-height: 1.5;
-  /* 保留內容裡的換行(分段、條列的純文字標號)——textContent 塞進 <p> 預設會
-     把換行當空白吃掉,多段落敘述會擠成一坨。用 pre-line 不用 pre-wrap:只保留
-     換行,但仍把連續空白/縮排壓成一個,避免來源格式化留下的空白被原樣呈現。 */
+}
+
+/* narration 等敘述欄位改由 ui/markdown.ts 解析成 <p>/<h3>/<ul>/<ol> 等真正的區塊
+   元素,不再是單一 <p> 塞全部內容——pre-line 因此從容器本身下移到 .codewalk-md-p
+   / .codewalk-md-li,只保留「段落或項目內部的單一換行維持斷行」這一件事;
+   區塊之間的間距改由 margin 負責,不隨來源連續空行數量累加。 */
+/* overflow-wrap: anywhere——敘述裡常見的識別字/路徑(如 shared/schema.ts)只有
+   斜線、句點,沒有空白這種瀏覽器預設的斷行點,窄面板下會撐開整個容器而非換行。
+   套在三個文字承載元素上,不管外層容器是不是 flex 都能自行斷行。 */
+.codewalk-md-p {
+  margin: 0 0 0.5rem;
   white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.codewalk-md-p:last-child {
+  margin-bottom: 0;
+}
+
+.codewalk-md-h {
+  margin: 0.9rem 0 0.35rem;
+  font-size: 1.1em;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+  overflow-wrap: anywhere;
+}
+
+.codewalk-md-list {
+  margin: 0 0 0.5rem;
+  padding-left: 1.4rem;
+}
+
+.codewalk-md-list:last-child {
+  margin-bottom: 0;
+}
+
+.codewalk-md-list li {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  margin-bottom: 0.2rem;
+}
+
+.codewalk-md-list li > .codewalk-md-list {
+  margin-top: 0.2rem;
+}
+
+/* 用途是句中的小塊行內程式碼,正是 --vscode-textCodeBlock-background 原本設計
+   要給的場景(hover 提示框、markdown 預覽)——與 .codewalk-snippet-code 刻意
+   不用它的理由(那裡要跟編輯器背景完全一致)不衝突,見該處註解。overflow-wrap
+   讓單一 code span 在容器不夠寬時能自己斷行,不需要仰賴外層容器夠寬。 */
+.codewalk-md-code {
+  background-color: var(--vscode-textCodeBlock-background);
+  color: var(--vscode-textPreformat-foreground, var(--vscode-editor-foreground));
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.9em;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  overflow-wrap: anywhere;
+}
+
+.codewalk-md-link {
+  display: inline;
+  color: var(--vscode-textLink-foreground);
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.codewalk-md-link:hover {
+  color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground));
+  text-decoration: underline;
 }
 
 .codewalk-walk-complete {
@@ -716,6 +791,9 @@ button.codewalk-attempt-menu-item:hover:not(:disabled) {
 .codewalk-term[open] {
   background-color: var(--vscode-editorHoverWidget-background, transparent);
   border-color: var(--vscode-focusBorder);
+  display: flex;
+  flex-direction: column;
+  row-gap: 0.3rem;
 }
 
 .codewalk-term summary {
@@ -737,6 +815,8 @@ button.codewalk-attempt-menu-item:hover:not(:disabled) {
 
 .codewalk-term-label {
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .codewalk-term-chevron {
@@ -787,6 +867,10 @@ button.codewalk-attempt-menu-item:hover:not(:disabled) {
 }
 
 .codewalk-annotation-text {
+  /* .codewalk-annotation 是 flex row,flex 子項預設不會縮到比內容還窄
+     (min-width: auto)——沒設這個,內容裡的長識別字會撐開整個框而不換行。
+     .codewalk-snippet-header-text / .codewalk-diff-header-text 已用同一招。 */
+  min-width: 0;
   margin: 0;
   line-height: 1.4;
   white-space: pre-line;
@@ -847,9 +931,15 @@ button.codewalk-attempt-menu-item:hover:not(:disabled) {
   align-self: flex-start;
   align-items: center;
   gap: 0.4rem;
+  max-width: 100%;
   color: var(--vscode-textLink-foreground);
   background-color: transparent;
   padding: 0.3rem 0.5rem;
+}
+
+.codewalk-reference-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .codewalk-reference:hover:not(:disabled) {

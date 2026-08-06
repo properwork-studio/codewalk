@@ -16,6 +16,8 @@
 - Quiz 每個選項可選填 `optionExplanations` 解釋為什麼對/為什麼錯,結果頁列出全部選項解釋並標示正確選項與讀者的選擇,長度需與 `options` 相符 → [spec](../../openspec/specs/walk-player/spec.md)
 - ref 漂移偵測:比對 workspace HEAD 與導讀釘住的 commit,不符時顯示警告;導讀含錨時改以逐步失準狀態呈現,整份警告僅在完全無錨時作為退路 → [spec](../../openspec/specs/walk-player/spec.md)
 - 視覺跟隨編輯器主題(讀 VS Code CSS 變數渲染介面;程式碼片段的語法配色一併跟隨,見下方語法高亮條目)→ [spec](../../openspec/specs/walk-player/spec.md)
+- 敘述欄位支援封閉子集 markdown 語法(行內程式碼、粗體、連結、無序/有序清單含巢狀、二級小標),依長文欄位(narration 等)/短欄位(quiz 題目等)分級;不支援或格式錯誤的語法一律原樣顯示為純文字,不中止導讀播放 → [spec](../../openspec/specs/markdown-rendering/spec.md)
+- 敘述欄位中的內嵌連結限 http/https 才可點擊,點擊以外部瀏覽器開啟且面板不導航離開;非法網址原樣顯示、不可點擊 → [spec](../../openspec/specs/markdown-rendering/spec.md)
 - Step 內顯示提示/陷阱警告/待辦標記(annotation:tip/pitfall/todo)→ [spec](../../openspec/specs/walk-player/spec.md)
 - Step 內顯示外部連結參考,點擊開啟外部瀏覽器 → [spec](../../openspec/specs/walk-player/spec.md)
 - Step 內顯示程式碼片段引用(snippet),語法高亮預覽並可點擊跳轉編輯器;位移時預覽新位置內容,失準時改顯示錨定的產出當時原文 → [spec](../../openspec/specs/walk-player/spec.md)
@@ -40,7 +42,7 @@
 
 ## E2E 覆蓋
 
-無自動化 E2E——VS Code extension 的 host↔webview↔vscode API 整合行為改走 Extension Development Host 手動驗證 checklist(見 `openspec/changes/archive/2026-08-01-walk-player/tasks.md` 第 10、11 節,`items` 相關 checklist 見 `openspec/changes/archive/2026-08-01-add-step-items/tasks.md`,`diff` 相關 checklist 見 `openspec/changes/archive/2026-08-01-add-diff-item/tasks.md` 第 6、7 節,語法高亮換 Shiki 與跟隨編輯器主題相關 checklist 見 `openspec/changes/archive/2026-08-03-switch-to-shiki-highlighter/tasks.md`,失準偵測相關 checklist 見 `openspec/changes/archive/2026-08-05-add-stale-step-detection/tasks.md` 第 9 節);純邏輯(schema 驗證、協定序列化、quiz 計分、ref 比對、錨驗證與失準判定、snippet 讀檔、Shiki 語言註冊、主題檔 JSONC 解析與 `include` 繼承、diff 逐行分類與雙欄行號計算)由 Vitest 單元測試覆蓋。
+無自動化 E2E——VS Code extension 的 host↔webview↔vscode API 整合行為改走 Extension Development Host 手動驗證 checklist(見 `openspec/changes/archive/2026-08-01-walk-player/tasks.md` 第 10、11 節,`items` 相關 checklist 見 `openspec/changes/archive/2026-08-01-add-step-items/tasks.md`,`diff` 相關 checklist 見 `openspec/changes/archive/2026-08-01-add-diff-item/tasks.md` 第 6、7 節,語法高亮換 Shiki 與跟隨編輯器主題相關 checklist 見 `openspec/changes/archive/2026-08-03-switch-to-shiki-highlighter/tasks.md`,失準偵測相關 checklist 見 `openspec/changes/archive/2026-08-05-add-stale-step-detection/tasks.md` 第 9 節,markdown 渲染相關 checklist 見 `openspec/changes/archive/2026-08-06-add-markdown-rendering/tasks.md` 第 6、7 節);純邏輯(schema 驗證、協定序列化、quiz 計分、ref 比對、錨驗證與失準判定、snippet 讀檔、Shiki 語言註冊、主題檔 JSONC 解析與 `include` 繼承、diff 逐行分類與雙欄行號計算、markdown 子集解析與降級規則)由 Vitest 單元測試覆蓋。
 
 ## 已知限制與技術債
 
@@ -59,3 +61,4 @@
 - 2026-08-03 `quiz-attempt-record` 新增 quiz 作答紀錄:送出後留存該導讀最後一次的時間與結果(存於 workspace 狀態,不寫入 `.codewalk.json`),導讀列表顯示過關圖示、分數、相對時間(無紀錄不顯示),`ref` 變更後舊紀錄自動失效;每筆紀錄可透過 `⋮`「更多動作」選單清除,選單內兩段式確認;不阻擋既有重走/重測流程。手動驗證階段一併補上走讀畫面的「返回列表」按鈕與 Esc 快捷鍵(既有 MVP 缺口),並歷經多輪修正列表項目 hover 對比度問題
 - 2026-08-03 `switch-to-shiki-highlighter` 新增 `syntax-highlighting` capability,語法高亮引擎由 highlight.js 換成 Shiki(與 VS Code 編輯器同源的 TextMate grammar):snippet/diff 配色改讀讀者當前 VS Code 主題的 tokenColors,無法解析時降級為內建 dark-plus/light-plus,讀者切換主題時即時重繪、不需重開面板;**BREAKING**:移除 `codewalk.snippetTheme` 設定(MVP 未發佈無實際使用者)。不追求與編輯器 100% 一致——semantic tokens(語言伺服器提供的細分色)落在 TextMate 方案能力範圍外,已實測確認換 grammar 來源也無法解決,判定為長期限制
 - 2026-08-05 `add-stale-step-detection` 新增 `stale-step-detection` capability:以產出當下存下的程式碼原文(錨)在載入時逐 step 驗證是否與現行程式碼相符(相符/位移/失準/未錨定四態);位移(內容逐字相同但位置改變)時自動跟隨新行號,不顯示任何提示;失準時顯示產出當時的原文並標示非現行版本,提供「開啟現行檔案」動作(只開檔不選取),不中斷導覽與 Quiz 作答。導讀含任一失準步驟時面板顯示重生提示,`.codewalk.json` 提供 `regenerateHint` 時額外顯示「複製重生指令」動作(extension 本身不執行任何產生行為)。同時修改既有 `ref` 漂移偵測、檔案行號跳轉、程式碼片段引用三條 requirement 以支援位移跟隨與失準呈現——導讀含錨時整份 `refDrifted` 警告降為退路,僅在完全無錨時顯示;無錨導讀(含既有 5 份)行為完全不變。產生器(`.claude/skills/explain-change/`)同批更新為輸出含 `anchor`/`regenerateHint` 的 CodeWalk 格式
+- 2026-08-06 `add-markdown-rendering` 新增 `markdown-rendering` capability:敘述欄位支援封閉子集 markdown 語法(行內程式碼、粗體、連結、無序/有序清單含巢狀、二級小標 `##`),依長文欄位(`narration`、`term.explanation`、`tip.text`、`todo.text`、`pitfall.misconception`/`.reality`、`quiz.optionExplanations[]`)/短欄位(`quiz.question`、`quiz.options[]`、`item.label`、`term.term`、`walk.title`、`step.title`)分級,短欄位只吃行內語法;不支援或格式錯誤的語法一律原樣顯示為純文字,不中止導讀可播放性。內嵌連結沿用既有 `openReference` 外部連結路徑(限 http/https,渲染為按鈕而非 `<a href>`),非法網址原樣顯示不可點擊;單一換行維持斷行語意。解析只用 marked 的 Lexer 取 token、手動建 DOM,維持全檔零 `innerHTML` 的既有紀律。非 BREAKING,既有 6 份導讀檔零遷移成本;`.codewalk/2026-08-03-codebase-tour.codewalk.json` 同批重生 10 個 step 作為 dogfooding 驗收

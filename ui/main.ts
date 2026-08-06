@@ -116,7 +116,7 @@ function render(): void {
     );
   } else if (current.screen === 'quiz') {
     lastWalkingStepIndex = null;
-    root.appendChild(renderQuiz(current, { onSelectAnswer, onSubmitQuiz, onCancelQuiz }));
+    root.appendChild(renderQuiz(current, { onSelectAnswer, onSubmitQuiz, onCancelQuiz, onOpenReference }));
   } else if (current.screen === 'quizResult') {
     lastWalkingStepIndex = null;
     root.appendChild(
@@ -124,6 +124,7 @@ function render(): void {
         onRetryQuiz: onRetryQuiz,
         onRestartWalk: onRestartWalk,
         onBackToList: onBackToList,
+        onOpenReference: onOpenReference,
       }),
     );
   }
