@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyDiffLines } from './render';
+import { classifyDiffLines } from './index';
 
 describe('classifyDiffLines', () => {
   it('classifies +/- prefixed lines as added/removed and strips the marker', () => {

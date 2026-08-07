@@ -1,4 +1,4 @@
-import { detectLanguage } from '../shared/language';
+import { detectLanguage } from '../../shared/language';
 import {
   effectiveLineRange,
   type AnchorStatus,
@@ -6,30 +6,13 @@ import {
   type AttemptSummary,
   type SnippetPreviewResult,
   type WalkFileSummary,
-} from '../shared/protocol';
-import type { CodewalkItem, CodewalkQuizQuestion, CodewalkStep } from '../shared/schema';
-import { highlightSnippetLines, type HighlightToken } from './highlight';
-import { renderMarkdownBlock, renderMarkdownInline, type OpenLinkHandler } from './markdown';
-import { formatAbsoluteDateTime, formatRelativeTime } from './relativeTime';
-import { isAtLastStep, type QuizResult, type QuizState, type WalkingState } from './state';
-
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className?: string,
-  text?: string,
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
-function icon(name: string, extraClass?: string): HTMLSpanElement {
-  const span = document.createElement('span');
-  span.className = `codicon codicon-${name}${extraClass ? ` ${extraClass}` : ''}`;
-  span.setAttribute('aria-hidden', 'true');
-  return span;
-}
+} from '../../shared/protocol';
+import type { CodewalkItem, CodewalkQuizQuestion, CodewalkStep } from '../../shared/schema';
+import { highlightSnippetLines } from '../highlight';
+import { renderMarkdownBlock, renderMarkdownInline, type OpenLinkHandler } from '../markdown';
+import { formatAbsoluteDateTime, formatRelativeTime } from '../relativeTime';
+import { isAtLastStep, type QuizResult, type QuizState, type WalkingState } from '../state';
+import { appendTokens, el, icon } from './dom';
 
 export interface FileListHandlers {
   onSelect: (path: string) => void;
@@ -261,28 +244,6 @@ function renderReference(label: string, url: string, onOpenReference: (url: stri
   button.appendChild(labelSpan);
   button.addEventListener('click', () => onOpenReference(url));
   return button;
-}
-
-/**
- * 用 textContent(非 innerHTML)逐一附加 token,不需要跳脫 HTML——Shiki 回傳
- * 結構化 token 而非 HTML 字串,天然沒有注入疑慮。空行(無 token 或內容全空)
- * 補一個全形空白,維持行高與可選取性。
- */
-function appendTokens(container: HTMLElement, tokens: HighlightToken[]): void {
-  const hasVisibleContent = tokens.some((token) => token.content.length > 0);
-  if (!hasVisibleContent) {
-    container.appendChild(document.createTextNode(' '));
-    return;
-  }
-  for (const token of tokens) {
-    if (token.content.length === 0) continue;
-    const span = document.createElement('span');
-    span.textContent = token.content;
-    if (token.color) span.style.color = token.color;
-    if (token.italic) span.style.fontStyle = 'italic';
-    if (token.bold) span.style.fontWeight = 'bold';
-    container.appendChild(span);
-  }
 }
 
 function renderSnippetCode(content: string, language: string, startLine: number): HTMLElement {
