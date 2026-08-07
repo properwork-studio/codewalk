@@ -1,6 +1,6 @@
 {
   "title": "CodeWalk 全專案導讀:從 JSON 合約到側邊面板的一條龍",
-  "ref": "68b8cae2cecf322924e742b22459dbec9fe9bcce",
+  "ref": "ca1106a5fde6608e891616da292f7bcf4baaf0ca",
   "regenerateHint": "請重新走過 CodeWalk 的 src/、shared/、ui/ 三層,產生一份對齊目前 HEAD 的全專案導讀,輸出到 .codewalk/ 並為每個 step 與 snippet 填入 anchor 欄位。",
   "passThreshold": 4,
   "steps": [
@@ -62,7 +62,7 @@
       "file": "shared/schema.ts",
       "startLine": 25,
       "endLine": 56,
-      "narration": "這是整個產品最重要的東西:`.codewalk.json` 的格式定義。一個 step 的必備欄位是 `title` / `file` / `startLine` / `endLine` / `narration`,選填的有三個:\n\n- `anchor`——產出當下那段程式碼的原文。它是**失準偵測**的基礎,第 14 步會整段講\n- `terms`——可收合的術語卡(你現在看到的這些)\n- `items`——說明元件(下方那些方塊)\n\n上方那一大段 JSDoc 是另一個合約:`narration` 這類**長文欄位**支援六種 markdown 語法(行內程式碼、粗體、連結、無序/有序清單、`##` 小標),而 `title`、`term.term`、`quiz.question` 這些**短欄位**只支援行內三種。這個分級不是靠過濾程式碼實現的,第 22 步會看到它怎麼變成「選對函式就是規格」。\n\n因為這是對外合約,任何欄位改名或刪除都等同破壞性 API 變更——別人 repo 裡放著的舊 JSON 會立刻壞掉。專案規則因此要求:格式變更一律走 OpenSpec change 流程,而且定義只准住在這一個檔案裡。",
+      "narration": "這是整個產品最重要的東西:`.codewalk.json` 的格式定義。一個 step 的必備欄位是 `title` / `file` / `startLine` / `endLine` / `narration`,選填的有三個:\n\n- `anchor`——產出當下那段程式碼的原文。它是**失準偵測**的基礎,第 13、14 步會整段講\n- `terms`——可收合的術語卡(你現在看到的這些)\n- `items`——說明元件(下方那些方塊)\n\n上方那一大段 JSDoc 是另一個合約:`narration` 這類**長文欄位**支援六種 markdown 語法(行內程式碼、粗體、連結、無序/有序清單、`##` 小標),而 `title`、`term.term`、`quiz.question` 這些**短欄位**只支援行內三種。這個分級不是靠過濾程式碼實現的,第 22 步會看到它怎麼變成「選對函式就是規格」。\n\n因為這是對外合約,任何欄位改名或刪除都等同破壞性 API 變更——別人 repo 裡放著的舊 JSON 會立刻壞掉。專案規則因此要求:格式變更一律走 OpenSpec change 流程,而且定義只准住在這一個檔案裡。",
       "terms": [
         {
           "term": "對外合約",
@@ -189,7 +189,7 @@
         {
           "kind": "pitfall",
           "misconception": "`retainContextWhenHidden` 開了之後,webview 的狀態就永遠不會遺失了。",
-          "reality": "它只擋住「面板隱藏/顯示」這一種重建。webview 仍可能因為 view 被拖到別的容器、或編輯器回收資源而重建,而 VS Code 完全重啟後更是必定重建。專案為此還有另外兩層:webview 自己的 `setState`(第 23 步)與 host 端寫進 workspaceState 的進度(第 21 步)。"
+          "reality": "它只擋住「面板隱藏/顯示」這一種重建。webview 仍可能因為 view 被拖到別的容器、或編輯器回收資源而重建,而 VS Code 完全重啟後更是必定重建。專案為此還有另外兩層:webview 自己的 `setState`(第 23 步)與 host 端寫進 workspaceState 的進度(第 24 步)。"
         },
         {
           "kind": "reference",
@@ -284,7 +284,7 @@
       "file": "src/viewProvider.ts",
       "startLine": 210,
       "endLine": 246,
-      "narration": "`loadWalk()` 是整個 host 端最密集的一段。讀者點一份導讀,依序發生:\n\n1. **讀檔 + 驗證**——失敗就送 `loadError`,把所有錯誤用 `; ` 串起來給讀者看,流程到此為止\n2. **比對 ref 與 HEAD**——算出 `refDrifted`(第 13 步)\n3. **建錨驗證報告**——`buildAnchorReport()` 逐步檢查每個錨點是否還對得上(第 14、15 步)\n4. **決定起始步驟**——這裡是 `resume` 選項的分水嶺\n5. **一次送齊 `walkLoaded`**,然後(視情況)跳轉編輯器\n\n第 4、5 點的細節值得停一下。決定起始步驟的是這一行:\n\n`this.stepIndex = Math.min(Math.max(progress?.stepIndex ?? 0, 0), maxIndex);`\n\n它同時處理三件事:沒有進度就從 0 開始、進度不可能是負的、**進度不可能超過現有步數**。最後一項是真實會發生的情況——導讀重新產生後步驟變少,舊進度就會越界。用 clamp 一次擋掉,不需要特判。\n\n最後 `if (!options.resume)` 才跳轉編輯器。**接續閱讀不該擅自打開檔案**——讀者可能正在看別的東西,恢復閱讀位置是面板自己的事,不該動編輯器。這條規則在第 22 步的面板重建路徑上再次出現。",
+      "narration": "`loadWalk()` 是整個 host 端最密集的一段。讀者點一份導讀,依序發生:\n\n1. **讀檔 + 驗證**——失敗就送 `loadError`,把所有錯誤用 `; ` 串起來給讀者看,流程到此為止\n2. **比對 ref 與 HEAD**——算出 `refDrifted`(第 12 步)\n3. **建錨驗證報告**——`buildAnchorReport()` 逐步檢查每個錨點是否還對得上(第 14、15 步)\n4. **決定起始步驟**——這裡是 `resume` 選項的分水嶺\n5. **一次送齊 `walkLoaded`**,然後(視情況)跳轉編輯器\n\n第 4、5 點的細節值得停一下。決定起始步驟的是這一行:\n\n`this.stepIndex = Math.min(Math.max(progress?.stepIndex ?? 0, 0), maxIndex);`\n\n它同時處理三件事:沒有進度就從 0 開始、進度不可能是負的、**進度不可能超過現有步數**。最後一項是真實會發生的情況——導讀重新產生後步驟變少,舊進度就會越界。用 clamp 一次擋掉,不需要特判。\n\n最後 `if (!options.resume)` 才跳轉編輯器。**接續閱讀不該擅自打開檔案**——讀者可能正在看別的東西,恢復閱讀位置是面板自己的事,不該動編輯器。這條規則在第 23 步的面板重建路徑上再次出現。",
       "terms": [
         {
           "term": "clamp",
@@ -504,7 +504,7 @@
       "file": "ui/highlight.ts",
       "startLine": 139,
       "endLine": 153,
-      "narration": "`highlightSnippetLines()` 的第一行就是降級判斷:引擎還沒就緒、或這個語言沒註冊 grammar,一律回傳「一整行純文字 token」。\n\n這裡有兩個獨立的降級點:\n\n- **時間上的**:Shiki 引擎初始化是非同步的。就緒之前 snippet 已經以純文字先顯示了,`ui/main.ts` 的 `onHighlightReady()` 會在就緒後補一次重繪讓它們換上顏色。讀者感受到的是「先看到內容、顏色慢半拍」,而不是「等一下才看到內容」\n- **能力上的**:未支援的語言不上色。猜錯顏色比不上色更容易誤導——把註解染成字串色,讀者會以為那真的是字串\n\n注意回傳型別是 `HighlightToken[][]`(逐行的 token 陣列),**不是 HTML 字串**。這是刻意的:第 24 步會看到 `appendTokens()` 逐個建立 span 再設 `textContent`,整條路徑上沒有任何一處碰過 `innerHTML`。\n\n選 Shiki 而非 highlight.js 的理由也在這:Shiki 用的是跟 VS Code 同一套 TextMate grammar,而且 `codeToTokens()` 原生依行輸出——不像 highlight.js 要輸出一整塊 HTML、再手動追蹤標籤堆疊把跨行 `<span>` 切開。",
+      "narration": "`highlightSnippetLines()` 的第一行就是降級判斷:引擎還沒就緒、或這個語言沒註冊 grammar,一律回傳「一整行純文字 token」。\n\n這裡有兩個獨立的降級點:\n\n- **時間上的**:Shiki 引擎初始化是非同步的。就緒之前 snippet 已經以純文字先顯示了,`ui/main.ts` 的 `onHighlightReady()` 會在就緒後補一次重繪讓它們換上顏色。讀者感受到的是「先看到內容、顏色慢半拍」,而不是「等一下才看到內容」\n- **能力上的**:未支援的語言不上色。猜錯顏色比不上色更容易誤導——把註解染成字串色,讀者會以為那真的是字串\n\n注意回傳型別是 `HighlightToken[][]`(逐行的 token 陣列),**不是 HTML 字串**。這是刻意的:`ui/render/dom.ts` 的 `appendTokens()` 逐個建立 span 再設 `textContent`,整條路徑上沒有任何一處碰過 `innerHTML`。\n\n選 Shiki 而非 highlight.js 的理由也在這:Shiki 用的是跟 VS Code 同一套 TextMate grammar,而且 `codeToTokens()` 原生依行輸出——不像 highlight.js 要輸出一整塊 HTML、再手動追蹤標籤堆疊把跨行 `<span>` 切開。",
       "terms": [
         {
           "term": "TextMate grammar",
