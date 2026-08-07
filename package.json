@@ -3,15 +3,31 @@
   "displayName": "CodeWalk",
   "description": "互動式 codebase 導讀播放器——讀取 .codewalk/ 的 JSON,在側邊面板帶讀者逐步走 code",
   "version": "0.1.0",
-  "private": true,
-  "publisher": "codewalk-local",
-  "license": "UNLICENSED",
+  "publisher": "properworkstudio",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/properworkstudio/codewalk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/properworkstudio/codewalk/issues"
+  },
+  "homepage": "https://github.com/properworkstudio/codewalk#readme",
   "engines": {
     "vscode": "^1.90.0"
   },
   "categories": [
-    "Other"
+    "Education",
+    "Visualization"
   ],
+  "keywords": [
+    "codebase",
+    "onboarding",
+    "code tour",
+    "walkthrough",
+    "code reading"
+  ],
+  "icon": "resources/icon-128.png",
   "main": "./dist/extension.js",
   "activationEvents": [],
   "contributes": {
