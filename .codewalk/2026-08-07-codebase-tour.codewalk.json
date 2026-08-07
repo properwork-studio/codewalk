@@ -384,9 +384,9 @@
     },
     {
       "title": "第 15 步:失準之後怎麼辦——重生引導",
-      "file": "ui/render/index.ts",
-      "startLine": 454,
-      "endLine": 471,
+      "file": "ui/render/walking.ts",
+      "startLine": 26,
+      "endLine": 43,
       "narration": "偵測到失準只解決一半問題。讀者接下來會問:那我該怎麼辦?\n\n這就是 `regenerateHint` 的用途。它是 `.codewalk.json` 的一個選填欄位,由**產生器自述**「要怎麼重新產生這份導讀」——可能是一行 CLI 指令、一段 prompt、或一個內部工具的連結。\n\n關鍵在於:**播放器只顯示與複製,完全不解讀內容**。它不知道那串字是什麼意思,也不會去執行。這守住了 MVP 的分界線——播放器不碰產生邏輯,但可以幫讀者把產生的方法遞過去。\n\n這是一個小而重要的架構姿態:當你不想讓 A 依賴 B,又希望使用者能從 A 走到 B,「讓資料自己攜帶說明、由人接手執行」往往比「A 直接呼叫 B」更好——後者會把兩者永久綁死。\n\n下方 snippet 裡的 `renderStepStaleBlock()` 是另一半:失準的那一步會插入一個區塊,顯示 anchor 存的**舊內容**,並提供一個「開啟現行檔案」按鈕讓讀者自己比對。舊內容仍然顯示,是因為它至少說明了作者當初在講什麼。",
       "terms": [
         {
@@ -398,9 +398,9 @@
         {
           "kind": "snippet",
           "label": "renderStepStaleBlock:失準時顯示 anchor 舊內容 + 開啟現行檔案",
-          "file": "ui/render/index.ts",
-          "startLine": 474,
-          "endLine": 496,
+          "file": "ui/render/walking.ts",
+          "startLine": 46,
+          "endLine": 68,
           "anchor": "function renderStepStaleBlock(\n  step: CodewalkStep,\n  status: Extract<AnchorStatus, { kind: 'stale' }>,\n  onOpenStaleFile: () => void,\n): HTMLElement {\n  const container = el('div', 'codewalk-snippet codewalk-snippet--stale');\n  const canOpen = status.reason !== 'fileMissing';\n  const header = el(canOpen ? 'button' : 'div', 'codewalk-snippet-header');\n  header.appendChild(icon('warning'));\n  const headerText = el('span', 'codewalk-snippet-header-text');\n  headerText.appendChild(el('span', 'codewalk-snippet-label', canOpen ? '開啟現行檔案' : '找不到檔案'));\n  headerText.appendChild(el('span', 'codewalk-snippet-file-ref', step.file));\n  header.appendChild(headerText);\n  if (canOpen && header instanceof HTMLButtonElement) {\n    header.addEventListener('click', onOpenStaleFile);\n  }\n  container.appendChild(header);\n  container.appendChild(renderStaleLabel());\n  if (step.anchor && step.anchor.trim().length > 0) {\n    container.appendChild(renderSnippetCode(step.anchor, detectLanguage(step.file), step.startLine));\n  }\n  return container;\n}"
         },
         {
