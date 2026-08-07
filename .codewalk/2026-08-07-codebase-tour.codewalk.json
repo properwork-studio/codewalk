@@ -558,7 +558,7 @@
       "file": "ui/markdown.ts",
       "startLine": 29,
       "endLine": 77,
-      "narration": "`narration` 這類欄位要支援 markdown,但 `ui/render.ts` 全檔立有明文紀律:**一律用 `textContent`,禁止 `innerHTML`**。一般 markdown 套件的 renderer 直接吐 HTML 字串,要嘛違反紀律、要嘛得自己消毒字串——而消毒字串正是這條紀律當初要避免的事。\n\n解法是用 `marked` 比較少人用的 `Lexer` API:只回傳**結構化的 token 陣列**,不產生任何 HTML。拿到 token 後自己用 `createElement` + `textContent` 組回 DOM。\n\n每個 token 都帶 `raw` 欄位(產生它的原始字元),這一個欄位同時解決兩個問題:不支援的語法(表格、引用區塊)直接輸出 `raw` 就是「原樣呈現」;輸出走 `textContent`,天然無注入面。\n\n兩個對外函式的回傳型別都是 `DocumentFragment` **而不是字串**——這讓「這個模組不可能產出 HTML 字串」變成型別層面的事實,不用靠 code review 把關。\n\n第 3 步提到的長短欄位分級,答案就在這:`renderMarkdownBlock()` 用 `lex()` 六種全開,`renderMarkdownInline()` 用 `lexInline()` 只解析行內三種。**分級不是靠過濾程式碼,而是選對入口就是規格**——`lexInline()` 眼中 `- 項目` 本來就不成清單 token,自然落為普通文字。",
+      "narration": "`narration` 這類欄位要支援 markdown,但 `ui/render/` 全目錄立有明文紀律:**一律用 `textContent`,禁止 `innerHTML`**。一般 markdown 套件的 renderer 直接吐 HTML 字串,要嘛違反紀律、要嘛得自己消毒字串——而消毒字串正是這條紀律當初要避免的事。\n\n解法是用 `marked` 比較少人用的 `Lexer` API:只回傳**結構化的 token 陣列**,不產生任何 HTML。拿到 token 後自己用 `createElement` + `textContent` 組回 DOM。\n\n每個 token 都帶 `raw` 欄位(產生它的原始字元),這一個欄位同時解決兩個問題:不支援的語法(表格、引用區塊)直接輸出 `raw` 就是「原樣呈現」;輸出走 `textContent`,天然無注入面。\n\n兩個對外函式的回傳型別都是 `DocumentFragment` **而不是字串**——這讓「這個模組不可能產出 HTML 字串」變成型別層面的事實,不用靠 code review 把關。\n\n第 3 步提到的長短欄位分級,答案就在這:`renderMarkdownBlock()` 用 `lex()` 六種全開,`renderMarkdownInline()` 用 `lexInline()` 只解析行內三種。**分級不是靠過濾程式碼,而是選對入口就是規格**——`lexInline()` 眼中 `- 項目` 本來就不成清單 token,自然落為普通文字。",
       "terms": [
         {
           "term": "Lexer",
@@ -615,10 +615,10 @@
     },
     {
       "title": "第 24 步:六種說明元件怎麼被畫出來,以及最後兩塊拼圖",
-      "file": "ui/render/index.ts",
-      "startLine": 412,
-      "endLine": 450,
-      "narration": "`renderItems()` 是一個對 `kind` 的 switch,六種元件各自對應一個建構函式,依陣列原始順序逐一 append——所以 JSON 裡 `items` 的排列順序就是畫面由上而下的順序,作者可以自由交錯,不會被重新分組。\n\n整份 `render.ts` 全部用 `createElement` 加 `textContent` 組 DOM,**沒有任何字串樣板拼接**。這不只是風格偏好:導讀 JSON 可能來自別人,把它的字串直接當 HTML 塞進去就是一個現成的注入漏洞。第 22 步的 markdown 渲染是同一條紀律的延伸,連 Shiki 的語法高亮也不例外。\n\n最後兩塊拼圖:\n\n- **`ProgressStore`**(`src/progressStore.ts`)——閱讀進度寫進 VS Code 的 `workspaceState`,跨重啟留存。這是三層防線的最外層\n- **`AttemptStore`**(`src/attemptStore.ts`)——quiz 作答紀錄,結構跟 ProgressStore 幾乎相同\n\n兩者都用 `ref` 當有效性判斷:**記錄的 ref 跟現在這份導讀的 ref 不符,就視同沒有紀錄**。導讀重新產生後,舊進度與舊分數自動失效——沒有清除邏輯、沒有遷移程式碼,只是一個相等比較。\n\n它們幾乎一模一樣卻沒有抽共用父類別,這是刻意的:專案的抽象門檻是 **rule of three**,重複第三次才抽。兩份相似的 50 行,比一個為了容納兩種用途而長出參數的基底類別更好維護。\n\n走完了。按下方按鈕進 quiz 驗收一下。",
+      "file": "ui/render/items.ts",
+      "startLine": 255,
+      "endLine": 293,
+      "narration": "`renderItems()` 是一個對 `kind` 的 switch,六種元件各自對應一個建構函式,依陣列原始順序逐一 append——所以 JSON 裡 `items` 的排列順序就是畫面由上而下的順序,作者可以自由交錯,不會被重新分組。\n\n整個 `ui/render/` 目錄全部用 `createElement` 加 `textContent` 組 DOM,**沒有任何字串樣板拼接**(這條紀律寫在 `ui/render/dom.ts` 的檔頭)。這不只是風格偏好:導讀 JSON 可能來自別人,把它的字串直接當 HTML 塞進去就是一個現成的注入漏洞。第 22 步的 markdown 渲染是同一條紀律的延伸,連 Shiki 的語法高亮也不例外。\n\n最後兩塊拼圖:\n\n- **`ProgressStore`**(`src/progressStore.ts`)——閱讀進度寫進 VS Code 的 `workspaceState`,跨重啟留存。這是三層防線的最外層\n- **`AttemptStore`**(`src/attemptStore.ts`)——quiz 作答紀錄,結構跟 ProgressStore 幾乎相同\n\n兩者都用 `ref` 當有效性判斷:**記錄的 ref 跟現在這份導讀的 ref 不符,就視同沒有紀錄**。導讀重新產生後,舊進度與舊分數自動失效——沒有清除邏輯、沒有遷移程式碼,只是一個相等比較。\n\n它們幾乎一模一樣卻沒有抽共用父類別,這是刻意的:專案的抽象門檻是 **rule of three**,重複第三次才抽。兩份相似的 50 行,比一個為了容納兩種用途而長出參數的基底類別更好維護。\n\n走完了。按下方按鈕進 quiz 驗收一下。",
       "terms": [
         {
           "term": "workspaceState",
@@ -643,7 +643,7 @@
           "text": "走完 quiz 時 host 會**清掉閱讀進度**(`viewProvider.ts` 的 `handleQuizSubmitted`)——這份導讀已經讀完了,列表上不該再顯示「接續上次」。清除失敗被 try/catch 吞掉不打斷流程:進度是輔助功能,不該有能力弄壞主要路徑。"
         }
       ],
-      "anchor": "function renderItems(\n  items: CodewalkItem[],\n  snippetPreviews: SnippetPreviewResult[],\n  itemAnchorStatuses: AnchorStepReport['items'],\n  handlers: Pick<WalkingHandlers, 'onOpenReference' | 'onJumpToSnippet'>,\n): HTMLElement {\n  const container = el('div', 'codewalk-items');\n  items.forEach((item, itemIndex) => {\n    switch (item.kind) {\n      case 'tip':\n        container.appendChild(renderAnnotation('tip', 'lightbulb', item.text, handlers.onOpenReference));\n        break;\n      case 'todo':\n        container.appendChild(\n          renderAnnotation('todo', 'circle-large-outline', item.text, handlers.onOpenReference),\n        );\n        break;\n      case 'pitfall':\n        container.appendChild(renderPitfall(item.misconception, item.reality, handlers.onOpenReference));\n        break;\n      case 'reference':\n        container.appendChild(renderReference(item.label, item.url, handlers.onOpenReference));\n        break;\n      case 'snippet': {\n        const status = itemAnchorStatuses.find((s) => s.itemIndex === itemIndex)?.status ?? {\n          kind: 'unanchored',\n        };\n        container.appendChild(\n          renderSnippet(item, itemIndex, snippetPreviews, status, handlers.onJumpToSnippet),\n        );\n        break;\n      }\n      case 'diff':\n        container.appendChild(renderDiff(item, itemIndex, handlers.onJumpToSnippet));\n        break;\n    }\n  });\n  return container;\n}"
+      "anchor": "export function renderItems(\n  items: CodewalkItem[],\n  snippetPreviews: SnippetPreviewResult[],\n  itemAnchorStatuses: AnchorStepReport['items'],\n  handlers: ItemHandlers,\n): HTMLElement {\n  const container = el('div', 'codewalk-items');\n  items.forEach((item, itemIndex) => {\n    switch (item.kind) {\n      case 'tip':\n        container.appendChild(renderAnnotation('tip', 'lightbulb', item.text, handlers.onOpenReference));\n        break;\n      case 'todo':\n        container.appendChild(\n          renderAnnotation('todo', 'circle-large-outline', item.text, handlers.onOpenReference),\n        );\n        break;\n      case 'pitfall':\n        container.appendChild(renderPitfall(item.misconception, item.reality, handlers.onOpenReference));\n        break;\n      case 'reference':\n        container.appendChild(renderReference(item.label, item.url, handlers.onOpenReference));\n        break;\n      case 'snippet': {\n        const status = itemAnchorStatuses.find((s) => s.itemIndex === itemIndex)?.status ?? {\n          kind: 'unanchored',\n        };\n        container.appendChild(\n          renderSnippet(item, itemIndex, snippetPreviews, status, handlers.onJumpToSnippet),\n        );\n        break;\n      }\n      case 'diff':\n        container.appendChild(renderDiff(item, itemIndex, handlers.onJumpToSnippet));\n        break;\n    }\n  });\n  return container;\n}"
     }
   ],
   "quiz": [
