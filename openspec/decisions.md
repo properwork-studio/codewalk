@@ -22,7 +22,7 @@
 - 分層:extension host ⇄ postMessage 協定(單一定義)⇄ webview(禁碰 vscode API)
 - schema 單點住 `shared/schema.ts`;格式變更視同破壞性 API 變更走 change
 - **檔案組織已查過,結論如下**(2026-08-07,依賴圖與變更頻率實測)——依賴方向乾淨(`shared/` 只依賴自己、`src/` 與 `ui/` 各自依賴 `shared/`,**無 src↔ui 互依、無循環**),三層架構守住了,所以「檔案看起來散亂」是視覺問題不是結構病,兩者處方不同:
-  - **測試維持 co-located**(`foo.ts` 與 `foo.test.ts` 並排),不移到 `tests/` 鏡像目錄——改 A 檔時測試就在旁邊、重新命名時跟著走,是 Vitest/Jest 生態主流;移走要改 19 個測試的 import 成 `../../src/foo`,換來的只有「原始碼目錄看起來乾淨」。**視覺問題用 `.vscode/settings.json` 的 `explorer.fileNesting` 解決**,檔案實際位置不動。例外:不對應任何原始檔的測試(如 `repoWalks.test.ts` 驗的是 `.codewalk/` 資料)另置
+  - **測試維持 co-located**(`foo.ts` 與 `foo.test.ts` 並排),不移到 `tests/` 鏡像目錄——改 A 檔時測試就在旁邊、重新命名時跟著走,是 Vitest/Jest 生態主流;移走要改 19 個測試的 import 成 `../../src/foo`,換來的只有「原始碼目錄看起來乾淨」。`explorer.fileNesting` **實測過但不採用**(2026-08-07,不合偏好已回復)——co-located 的決定不因此動搖:視覺整潔不值得拿結構去換,也不必再繞回去試一次。例外:不對應任何原始檔的測試住 `tests/`(如 `repoWalks.test.ts` 驗的是 `.codewalk/` 資料而非某支程式),搬動時**記得 `tsconfig.json` 的 include 要同步**——`vitest` 走 esbuild 轉譯不做型別檢查,漏掉 include 會讓該目錄安靜地脫離 `pnpm typecheck`
   - **不依功能分組**(`walk/`、`anchor/`、`storage/` 這類子目錄)——**出場條件:單一目錄超過 20 個原始檔**(`src/` 現為 13,future-work 的三個功能做完估 18-20,接近但未超過)。理由不只是規模:`viewProvider.ts` import 了 11 個模組,walk/anchor/storage/editor/theme 它全碰,**放哪一組都不對**,因為它就是 orchestrator。分組邊界會吵這件事已經驗證過,不必重推
   - **`ui/render.ts` 依畫面拆分**(916 行,是第二名 `main.ts` 447 行的 2 倍;變更頻率全 repo 最高 9 次;單一 change 內曾增加 378 行)——高頻變更 × 超大檔案是最痛的組合。拆成 `ui/render/{dom,fileList,items,walking,quiz}.ts` 加 `index.ts` re-export(呼叫端 import 不用改),分界對應 `ui/state.ts` 的四個畫面狀態,命名有現成語彙。`ui/main.ts` 447 行**不拆**:職責單一(訊息路由+render 迴圈+事件監聽),且碰 DOM 全域、拆了也不好測
 - **導讀列表載入不是效能問題,不再重開**(2026-08-04 實測,`Promise.all` 並行版):5 份 0.37 ms、50 份 2.4 ms、100 份 4.8 ms、500 份 25 ms——100 份仍低於一個 60fps 影格,讀者感知不到。衍生三條:

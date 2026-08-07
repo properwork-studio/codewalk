@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { validateCodewalk } from '../shared/schema';
-import { buildAnchorReport } from './anchorCheck';
+import { buildAnchorReport } from '../src/anchorCheck';
 
 /**
  * 本 repo 自己的 `.codewalk/` 導讀是對外的門面(讀者裝完 extension 第一個看到的

@@ -15,6 +15,6 @@
     "resolveJsonModule": true,
     "types": ["node", "vscode"]
   },
-  "include": ["src", "ui", "shared"],
+  "include": ["src", "ui", "shared", "tests"],
   "exclude": ["node_modules", "dist"]
 }
