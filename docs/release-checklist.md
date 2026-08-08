@@ -9,23 +9,15 @@
 - `LICENSE`(MIT)、`CHANGELOG.md`(0.1.0)
 - `resources/icon-128.png`(marketplace 圖示,128×128)
 - README 改為使用者視角,含指令參考;拆為 `README.md`(英文為主,marketplace 預設顯示)與 `README.zh-TW.md`(繁中),開頭互相連結
-- `vsce package` 零 warning、250 個測試通過
+- `vsce package` 零 warning、279 個測試通過
 - 新增英文版自我指涉導讀 `.codewalk/2026-08-08-codebase-tour-en.codewalk.json`(`2026-08-07-codebase-tour.codewalk.json` 的完整翻譯,`file`/`startLine`/`endLine`/`anchor` 逐一對齊、`ref` 相同),供英文顯示語言下截圖用——此後兩份導讀需並行維護,`src`/`shared`/`ui` 有結構性改動時兩邊的錨點都要重新產生
 - README 加 MIT License badge(靜態,讀 `LICENSE`,不依賴外部即時數據,不必等發布)。Marketplace 版本/安裝數/評分 badge 仍照下方「發布後可補」延後
+- 英文版截圖 `docs/images/panel-walking-en.png` 已補上(commit `0a0b77f`),`README.md` 的引用不再是死連結
+- 全專案 JSDoc 盤點補齊(commit `7b29970`),並新增 `pnpm relocate-anchors` 供日後維護時對齊自帶導讀的 anchor
 
 ## 待執行
 
-### 1. 補上英文版截圖(硬性前置,擋下一步)
-
-`README.md` 目前指向 `docs/images/panel-walking-en.png`,這個檔案還不存在。步驟:
-
-1. VS Code 顯示語言切成 English(`Configure Display Language` → `en`),重新載入視窗
-2. `F5` 開 Extension Development Host,開啟 `2026-08-08-codebase-tour-en.codewalk.json`,走到第 3 步(`shared/schema.ts`)
-3. 截圖存成 `docs/images/panel-walking-en.png`
-
-`README.zh-TW.md` 沿用既有的 `docs/images/panel-walking.png`,不用重截。
-
-### 2. 建立 GitHub repo 並 push(硬性前置)
+### 1. 建立 GitHub repo 並 push(硬性前置)
 
 ```bash
 # GitHub 上建立 properworkstudio/codewalk,設為 public
@@ -37,7 +29,7 @@ git push -u origin main
 `https://github.com/properworkstudio/codewalk/raw/HEAD/...`,repo 不存在或非
 public 時,截圖與所有連結都是死的。
 
-### 3. 發布到 VS Code Marketplace
+### 2. 發布到 VS Code Marketplace
 
 需要 Azure DevOps 的 Personal Access Token(scope: Marketplace → Manage)。
 
@@ -49,7 +41,7 @@ npx vsce publish
 
 發布後 extension 識別碼為 `properworkstudio.codewalk`,**永久不可改**。
 
-### 4. (可選)發布到 Open VSX,供 Cursor 使用
+### 3. (可選)發布到 Open VSX,供 Cursor 使用
 
 Cursor 不能用微軟 Marketplace(ToS 只授權自家產品)。需先註冊 Eclipse
 Foundation 帳號並簽 Publisher Agreement。
