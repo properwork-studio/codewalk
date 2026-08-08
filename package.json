@@ -16,6 +16,12 @@
   "sponsor": {
     "url": "https://ko-fi.com/properworkstudio"
   },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "%extension.untrustedWorkspaces.description%"
+    }
+  },
   "engines": {
     "vscode": "^1.90.0"
   },

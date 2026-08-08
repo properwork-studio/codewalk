@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { t } from '../shared/i18n';
+import { resolveInWorkspace } from './workspacePath';
 
 /** 跳轉目標的行段。行號 1-based、頭尾皆含,與 `.codewalk.json` 的欄位語意一致。 */
 export interface JumpTarget {
@@ -42,8 +42,8 @@ export async function jumpToStep(
   target: JumpTarget,
   mode: JumpMode = 'select',
 ): Promise<JumpResult> {
-  const absPath = join(workspaceRoot, target.file);
-  if (!existsSync(absPath)) {
+  const absPath = resolveInWorkspace(workspaceRoot, target.file);
+  if (absPath === null || !existsSync(absPath)) {
     return { ok: false, reason: 'fileNotFound', message: t('host.fileNotFound', { file: target.file }) };
   }
 

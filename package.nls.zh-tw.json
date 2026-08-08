@@ -1,5 +1,6 @@
 {
   "extension.description": "互動式 codebase 導讀播放器——讀取 .codewalk/ 的 JSON,在側邊面板帶讀者逐步走 code",
+  "extension.untrustedWorkspaces.description": "CodeWalk 會讀取工作區的導讀檔與其指向的原始碼,因此在你信任這個資料夾之前保持停用。",
   "command.openWalk.title": "CodeWalk: 開啟導讀",
   "command.nextStep.title": "CodeWalk: 下一步",
   "command.prevStep.title": "CodeWalk: 上一步",

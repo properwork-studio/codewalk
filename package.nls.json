@@ -1,5 +1,6 @@
 {
   "extension.description": "An interactive codebase walkthrough player — reads JSON from .codewalk/ and guides readers through the code step by step in the side panel",
+  "extension.untrustedWorkspaces.description": "CodeWalk reads walk files and the source they point at from the workspace, so it stays disabled until you trust the folder.",
   "command.openWalk.title": "CodeWalk: Open Walk",
   "command.nextStep.title": "CodeWalk: Next Step",
   "command.prevStep.title": "CodeWalk: Previous Step",

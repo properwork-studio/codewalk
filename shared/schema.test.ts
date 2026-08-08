@@ -537,3 +537,57 @@ describe('scoreQuiz', () => {
     expect(result).toEqual({ score: 3, total: 5, passed: true });
   });
 });
+
+describe('validateCodewalk — file 的路徑圍堵', () => {
+  function sampleWithFile(file: unknown) {
+    const sample = validSample() as Record<string, any>;
+    sample.steps[0].file = file;
+    return sample;
+  }
+
+  function sampleWithItemFile(file: unknown) {
+    const sample = validSample() as Record<string, any>;
+    sample.steps[0].items = [{ kind: 'snippet', label: 'x', file, startLine: 1, endLine: 2 }];
+    return sample;
+  }
+
+  // 導讀檔可能來自不受信任的 repo,而每個 file 最終都會被 readFile/openTextDocument
+  // 消費——放行逸出路徑等於讓導讀作者讀取讀者的任意檔案。
+  const escapes = [
+    ['上層目錄', '../../../.ssh/id_rsa'],
+    ['路徑中段的上層目錄', 'src/../../../etc/passwd'],
+    ['POSIX 絕對路徑', '/etc/passwd'],
+    ['Windows 磁碟機代號', 'C:\\Windows\\System32\\config\\SAM'],
+    ['Windows UNC 路徑', '\\\\attacker\\share\\payload'],
+    ['反斜線分隔的上層目錄', '..\\..\\secrets.txt'],
+  ] as const;
+
+  for (const [label, file] of escapes) {
+    it(`拒絕 step.file 的${label}`, () => {
+      const result = validateCodewalk(sampleWithFile(file));
+      expect(result.valid).toBe(false);
+      expect(result.valid === false && result.errors.join()).toContain('workspace-relative');
+    });
+
+    it(`拒絕 snippet item.file 的${label}`, () => {
+      const result = validateCodewalk(sampleWithItemFile(file));
+      expect(result.valid).toBe(false);
+    });
+  }
+
+  it('接受一般的 workspace 相對路徑', () => {
+    expect(validateCodewalk(sampleWithFile('src/a/b/index.ts')).valid).toBe(true);
+  });
+
+  it('接受檔名含兩個點但不是上層目錄的路徑', () => {
+    expect(validateCodewalk(sampleWithFile('src/foo..bar.ts')).valid).toBe(true);
+  });
+
+  it('接受單點的目前目錄標記', () => {
+    expect(validateCodewalk(sampleWithFile('./src/index.ts')).valid).toBe(true);
+  });
+
+  it('仍拒絕空字串', () => {
+    expect(validateCodewalk(sampleWithFile('')).valid).toBe(false);
+  });
+});

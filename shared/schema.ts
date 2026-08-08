@@ -278,6 +278,32 @@ export function isHttpUrl(value: unknown): value is string {
 }
 
 /**
+ * Whether a value is a non-empty path that stays inside the workspace.
+ *
+ * @remarks
+ * Security boundary, not a style rule. Every `file` field ends up in a
+ * `readFile`/`openTextDocument` call on the host, so a walk shipped in an
+ * untrusted repo could otherwise name `../../../.ssh/id_rsa` and have the
+ * player read it and print it into the panel. Rejecting the path here — the
+ * one gate every walk passes through — stops that before any file is touched.
+ *
+ * Both separators are treated as such regardless of the current platform: a
+ * walk written on Windows may use `\`, and a walk read on Linux must not have
+ * `..\..\etc` slip through as a single innocent-looking segment.
+ *
+ * The host still re-checks containment when resolving the path, because this
+ * function only sees the string, never the resolved location (a symlink inside
+ * the workspace can point outside it).
+ */
+export function isWorkspaceRelativePath(value: unknown): value is string {
+  if (!isNonEmptyString(value)) return false;
+  // POSIX absolute (/etc), Windows UNC (\\host\share) and drive-letter (C:\)
+  if (value.startsWith('/') || value.startsWith('\\')) return false;
+  if (/^[A-Za-z]:/.test(value)) return false;
+  return !value.split(/[/\\]/).includes('..');
+}
+
+/**
  * Whether a hunk body contains at least one added (`+`) or removed (`-`) line.
  *
  * @remarks
@@ -327,8 +353,8 @@ function validateStep(step: unknown, path: string, errors: string[]): void {
   if (!isNonEmptyString(s.title)) {
     errors.push(`${path}.title must be a non-empty string`);
   }
-  if (!isNonEmptyString(s.file)) {
-    errors.push(`${path}.file must be a non-empty string`);
+  if (!isWorkspaceRelativePath(s.file)) {
+    errors.push(`${path}.file must be a workspace-relative path (no leading "/" and no ".." segment)`);
   }
   validateLineRange(s, path, errors);
   if (!isNonEmptyString(s.narration)) {
@@ -386,8 +412,8 @@ function validateItem(item: unknown, path: string, errors: string[]): void {
       if (!isNonEmptyString(it.label)) {
         errors.push(`${path}.label must be a non-empty string`);
       }
-      if (!isNonEmptyString(it.file)) {
-        errors.push(`${path}.file must be a non-empty string`);
+      if (!isWorkspaceRelativePath(it.file)) {
+        errors.push(`${path}.file must be a workspace-relative path (no leading "/" and no ".." segment)`);
       }
       validateLineRange(it, path, errors);
       if (!isOptionalString(it.anchor)) {
@@ -398,8 +424,8 @@ function validateItem(item: unknown, path: string, errors: string[]): void {
       if (!isNonEmptyString(it.label)) {
         errors.push(`${path}.label must be a non-empty string`);
       }
-      if (!isNonEmptyString(it.file)) {
-        errors.push(`${path}.file must be a non-empty string`);
+      if (!isWorkspaceRelativePath(it.file)) {
+        errors.push(`${path}.file must be a workspace-relative path (no leading "/" and no ".." segment)`);
       }
       validateLineRange(it, path, errors);
       if (!isPositiveInteger(it.oldStartLine)) {

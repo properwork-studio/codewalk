@@ -1,10 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { t } from '../shared/i18n';
 import { detectLanguage } from '../shared/language';
 import type { AnchorItemStatus, SnippetPreviewResult } from '../shared/protocol';
 import type { CodewalkItem } from '../shared/schema';
 import { effectiveLineRange } from './anchorCheck';
+import { resolveInWorkspace } from './workspacePath';
 
 type SnippetItem = Extract<CodewalkItem, { kind: 'snippet' }>;
 
@@ -46,8 +46,8 @@ export async function readSnippetPreviews(
       return;
     }
 
-    const absPath = join(workspaceRoot, snippet.file);
-    if (!existsSync(absPath)) {
+    const absPath = resolveInWorkspace(workspaceRoot, snippet.file);
+    if (absPath === null || !existsSync(absPath)) {
       results.push({ itemIndex, ok: false, message: t('host.fileNotFound', { file: snippet.file }) });
       return;
     }

@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import type { AnchorItemStatus, AnchorReport, AnchorStatus, AnchorStepReport } from '../shared/protocol';
 import { effectiveLineRange } from '../shared/protocol';
 import type { CodewalkFile, CodewalkItem } from '../shared/schema';
+import { resolveInWorkspace } from './workspacePath';
 
 export { effectiveLineRange };
 
@@ -85,8 +85,8 @@ export function checkAnchorAgainstLines(
 }
 
 function readLinesOrNull(workspaceRoot: string, file: string): string[] | null {
-  const absPath = join(workspaceRoot, file);
-  if (!existsSync(absPath)) return null;
+  const absPath = resolveInWorkspace(workspaceRoot, file);
+  if (absPath === null || !existsSync(absPath)) return null;
   return readFileSync(absPath, 'utf8').split('\n');
 }
 
