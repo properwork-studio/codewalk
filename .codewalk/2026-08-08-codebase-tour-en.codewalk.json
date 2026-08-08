@@ -1,6 +1,6 @@
 {
   "title": "CodeWalk end-to-end walk: from the JSON contract to the side panel",
-  "ref": "7b299708dfecee092bc316f82763a0425ebcb4d1",
+  "ref": "16280d78d5ac8770f5ced672c3fc7300f19fccb5",
   "regenerateHint": "Walk through CodeWalk's src/, shared/, and ui/ layers again, produce an English walk aligned to the current HEAD, output it to .codewalk/, and fill in the anchor field for every step and snippet.",
   "passThreshold": 4,
   "steps": [
@@ -27,8 +27,8 @@
     {
       "title": "Step 2: How the extension claims a spot in the Activity Bar (the answer isn't code)",
       "file": "package.json",
-      "startLine": 25,
-      "endLine": 43,
+      "startLine": 28,
+      "endLine": 46,
       "narration": "The CodeWalk icon in the Activity Bar and the panel it opens — **not a single line of code creates them**. They're entirely declared through `package.json`'s `contributes` field. VS Code reads this manifest and knows what to draw.\n\nTwo things are declared here:\n\n- `viewsContainers.activitybar`: opens a container called `codewalk` in the Activity Bar, using `resources/icon.svg` as its icon\n- `views.codewalk`: places a view inside that container with id `codewalk.playerView` and `type: \"webview\"`\n\nThat id shows up again shortly — `WalkPlayerViewProvider.viewId` in `viewProvider.ts` must be **character-for-character identical** to the string here, or VS Code can't find the matching provider and the panel stays blank. It's a string contract with no type-level protection — you just have to remember it.\n\nThe `activationEvents` array above is empty on purpose: since VS Code 1.74, activation timing can be inferred automatically from `contributes` — declaring a view already means \"activate me when this view is opened,\" so there's no need to hand-write an `onView:` event.",
       "terms": [
         {
@@ -45,8 +45,8 @@
           "kind": "snippet",
           "label": "The four commands are also declared here — searchable in the command palette, and bindable to shortcuts",
           "file": "package.json",
-          "startLine": 43,
-          "endLine": 66,
+          "startLine": 46,
+          "endLine": 69,
           "anchor": "    \"views\": {\n      \"codewalk\": [\n        {\n          \"id\": \"codewalk.playerView\",\n          \"name\": \"Walk\",\n          \"type\": \"webview\"\n        }\n      ]\n    },\n    \"commands\": [\n      {\n        \"command\": \"codewalk.openWalk\",\n        \"title\": \"%command.openWalk.title%\",\n        \"category\": \"CodeWalk\"\n      },\n      {\n        \"command\": \"codewalk.nextStep\",\n        \"title\": \"%command.nextStep.title%\",\n        \"category\": \"CodeWalk\"\n      },\n      {\n        \"command\": \"codewalk.prevStep\",\n        \"title\": \"%command.prevStep.title%\",\n        \"category\": \"CodeWalk\""
         },
         {

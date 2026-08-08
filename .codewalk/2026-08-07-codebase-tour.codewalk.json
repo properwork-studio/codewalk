@@ -1,6 +1,6 @@
 {
   "title": "CodeWalk 全專案導讀:從 JSON 合約到側邊面板的一條龍",
-  "ref": "7b299708dfecee092bc316f82763a0425ebcb4d1",
+  "ref": "16280d78d5ac8770f5ced672c3fc7300f19fccb5",
   "regenerateHint": "請重新走過 CodeWalk 的 src/、shared/、ui/ 三層,產生一份對齊目前 HEAD 的全專案導讀,輸出到 .codewalk/ 並為每個 step 與 snippet 填入 anchor 欄位。",
   "passThreshold": 4,
   "steps": [
@@ -27,8 +27,8 @@
     {
       "title": "第 2 步:extension 怎麼在活動列佔一個位置(答案不是程式碼)",
       "file": "package.json",
-      "startLine": 25,
-      "endLine": 43,
+      "startLine": 28,
+      "endLine": 46,
       "narration": "左側活動列上的 CodeWalk 圖示、點開後的那個面板,**沒有任何一行程式碼負責建立它們**——全部由 `package.json` 的 `contributes` 宣告。VS Code 讀這份 manifest 就知道要畫什麼。\n\n這裡宣告了兩件事:\n\n- `viewsContainers.activitybar`:在活動列開一個叫 `codewalk` 的容器,用 `resources/icon.svg` 當圖示\n- `views.codewalk`:容器裡放一個 id 為 `codewalk.playerView`、`type: \"webview\"` 的 view\n\n那個 id 待會會再出現一次——`viewProvider.ts` 裡的 `WalkPlayerViewProvider.viewId` 必須跟這裡的字串**逐字相同**,否則 VS Code 找不到對應的 provider,面板會是空白的。這是一個沒有型別保護的字串契約,只能靠人記住。\n\nmanifest 上方的 `activationEvents` 是空陣列,這是刻意的:VS Code 1.74 起會從 `contributes` 自動推斷啟動時機,宣告了 view 就等於宣告了「這個 view 被開啟時啟動我」,不必再手寫 `onView:` 事件。",
       "terms": [
         {
@@ -45,8 +45,8 @@
           "kind": "snippet",
           "label": "四個指令也在這裡宣告——指令面板搜得到,也能被綁快捷鍵",
           "file": "package.json",
-          "startLine": 43,
-          "endLine": 66,
+          "startLine": 46,
+          "endLine": 69,
           "anchor": "    \"views\": {\n      \"codewalk\": [\n        {\n          \"id\": \"codewalk.playerView\",\n          \"name\": \"Walk\",\n          \"type\": \"webview\"\n        }\n      ]\n    },\n    \"commands\": [\n      {\n        \"command\": \"codewalk.openWalk\",\n        \"title\": \"%command.openWalk.title%\",\n        \"category\": \"CodeWalk\"\n      },\n      {\n        \"command\": \"codewalk.nextStep\",\n        \"title\": \"%command.nextStep.title%\",\n        \"category\": \"CodeWalk\"\n      },\n      {\n        \"command\": \"codewalk.prevStep\",\n        \"title\": \"%command.prevStep.title%\",\n        \"category\": \"CodeWalk\""
         },
         {
