@@ -213,6 +213,8 @@ CodeWalk 目前由個人維護，不是商業產品。
 
 **貢獻程式碼** — 送 PR 之前請先[開 issue](https://github.com/properworkstudio/codewalk/issues/new) 討論方向。這個 repo 用 [OpenSpec](https://github.com/Fission-AI/OpenSpec) 管理行為規格，沒討論過的實作很可能跟既有規格衝突，難以合併。
 
+**支持這個專案** — 如果 CodeWalk 幫你省下了一些時間，可以請我[喝杯咖啡](https://ko-fi.com/properworkstudio)。純屬自由，也不會換到優先支援——上面那句「沒辦法保證回應時間」一樣適用。
+
 ## 授權
 
 [MIT](LICENSE)
