@@ -90,6 +90,11 @@ function renderReference(label: string, url: string, onOpenReference: (url: stri
   return button;
 }
 
+/**
+ * 渲染帶行號的程式碼區塊。
+ *
+ * @param startLine - 第一行的行號;後續行依序遞增,不做任何跳號處理
+ */
 export function renderSnippetCode(content: string, language: string, startLine: number): HTMLElement {
   const code = el('div', 'codewalk-snippet-code');
   const lines = highlightSnippetLines(content, language);
@@ -105,8 +110,11 @@ export function renderSnippetCode(content: string, language: string, startLine: 
   return code;
 }
 
-/** 產出當時內容的說明標籤——不與系統層級警告(.codewalk-warning)共用樣式,
- * 避免讀者把「這是舊內容」跟「系統錯誤」搞混,但沿用同一套告警色階(design.md 決策 8)。 */
+/**
+ * 產出當時內容的說明標籤——不與系統層級警告(.codewalk-warning)共用樣式,
+ * 避免讀者把「這是舊內容」跟「系統錯誤」搞混,但沿用同一套告警色階
+ * (design.md 決策 8)。
+ */
 export function renderStaleLabel(): HTMLElement {
   const label = el('div', 'codewalk-stale-label');
   label.appendChild(icon('history'));
@@ -165,10 +173,13 @@ function renderSnippet(
   return container;
 }
 
+/** diff 中的一行,已剝除開頭的 `+`/`-` 標記。 */
 export interface DiffLine {
   type: 'added' | 'removed' | 'context';
   content: string;
+  /** 新增行為 null——該行在舊版並不存在。 */
   oldLineNumber: number | null;
+  /** 刪除行為 null——該行在新版已不存在。 */
   newLineNumber: number | null;
 }
 
@@ -253,6 +264,13 @@ function renderDiff(
   return container;
 }
 
+/**
+ * 依序渲染一個步驟的所有說明元件,六種 kind 各自對應不同版面。
+ *
+ * @param snippetPreviews - host 讀來的 snippet 內容,以 itemIndex 配對;找不到
+ * 對應項目時該 snippet 只顯示標題列,不顯示程式碼
+ * @param itemAnchorStatuses - 各 snippet 的錨驗證結果;沒有對應項目時視為未錨定
+ */
 export function renderItems(
   items: CodewalkItem[],
   snippetPreviews: SnippetPreviewResult[],

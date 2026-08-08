@@ -16,7 +16,20 @@ function getWorkspaceRoot(): string | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 }
 
+/**
+ * 側邊面板的 view provider——host 端的中樞:建立 webview、處理來自 webview 的
+ * 訊息、操作編輯器,並持有目前導讀的狀態。
+ *
+ * 狀態的權威在這裡,不在 webview:目前讀到第幾步、錨驗證結果、snippet 內容都由
+ * host 算好送出。webview 只回報讀者的意圖(見 `shared/protocol.ts`)。
+ *
+ * @remarks
+ * 幾乎所有方法都需要真實的 vscode API,無法在 Vitest 環境測試。可獨立驗證的邏輯
+ * 已刻意抽到 `anchorCheck.ts`、`webviewReadyPlan.ts`、`walkLoader.ts` 等模組,
+ * 本類別只保留串接的部分。
+ */
 export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
+  /** 必須與 package.json 的 `contributes.views` 條目 id 一致。 */
   public static readonly viewId = 'codewalk.playerView';
 
   private view: vscode.WebviewView | undefined;
@@ -33,6 +46,10 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
     this.progressStore = new ProgressStore(context.workspaceState);
   }
 
+  /**
+   * VS Code 首次要顯示面板時呼叫,建立 webview 內容並掛上訊息與主題監聽。
+   * 面板被拖到別的容器或因資源壓力回收後重建時會再次呼叫。
+   */
   resolveWebviewView(webviewView: vscode.WebviewView): void {
     this.view = webviewView;
     webviewView.webview.options = {
@@ -48,14 +65,17 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
     webviewView.onDidDispose(() => themeListener.dispose());
   }
 
+  /** `codewalk.nextStep` 指令的處理常式(面板未取得焦點時仍可用的快捷鍵路徑)。 */
   public async handleNextStep(): Promise<void> {
     await this.moveStep(1);
   }
 
+  /** `codewalk.prevStep` 指令的處理常式。 */
   public async handlePrevStep(): Promise<void> {
     await this.moveStep(-1);
   }
 
+  /** `codewalk.revealCurrentStep` 指令的處理常式:把編輯器帶回目前步驟的位置。 */
   public async handleRevealCurrentStep(): Promise<void> {
     await this.jumpToCurrentStep();
   }
@@ -110,8 +130,10 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  /** 返回列表時清掉 currentWalk 等 in-memory 狀態,讓下一次 webviewReady
-   * 判斷「該不該回灌」時視同尚未選擇導讀(design.md 決策 1)。 */
+  /**
+   * 返回列表時清掉 currentWalk 等 in-memory 狀態,讓下一次 webviewReady
+   * 判斷「該不該回灌」時視同尚未選擇導讀(design.md 決策 1)。
+   */
   private clearActiveWalk(): void {
     this.currentWalk = undefined;
     this.currentWalkPath = undefined;
@@ -184,9 +206,11 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
     this.post({ type: 'walkFileList', files });
   }
 
-  /** host 仍持有目前導讀時,webview 真的被重建(而非常態的面板隱藏/顯示)
+  /**
+   * host 仍持有目前導讀時,webview 真的被重建(而非常態的面板隱藏/顯示)
    * 就靠這則訊息回灌——不呼叫 jumpToCurrentStep(),恢復動作不動編輯器
-   * (reading-progress capability「恢復閱讀位置不改動編輯器」)。 */
+   * (reading-progress capability「恢復閱讀位置不改動編輯器」)。
+   */
   private async sendRestoreIfActive(): Promise<void> {
     if (!this.currentWalk || !this.anchorReport) return;
     const message = buildWalkRestoredMessage(

@@ -1,11 +1,9 @@
-import { Lexer, type MarkedToken, type Tokens } from 'marked';
-import { isHttpUrl } from '../shared/schema';
-
-/**
+/*
+ * 導讀文字的 markdown 子集渲染(markdown-rendering capability)。
+ *
  * 只用 marked 的 Lexer 取 token,永不呼叫 marked() 或 Renderer——token 皆帶 `raw`
  * 欄位(產生該 token 的原始字元),不支援的語法直接輸出 raw 即是「原樣呈現」,
  * 而輸出一律經 textContent/createTextNode,天然沒有注入疑慮(見 design.md D1)。
- * gfm: false 讓表格、裸網址 autolink、刪除線在 lexer 這層就不成 token。
  *
  * 型別一律用 MarkedToken(而非 marked 匯出的 Token),因為 Token = MarkedToken |
  * Tokens.Generic,而 Generic.type 是寬鬆的 string——switch (token.type) 在每個
@@ -13,8 +11,14 @@ import { isHttpUrl } from '../shared/schema';
  * 不使用任何自訂 tokenizer 擴充,Generic 不會真的出現,MarkedToken 排除它後
  * 窄化才會正確運作,不需要到處補 `?? []`。
  */
+
+import { Lexer, type MarkedToken, type Tokens } from 'marked';
+import { isHttpUrl } from '../shared/schema';
+
+/** gfm: false 讓表格、裸網址 autolink、刪除線在 lexer 這層就不成 token。 */
 const LEXER_OPTIONS = { gfm: false } as const;
 
+/** 點擊連結時的處理常式。webview 無法自行開啟瀏覽器,一律轉給 host。 */
 export type OpenLinkHandler = (url: string) => void;
 
 /**
@@ -26,6 +30,14 @@ export type OpenLinkHandler = (url: string) => void;
  */
 export type MaybeOpenLinkHandler = OpenLinkHandler | null;
 
+/**
+ * 渲染**長文欄位**:支援段落、清單、二級小標,以及行內的程式碼/粗體/連結。
+ * 不支援的語法原樣輸出為純文字,不會讓整份導讀載入失敗。
+ *
+ * @param onOpenLink - 傳 `null` 讓連結降級為純文字;把結果放進 `<button>`、
+ * `<summary>` 這類本身可點擊的元素時必須這樣做,避免巢狀互動元素
+ * @returns 可直接 append 的 fragment;所有文字都經 textContent 寫入,無注入風險
+ */
 export function renderMarkdownBlock(source: string, onOpenLink: MaybeOpenLinkHandler): DocumentFragment {
   const fragment = document.createDocumentFragment();
   const tokens = new Lexer(LEXER_OPTIONS).lex(source) as MarkedToken[];
@@ -35,6 +47,12 @@ export function renderMarkdownBlock(source: string, onOpenLink: MaybeOpenLinkHan
   return fragment;
 }
 
+/**
+ * 渲染**短欄位**:只支援行內的程式碼/粗體/連結。清單與小標不會生效,原樣顯示為
+ * 純文字——標題、按鈕文字這類位置放區塊語法本來就會破壞版面。
+ *
+ * @param onOpenLink - 傳 `null` 讓連結降級為純文字(見 {@link renderMarkdownBlock})
+ */
 export function renderMarkdownInline(source: string, onOpenLink: MaybeOpenLinkHandler): DocumentFragment {
   const fragment = document.createDocumentFragment();
   const tokens = Lexer.lexInline(source, LEXER_OPTIONS) as MarkedToken[];

@@ -1,27 +1,64 @@
-/**
- * 本檔 validateCodewalk() 的所有驗證錯誤訊息刻意固定為英文,不經
- * `shared/i18n.ts` 的 t()——它們是 `.codewalk.json` 格式合約的診斷輸出,
- * 受眾是撰寫導讀或開發產生器的人,經常被複製到 issue、CI log 等跨語言情境,
- * 固定語言比隨介面語言浮動更有用(interface-localization capability
- * 「格式驗證錯誤固定英文」,design.md 決策 7)。
+/*
+ * Type definitions and validation for the `.codewalk.json` open format.
  *
- * 若要改動這裡的任何訊息,請維持這個例外,不要「順手」接進 t()。
+ * This file is the contract: the extension is a pure player and accepts any
+ * file matching this schema, no matter who produced it (an AI generator, a
+ * script, or a human writing JSON by hand).
+ *
+ * Every validation message emitted by validateCodewalk() is deliberately
+ * hard-coded in English and never goes through t() in `shared/i18n.ts`. These
+ * are diagnostics for the format contract, read by people authoring walks or
+ * building generators, and they are routinely pasted into issues and CI logs
+ * where a fixed language is more useful than one that follows the reader's
+ * editor locale (interface-localization capability, "format validation errors
+ * stay in English"; design.md decision 7).
+ *
+ * Keep that exception when changing any message here — do not "tidy them up"
+ * by routing them through t().
  */
 
+/** A glossary entry shown as a collapsible card during a walk: one term, one explanation. */
 export interface CodewalkTerm {
-  /** 短欄位,markdown 子集僅行內三種——見 CodewalkStep.narration 的說明。 */
+  /** Short field — inline markdown only (code, bold, links). See {@link CodewalkStep.narration}. */
   term: string;
-  /** 長文欄位,markdown 子集完整六種——見 CodewalkStep.narration 的說明。 */
+  /** Long-form field — the full markdown subset. See {@link CodewalkStep.narration}. */
   explanation: string;
 }
 
+/**
+ * An explanatory element attached to a step, rendered below the narration in
+ * the order given. A step may carry any number of items, in any combination.
+ *
+ * `text`, `misconception` and `reality` are long-form fields; every `label` is
+ * a short field. See {@link CodewalkStep.narration} for what each supports.
+ */
 export type CodewalkItem =
-  // tip/todo.text、pitfall.misconception/reality 為長文欄位;reference/snippet/diff.label 為短欄位——見 CodewalkStep.narration 的說明。
+  /** A side note worth knowing but not essential to the step. */
   | { kind: 'tip'; text: string }
+  /**
+   * A belief readers commonly hold that is wrong, paired with what is actually
+   * true. Rendered as a two-line "Misconception / Reality" block.
+   */
   | { kind: 'pitfall'; misconception: string; reality: string }
+  /** Known work left undone in the code being walked through — not a task for the reader. */
   | { kind: 'todo'; text: string }
+  /** An external link. Only http/https URLs are accepted; anything else fails validation. */
   | { kind: 'reference'; label: string; url: string }
+  /**
+   * A quotable region of a file, shown inline with syntax highlighting and
+   * clickable to jump to. Content is read live from the workspace, so it stays
+   * current; `anchor` (the code as it was when generated) lets the player
+   * detect drift and fall back to the original when the file has changed.
+   */
   | { kind: 'snippet'; label: string; file: string; startLine: number; endLine: number; anchor?: string }
+  /**
+   * A change, rendered as a two-column diff. `diffText` holds the hunk body
+   * only — no `diff --git`, `---`/`+++` or `@@` headers — with each line
+   * prefixed `+`, `-`, or a space for context. `oldStartLine` is where the hunk
+   * starts in the pre-change file; `startLine` is where it starts in the
+   * post-change file. At least one `+` or `-` line is required (otherwise
+   * nothing changed and the content should be a `snippet` instead).
+   */
   | {
       kind: 'diff';
       label: string;
@@ -32,78 +69,167 @@ export type CodewalkItem =
       diffText: string;
     };
 
+/**
+ * One stop on the walk. Selecting a step opens `file` in the editor and
+ * highlights lines `startLine` through `endLine` (both 1-based and inclusive).
+ */
 export interface CodewalkStep {
-  /** 短欄位,markdown 子集僅行內三種——見下方 narration 的說明。 */
+  /** Short field — inline markdown only. See {@link CodewalkStep.narration}. */
   title: string;
+  /** Path relative to the workspace root, using forward slashes. */
   file: string;
+  /** First line of the region, 1-based and inclusive. */
   startLine: number;
+  /** Last line of the region, 1-based and inclusive; must be >= `startLine`. */
   endLine: number;
   /**
-   * 播放器將此欄位依封閉的 markdown 子集渲染(markdown-rendering capability),
-   * 而非顯示原始標記字元。**長文欄位**(narration、term.explanation、tip/todo.text、
-   * pitfall.misconception/reality、quiz.optionExplanations)支援全部六種語法:
+   * The prose explaining this step. The player renders it as a closed markdown
+   * subset (markdown-rendering capability) rather than showing raw markup.
    *
-   * - 行內程式碼:`` `code` ``
-   * - 粗體:`**text**`
-   * - 連結:`[文字](https://...)`——僅 http/https 生效,其餘網址原樣顯示、不可點擊
-   * - 無序清單:`- 項目`(支援縮排巢狀)
-   * - 有序清單:`1. 項目`
-   * - 二級小標:`## 標題`(僅 depth 2;`#`、`###` 以下不支援)
+   * **Long-form fields** (`narration`, `term.explanation`, `tip`/`todo.text`,
+   * `pitfall.misconception`/`reality`, `quiz.optionExplanations`) support all
+   * six constructs:
    *
-   * **短欄位**(walk.title、step.title、term.term、quiz.question、quiz.options、
-   * item.label)只支援行內三種(程式碼/粗體/連結),清單與小標不生效、原樣顯示為
-   * 純文字(在按鈕、`<summary>` 這類元件裡放區塊語法本來就會破壞版面)。
+   * - inline code: `` `code` ``
+   * - bold: `**text**`
+   * - links: `[text](https://...)` — http/https only; other URLs render as
+   *   plain text and are not clickable
+   * - unordered lists: `- item` (nesting by indentation is supported)
+   * - ordered lists: `1. item`
+   * - level-2 headings: `## Heading` (depth 2 only; `#` and `###` or deeper
+   *   are not supported)
    *
-   * **降級規則統一**:表格、圖片、引用區塊、程式碼區塊(```)、`#`/`###` 以下標題、
-   * 原始 HTML、格式錯誤的語法——一律原樣顯示為純文字,不影響同一份導讀其餘部分
-   * 的載入與播放。單一換行維持斷行(不會被合併成一行),空行才分段落。
+   * **Short fields** (`walk.title`, `step.title`, `term.term`, `quiz.question`,
+   * `quiz.options`, any `item.label`) support only the three inline constructs
+   * (code, bold, links). Lists and headings render as literal text, since block
+   * markup inside a button or `<summary>` would break the layout anyway.
+   *
+   * **One degradation rule for everything else**: tables, images, blockquotes,
+   * fenced code blocks, headings other than depth 2, raw HTML, and malformed
+   * markup all render as literal text. A walk never fails to load because of
+   * unsupported markup — the rest of it plays normally.
+   *
+   * A single newline is preserved as a line break; a blank line starts a new
+   * paragraph.
    */
   narration: string;
-  /** 產出當下該行段的程式碼原文,用於失準偵測(見 stale-step-detection capability)。 */
+  /**
+   * The source text of lines `startLine`–`endLine` exactly as it was when this
+   * walk was generated. Optional, but supplying it is what lets the player tell
+   * the reader that a step no longer matches the code, and follow the region if
+   * it merely moved (stale-step-detection capability).
+   */
   anchor?: string;
+  /** Glossary entries offered alongside this step, each collapsed until opened. */
   terms?: CodewalkTerm[];
+  /** Explanatory elements rendered below the narration, in the order given. */
   items?: CodewalkItem[];
 }
 
+/** A single-answer multiple-choice question in the closing self-check quiz. */
 export interface CodewalkQuizQuestion {
-  /** 短欄位,markdown 子集僅行內三種——見 CodewalkStep.narration 的說明。 */
+  /** Short field — inline markdown only. See {@link CodewalkStep.narration}. */
   question: string;
-  /** 短欄位,markdown 子集僅行內三種——見 CodewalkStep.narration 的說明。 */
+  /** At least two options, each a non-empty short field. */
   options: string[];
+  /** Index into `options` of the correct answer, 0-based. */
   correctIndex: number;
-  /** 長文欄位,markdown 子集完整六種——見 CodewalkStep.narration 的說明。 */
+  /**
+   * Why each option is right or wrong, shown on the results screen. Long-form
+   * fields — see {@link CodewalkStep.narration}. When present, must have exactly
+   * one entry per option, aligned by index.
+   */
   optionExplanations?: string[];
 }
 
+/**
+ * A complete walk — the root object of a `.codewalk.json` file.
+ *
+ * Files are discovered in the `.codewalk/` directory at the workspace root and
+ * must be named `*.codewalk.json`.
+ *
+ * @example A minimal valid walk (every required field, nothing optional):
+ * ```json
+ * {
+ *   "title": "How requests get routed",
+ *   "ref": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
+ *   "steps": [
+ *     {
+ *       "title": "The entry point",
+ *       "file": "src/server.ts",
+ *       "startLine": 12,
+ *       "endLine": 20,
+ *       "narration": "Every request lands here first."
+ *     }
+ *   ],
+ *   "quiz": [
+ *     {
+ *       "question": "Where does a request arrive first?",
+ *       "options": ["The router", "The entry point in server.ts"],
+ *       "correctIndex": 1
+ *     }
+ *   ]
+ * }
+ * ```
+ */
 export interface CodewalkFile {
-  /** 短欄位,markdown 子集僅行內三種——見 CodewalkStep.narration 的說明。 */
+  /** Short field — inline markdown only. See {@link CodewalkStep.narration}. */
   title: string;
+  /**
+   * The commit SHA this walk was generated against. The player compares it with
+   * the workspace HEAD and warns the reader when they differ, since line numbers
+   * may have drifted. Steps carrying an `anchor` get per-step detection instead,
+   * which is more precise.
+   */
   ref: string;
+  /** The walk itself, played in order. At least one step is required. */
   steps: CodewalkStep[];
+  /** Self-check questions shown after the last step. At least one is required. */
   quiz: CodewalkQuizQuestion[];
-  /** 過關門檻(答對題數)。省略時預設為簡單多數(ceil(題數/2))。 */
+  /**
+   * How many correct answers count as a pass. Defaults to a simple majority,
+   * `ceil(quiz.length / 2)`. Must be between 1 and the number of questions.
+   */
   passThreshold?: number;
-  /** 重新產生本導讀的方式,由產生器自述;播放器只顯示與複製,不解讀內容。 */
+  /**
+   * How to regenerate this walk, described by whatever produced it — typically a
+   * command line. The player only displays it and copies it to the clipboard; it
+   * never parses or executes it.
+   */
   regenerateHint?: string;
 }
 
 /**
- * 沒有指定 passThreshold 時的預設過關門檻:簡單多數。
- * 5 題時等於 3 題,與 MVP 最初決策的固定門檻一致。
+ * The number of correct answers needed to pass this walk's quiz: the walk's own
+ * `passThreshold` when set, otherwise a simple majority.
+ *
+ * @remarks
+ * A simple majority works out to 3 of 5 questions, matching the fixed threshold
+ * the MVP originally shipped with.
  */
 export function resolvePassThreshold(walk: CodewalkFile): number {
   return walk.passThreshold ?? Math.ceil(walk.quiz.length / 2);
 }
 
+/** The outcome of a graded quiz attempt. */
 export interface QuizScore {
+  /** How many questions were answered correctly. */
   score: number;
+  /** How many questions the quiz had. */
   total: number;
+  /** Whether `score` reached {@link resolvePassThreshold}. */
   passed: boolean;
 }
 
 /**
- * 未作答的題目以 -1(或任何非法選項索引)表示,天然不會等於任一題的
- * correctIndex,不需要另外特判「未作答」。
+ * Grades a set of answers against a walk's quiz.
+ *
+ * @param answers - The chosen option index per question, aligned by index with
+ * `walk.quiz`. Use `-1` for an unanswered question.
+ *
+ * @remarks
+ * Any invalid option index works for "unanswered", not just `-1`: it can never
+ * equal a question's `correctIndex`, so no special case is needed.
  */
 export function scoreQuiz(walk: CodewalkFile, answers: readonly number[]): QuizScore {
   const total = walk.quiz.length;
@@ -113,6 +239,12 @@ export function scoreQuiz(walk: CodewalkFile, answers: readonly number[]): QuizS
   return { score, total, passed: score >= resolvePassThreshold(walk) };
 }
 
+/**
+ * The result of validating an unknown value against the walk schema. On success
+ * `value` is the same object, narrowed to {@link CodewalkFile}; on failure
+ * `errors` lists every problem found, each prefixed with the JSON path it
+ * occurred at (for example `steps[2].narration must be a non-empty string`).
+ */
 export type ValidationResult = { valid: true; value: CodewalkFile } | { valid: false; errors: string[] };
 
 function isNonEmptyString(value: unknown): value is string {
@@ -127,7 +259,14 @@ function isOptionalString(value: unknown): boolean {
   return value === undefined || typeof value === 'string';
 }
 
-/** 判定是否為合法 http/https 網址;`reference.url` 驗證與 ui/markdown.ts 的內嵌連結降級共用同一判定。 */
+/**
+ * Whether a value is a well-formed http or https URL.
+ *
+ * @remarks
+ * Shared deliberately: `reference.url` validation and the inline-link
+ * degradation in `ui/markdown.ts` must agree on what counts as a usable link,
+ * or a URL could pass validation and then render as unclickable text.
+ */
 export function isHttpUrl(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   try {
@@ -139,9 +278,12 @@ export function isHttpUrl(value: unknown): value is string {
 }
 
 /**
- * diffText 只存 hunk 本體(不含 diff --git/---/+++/@@ @@ 檔頭),依 '\n' 切行
- * 後捨棄結尾換行產生的尾端空字串元素,要求至少一行以 '+' 或 '-' 開頭——否則
- * 這段內容沒有任何改動,語意上該用 snippet 表達,不算 diff(見 design.md 決策 1)。
+ * Whether a hunk body contains at least one added (`+`) or removed (`-`) line.
+ *
+ * @remarks
+ * A trailing newline produces an empty final element when splitting on `\n`,
+ * which is dropped before checking. Content with no changed line isn't a diff —
+ * semantically it should be a `snippet` (design.md decision 1).
  */
 function hasAtLeastOneChangedLine(diffText: string): boolean {
   const lines = diffText.split('\n');
@@ -310,6 +452,17 @@ function validateQuizQuestion(question: unknown, path: string, errors: string[])
   }
 }
 
+/**
+ * Validates parsed JSON against the walk schema. This is the only gate between
+ * a `.codewalk.json` file and the player — anything it accepts must be safe to
+ * play, so it checks structure exhaustively rather than stopping at the first
+ * problem.
+ *
+ * @param data - Already-parsed JSON. Parsing is the caller's job, so that
+ * syntax errors and schema errors can be reported differently.
+ * @returns Every problem found, not just the first, so an author can fix a file
+ * in one pass instead of one error per run.
+ */
 export function validateCodewalk(data: unknown): ValidationResult {
   const errors: string[] = [];
 

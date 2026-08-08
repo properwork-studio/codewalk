@@ -1,3 +1,7 @@
+/*
+ * 走讀畫面:步驟敘述、術語卡、說明元件,以及失準時的重生引導。
+ */
+
 import { t } from '../../shared/i18n';
 import { detectLanguage } from '../../shared/language';
 import { effectiveLineRange, type AnchorStatus, type SnippetPreviewResult } from '../../shared/protocol';
@@ -7,8 +11,7 @@ import { isAtLastStep, type WalkingState } from '../state';
 import { el, icon } from './dom';
 import { renderItems, renderSnippetCode, renderStaleLabel } from './items';
 
-/** 走讀畫面:步驟敘述、術語卡、說明元件,以及失準時的重生引導。 */
-
+/** 走讀畫面各項互動的回呼;由 `ui/main.ts` 提供,一律轉成送往 host 的訊息。 */
 export interface WalkingHandlers {
   onNext: () => void;
   onPrev: () => void;
@@ -22,8 +25,10 @@ export interface WalkingHandlers {
   onRevealCurrentStep: () => void;
 }
 
-/** 導讀含任一失準目標時顯示,提示與 refDrifted 使用同一套系統層級警告樣式
- * (stale-step-detection capability「重生引導」)。 */
+/**
+ * 導讀含任一失準目標時顯示,提示與 refDrifted 使用同一套系統層級警告樣式
+ * (stale-step-detection capability「重生引導」)。
+ */
 function renderRegeneratePrompt(
   regenerateHint: string | undefined,
   onCopyRegenerateHint: () => void,
@@ -85,6 +90,16 @@ function createStepDots(current: number, total: number): HTMLElement {
   return dots;
 }
 
+/**
+ * 渲染走讀畫面的完整內容:警告區、標題與進度、步驟敘述、說明元件、術語卡、
+ * 上下步導覽,以及走到最後一步時的 quiz 入口。
+ *
+ * @param jumpError - 這一步的跳轉錯誤訊息(通常是檔案不存在);null 代表無錯誤
+ * @param animateStepChange - 是否播放進場動畫。只有真的換步驟時才傳 true——
+ * 展開術語這類重繪也播動畫會造成整頁閃爍
+ * @param snippetPreviews - 目前步驟的 snippet 內容;切換步驟後、新內容送達前
+ * 會是空陣列,此時 snippet 只顯示標題列
+ */
 export function renderWalking(
   state: WalkingState,
   handlers: WalkingHandlers,

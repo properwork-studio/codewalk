@@ -1,11 +1,14 @@
+/*
+ * 進入導讀之前的兩個畫面:可選的導讀列表,以及載入失敗時的錯誤訊息。
+ */
+
 import { t } from '../../shared/i18n';
 import type { AttemptSummary, WalkFileSummary } from '../../shared/protocol';
 import { renderMarkdownInline } from '../markdown';
 import { formatAbsoluteDateTime, formatRelativeTime } from '../relativeTime';
 import { el, icon } from './dom';
 
-/** 進入導讀之前的兩個畫面:可選的導讀列表,以及載入失敗時的錯誤訊息。 */
-
+/** 導讀列表各項互動的回呼;由 `ui/main.ts` 提供,一律轉成送往 host 的訊息。 */
 export interface FileListHandlers {
   onSelect: (path: string) => void;
   onToggleMenu: (path: string) => void;
@@ -94,6 +97,12 @@ function renderAttemptMenu(
   return wrapper;
 }
 
+/**
+ * 渲染導讀列表。每列的右側配件依資料出現與否決定,不保留空版位:有作答紀錄才有
+ * 狀態圖示與更多動作選單,有進度才有接續按鈕。
+ *
+ * @param files - 空陣列時顯示「找不到導讀檔案」的提示,而非空白畫面
+ */
 export function renderFileList(
   files: WalkFileSummary[],
   state: { openMenuPath: string | null; pendingClearPath: string | null },
@@ -150,6 +159,10 @@ export function renderFileList(
   return container;
 }
 
+/**
+ * 渲染載入失敗畫面。訊息通常是 schema 驗證錯誤(固定英文),一律附上返回列表的
+ * 出口——讀者不該被一個壞掉的導讀檔困住。
+ */
 export function renderError(message: string, onBackToList: () => void): HTMLElement {
   const container = el('div', 'codewalk-error');
   const backButton = el('button', 'codewalk-back-to-list');

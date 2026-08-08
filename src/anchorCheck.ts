@@ -35,9 +35,17 @@ function lineNumberAtOffset(whole: string, offset: number): number {
 }
 
 /**
- * 純函式,不碰檔案系統——依判定順序(未錨定 → 檔案不存在 → 相符 → 位移 →
- * 失準)比對現行檔案內容與產出當下的 anchor。內容比對前只正規化換行,
- * 刻意不 trim:縮排或尾隨空白的差異代表真實的程式碼改動(design.md 決策 2)。
+ * 判定某個行段相對於它的 anchor 是否仍然準確,依序檢查:未錨定 → 檔案不存在 →
+ * 內容相符 → 內容整段位移 → 失準。
+ *
+ * @param fileLines - 現行檔案的逐行內容;`null` 代表檔案已不存在
+ * @param anchor - 產出當下的程式碼原文;`undefined` 或全空白視為未提供錨點
+ * @returns `shifted` 只在整份檔案中找到「恰好一處」逐字相同的內容時成立;
+ * 找不到或找到多處都算失準,因為無法確定該跟去哪裡
+ *
+ * @remarks
+ * 純函式,不碰檔案系統(讀檔在 {@link buildAnchorReport})。比對前只正規化換行,
+ * 刻意不 trim——縮排或尾隨空白的差異代表真實的程式碼改動(design.md 決策 2)。
  */
 export function checkAnchorAgainstLines(
   fileLines: string[] | null,

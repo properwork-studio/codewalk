@@ -71,6 +71,7 @@ const ready: Promise<void> = createHighlighterCore({
   highlighter = instance;
 });
 
+/** 高亮引擎是否已載入完成。尚未就緒時 snippet 會先以純文字顯示。 */
 export function isHighlightReady(): boolean {
   return highlighter !== null;
 }
@@ -114,8 +115,13 @@ export function isLanguageSupported(language: string): boolean {
   return highlighter !== null && highlighter.getLoadedLanguages().includes(language);
 }
 
+/**
+ * 一段同色的程式碼文字。刻意是結構化資料而非 HTML 字串——渲染端用 textContent
+ * 逐一寫入,天然沒有注入疑慮(見 ui/render/dom.ts 的 appendTokens)。
+ */
 export interface HighlightToken {
   content: string;
+  /** CSS 色值;主題沒有為該 token 指定顏色時省略,沿用容器的前景色。 */
   color?: string;
   bold?: boolean;
   italic?: boolean;
@@ -144,6 +150,13 @@ function plainTextLines(content: string): HighlightToken[][] {
   return content.split('\n').map((line) => [{ content: line }]);
 }
 
+/**
+ * 把一段程式碼切成逐行、逐 token 的上色結果,套用目前生效的主題。
+ *
+ * @param language - Shiki 語言 id(由 `shared/language.ts` 的 detectLanguage 判定)
+ * @returns 外層陣列每個元素是一行。語言未支援或引擎尚未就緒時,每行回傳單一無色
+ * token,呈現為純文字——猜錯顏色比不上色更容易誤導讀者
+ */
 export function highlightSnippetLines(content: string, language: string): HighlightToken[][] {
   if (!highlighter || !isLanguageSupported(language)) {
     return plainTextLines(content);

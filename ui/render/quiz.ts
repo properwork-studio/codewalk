@@ -1,11 +1,14 @@
+/*
+ * 走完導讀之後的兩個畫面:作答與結果。
+ */
+
 import { t } from '../../shared/i18n';
 import type { CodewalkQuizQuestion } from '../../shared/schema';
 import { renderMarkdownBlock, renderMarkdownInline, type OpenLinkHandler } from '../markdown';
 import type { QuizResult, QuizState } from '../state';
 import { el, icon } from './dom';
 
-/** 走完導讀之後的兩個畫面:作答與結果。 */
-
+/** Quiz 作答畫面各項互動的回呼;由 `ui/main.ts` 提供。 */
 export interface QuizHandlers {
   onSelectAnswer: (questionIndex: number, optionIndex: number) => void;
   onSubmitQuiz: () => void;
@@ -13,6 +16,10 @@ export interface QuizHandlers {
   onOpenReference: OpenLinkHandler;
 }
 
+/**
+ * 渲染作答畫面。所有題目同時顯示在一頁,可任意順序作答與改答;送出按鈕在每題
+ * 都作答前維持停用。
+ */
 export function renderQuiz(state: QuizState, handlers: QuizHandlers): HTMLElement {
   const container = el('div', 'codewalk-quiz');
   container.appendChild(el('h2', undefined, t('quiz.title')));
@@ -196,6 +203,7 @@ function createQuizBreakdown(state: QuizResult, onOpenLink: OpenLinkHandler): HT
   return breakdown;
 }
 
+/** 結果畫面各項出口的回呼。 */
 export interface QuizResultHandlers {
   onRetryQuiz: () => void;
   onRestartWalk: () => void;
@@ -203,6 +211,10 @@ export interface QuizResultHandlers {
   onOpenReference: OpenLinkHandler;
 }
 
+/**
+ * 渲染結果畫面:分數環、通過與否,以及逐題檢討。答錯的題目才顯示正確答案;
+ * 導讀有提供 `optionExplanations` 時,每個選項的對錯理由一併列出。
+ */
 export function renderQuizResult(state: QuizResult, handlers: QuizResultHandlers): HTMLElement {
   const container = el('div', 'codewalk-quiz-result');
   container.appendChild(el('h2', undefined, t('quiz.resultTitle')));
