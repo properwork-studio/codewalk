@@ -211,9 +211,9 @@ code --install-extension codewalk.vsix
 
 CodeWalk is currently maintained by one person, not a commercial product.
 
-**Reporting issues** — [issues](https://github.com/properworkstudio/codewalk/issues) are welcome. I'll do my best to address them, but can't promise a response time.
+**Reporting issues** — [issues](https://github.com/properwork-studio/codewalk/issues) are welcome. I'll do my best to address them, but can't promise a response time.
 
-**Contributing** — please [open an issue](https://github.com/properworkstudio/codewalk/issues/new) to discuss direction before sending a PR. This repo manages its behavior spec with [OpenSpec](https://github.com/Fission-AI/OpenSpec); changes that haven't been discussed first are likely to conflict with the existing spec and be hard to merge.
+**Contributing** — please [open an issue](https://github.com/properwork-studio/codewalk/issues/new) to discuss direction before sending a PR. This repo manages its behavior spec with [OpenSpec](https://github.com/Fission-AI/OpenSpec); changes that haven't been discussed first are likely to conflict with the existing spec and be hard to merge.
 
 **Support** — if CodeWalk saved you some time, you can [buy me a coffee](https://ko-fi.com/properworkstudio). Entirely optional, and it doesn't buy priority support — the note above still applies.
 

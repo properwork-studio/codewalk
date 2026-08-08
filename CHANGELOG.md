@@ -2,6 +2,16 @@
 
 本檔案格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版本號遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.1.1] - 2026-08-09
+
+### 修正
+
+- `repository`／`homepage`／`bugs` 與 README 內的連結原本指向 `github.com/properworkstudio`，實際的 GitHub 組織是 `properwork-studio`（有連字號）。0.1.0 的 marketplace 頁面因此截圖破圖、Repository 與 Issues 連結皆為 404
+
+### 變更
+
+- extension 識別碼為 `properworkstudio.codewalk-reader`、顯示名稱為「CodeWalk Reader」——`codewalk` 與 `CodeWalk` 在 Marketplace 上都已被他人保留（VS Code Marketplace 的 `name` 與 `displayName` 皆需全域唯一）
+
 ## [0.1.0] - 2026-08-09
 
 首個版本。純播放器，不含產生功能——`.codewalk.json` 需另外準備（人工撰寫或由其他工具產生）。

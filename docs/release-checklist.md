@@ -43,12 +43,12 @@ Sponsor 按鈕就是一顆死連結**,比沒有按鈕更糟。`sponsor.url` 語�
 
 ```bash
 # GitHub 上建立 properworkstudio/codewalk,設為 public
-git remote add origin https://github.com/properworkstudio/codewalk.git
+git remote add origin https://github.com/properwork-studio/codewalk.git
 git push -u origin main
 ```
 
 **不做這步,marketplace 頁面會壞掉**——vsce 把 README 的相對路徑轉成
-`https://github.com/properworkstudio/codewalk/raw/HEAD/...`,repo 不存在或非
+`https://github.com/properwork-studio/codewalk/raw/HEAD/...`,repo 不存在或非
 public 時,截圖與所有連結都是死的。
 
 ### 2. 發布到 VS Code Marketplace

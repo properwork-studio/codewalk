@@ -1,18 +1,18 @@
 {
   "name": "codewalk-reader",
-  "displayName": "CodeWalk",
+  "displayName": "CodeWalk Reader",
   "description": "%extension.description%",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "properworkstudio",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/properworkstudio/codewalk.git"
+    "url": "https://github.com/properwork-studio/codewalk.git"
   },
   "bugs": {
-    "url": "https://github.com/properworkstudio/codewalk/issues"
+    "url": "https://github.com/properwork-studio/codewalk/issues"
   },
-  "homepage": "https://github.com/properworkstudio/codewalk#readme",
+  "homepage": "https://github.com/properwork-studio/codewalk#readme",
   "sponsor": {
     "url": "https://ko-fi.com/properworkstudio"
   },
