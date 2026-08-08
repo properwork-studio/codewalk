@@ -61,6 +61,11 @@ function stripTrailingCommas(text: string): string {
   return text.replace(/,(\s*[}\]])/g, '$1');
 }
 
+/**
+ * 解析 JSONC(允許註解與 trailing comma 的 JSON),用於讀取 VS Code 主題定義檔。
+ *
+ * @throws 剝除註解與 trailing comma 後仍不是合法 JSON 時,由 `JSON.parse` 拋出
+ */
 export function parseJsonc(text: string): unknown {
   return JSON.parse(stripTrailingCommas(stripJsonComments(text)));
 }

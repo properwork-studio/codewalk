@@ -1,4 +1,4 @@
-/**
+/*
  * 介面文案的雙語翻譯表與 t()。host(src/)與 webview(ui/)各自 bundle 一份
  * 模組實例,兩邊都必須各自呼叫 setLocale()——這不是缺陷而是兩份獨立 bundle
  * 的必然結果(design.md 決策 2、5)。
@@ -10,6 +10,7 @@
  * `shared/schema.ts` 的格式驗證錯誤刻意不經過這裡,固定英文——見該檔案頭的說明。
  */
 
+/** 繁體中文翻譯表;同時是 key 集合的唯一真相來源,英文表以 TranslationKey 強制對齊。 */
 const zhTW = {
   'fileList.title': '選擇導讀',
   'fileList.empty': '找不到導讀檔案(workspace 內沒有 .codewalk/*.codewalk.json)',
@@ -69,8 +70,10 @@ const zhTW = {
   'host.fileNotFound': '找不到檔案:{file}',
 } as const;
 
+/** 所有可用的文案 key。新增文案時只要加進 zhTW,英文表漏補就會編譯失敗。 */
 export type TranslationKey = keyof typeof zhTW;
 
+/** 英文翻譯表。型別綁定 TranslationKey,強制與 zhTW 的 key 集合完全一致。 */
 const en: Record<TranslationKey, string> = {
   'fileList.title': 'Choose a walk',
   'fileList.empty': 'No walks found (no .codewalk/*.codewalk.json in this workspace)',
@@ -132,29 +135,49 @@ const en: Record<TranslationKey, string> = {
   'host.fileNotFound': 'File not found: {file}',
 };
 
+/** 介面支援的語言。導讀內容本身不受此影響——它的語言由產生器決定。 */
 export type Locale = 'zh-tw' | 'en';
 
 // 預設英文:與 package.nls.json 的預設一致,setLocale() 未被呼叫時不會意外
 // 顯示錯誤的語言(design.md Risks——「setLocale() 沒被呼叫或呼叫太晚」)。
 let locale: Locale = 'en';
 
+/**
+ * 設定介面語言。**host 與 webview 必須各自呼叫一次**,且要早於任何 t() 呼叫。
+ *
+ * @remarks
+ * 兩側是獨立 bundle、各持一份模組狀態,所以這不是重複呼叫而是必要的:host 在
+ * `activate()` 首行設定,webview 在 `ui/main.ts` 載入時依 `<html lang>` 設定。
+ */
 export function setLocale(next: Locale): void {
   locale = next;
 }
 
+/** 目前的介面語言。`viewProvider` 用它決定 webview HTML 的 `lang` 屬性。 */
 export function getLocale(): Locale {
   return locale;
 }
 
-/** `zh-*`(含 zh-Hant、zh-CN 等地區/文字系統變體)一律視為繁體中文,其餘
- * 一律英文——interface-localization capability「介面語言跟隨編輯器顯示語言」。
- * 前綴比對而非完整字串比對,讓 host 與 webview 能共用同一個函式:host 吃
- * vscode.env.language(如 'zh-tw'),webview 吃 <html lang> 的 HTML 語言標籤
- * (如 'zh-Hant'),兩者都以 'zh' 開頭(design.md 決策 4)。 */
+/**
+ * 把編輯器/HTML 的語言標籤對應到介面語言:`zh-*`(含 zh-Hant、zh-CN 等地區與
+ * 文字系統變體)一律視為繁體中文,其餘一律英文(interface-localization
+ * capability「介面語言跟隨編輯器顯示語言」)。
+ *
+ * @remarks
+ * 用前綴比對而非完整字串比對,是為了讓 host 與 webview 共用同一個函式:host 讀
+ * `vscode.env.language`(如 `'zh-tw'`),webview 讀 `<html lang>`(如 `'zh-Hant'`),
+ * 兩者格式不同但都以 `'zh'` 開頭(design.md 決策 4)。
+ */
 export function resolveLocale(language: string | undefined): Locale {
   return language?.toLowerCase().startsWith('zh') ? 'zh-tw' : 'en';
 }
 
+/**
+ * 取得目前語言的文案,並代入具名參數。
+ *
+ * @param params - 代入 `{name}` 佔位符;找不到對應值的佔位符原樣保留,不會變成
+ * `undefined` 出現在畫面上
+ */
 export function t(key: TranslationKey, params?: Record<string, string | number>): string {
   const template = (locale === 'zh-tw' ? zhTW : en)[key];
   if (!params) return template;

@@ -1,6 +1,6 @@
 {
   "title": "CodeWalk 全專案導讀:從 JSON 合約到側邊面板的一條龍",
-  "ref": "363320c8ee164652a0a859b68e1a14427207803c",
+  "ref": "7b299708dfecee092bc316f82763a0425ebcb4d1",
   "regenerateHint": "請重新走過 CodeWalk 的 src/、shared/、ui/ 三層,產生一份對齊目前 HEAD 的全專案導讀,輸出到 .codewalk/ 並為每個 step 與 snippet 填入 anchor 欄位。",
   "passThreshold": 4,
   "steps": [
@@ -8,7 +8,7 @@
       "title": "第 1 步:先看全貌——這個專案到底在做什麼",
       "file": "README.md",
       "startLine": 1,
-      "endLine": 9,
+      "endLine": 10,
       "narration": "CodeWalk 是一個 VS Code extension:讀取 repo 裡 `.codewalk/` 目錄下的 JSON 檔,在側邊面板帶讀者一步一步走過程式碼。每一步會自動跳轉到對應的檔案行號並高亮,附上敘述、可收合的術語卡、程式碼片段,走完還有 quiz 自測。\n\n**你現在正在用它讀它自己**——這份導讀就是一個 `.codewalk.json`,住在這個 repo 的 `.codewalk/` 底下。\n\n有兩件事值得先記住,它們解釋了後面很多設計:\n\n1. **MVP 階段只做播放器,不做產生器**。JSON 從哪來不是這個 extension 的事——AI 產、手寫、別的工具產都可以。「產生」按鈕是二期。\n2. **`.codewalk.json` 是開放格式**。它不綁任何特定工具,所以格式本身就是這個產品的對外合約——這條在下一步之後會反覆出現。",
       "terms": [
         {
@@ -27,8 +27,8 @@
     {
       "title": "第 2 步:extension 怎麼在活動列佔一個位置(答案不是程式碼)",
       "file": "package.json",
-      "startLine": 17,
-      "endLine": 35,
+      "startLine": 25,
+      "endLine": 43,
       "narration": "左側活動列上的 CodeWalk 圖示、點開後的那個面板,**沒有任何一行程式碼負責建立它們**——全部由 `package.json` 的 `contributes` 宣告。VS Code 讀這份 manifest 就知道要畫什麼。\n\n這裡宣告了兩件事:\n\n- `viewsContainers.activitybar`:在活動列開一個叫 `codewalk` 的容器,用 `resources/icon.svg` 當圖示\n- `views.codewalk`:容器裡放一個 id 為 `codewalk.playerView`、`type: \"webview\"` 的 view\n\n那個 id 待會會再出現一次——`viewProvider.ts` 裡的 `WalkPlayerViewProvider.viewId` 必須跟這裡的字串**逐字相同**,否則 VS Code 找不到對應的 provider,面板會是空白的。這是一個沒有型別保護的字串契約,只能靠人記住。\n\nmanifest 上方的 `activationEvents` 是空陣列,這是刻意的:VS Code 1.74 起會從 `contributes` 自動推斷啟動時機,宣告了 view 就等於宣告了「這個 view 被開啟時啟動我」,不必再手寫 `onView:` 事件。",
       "terms": [
         {
@@ -60,8 +60,8 @@
     {
       "title": "第 3 步:整個專案唯一的對外合約——CodewalkFile 型別",
       "file": "shared/schema.ts",
-      "startLine": 25,
-      "endLine": 56,
+      "startLine": 76,
+      "endLine": 127,
       "narration": "這是整個產品最重要的東西:`.codewalk.json` 的格式定義。一個 step 的必備欄位是 `title` / `file` / `startLine` / `endLine` / `narration`,選填的有三個:\n\n- `anchor`——產出當下那段程式碼的原文。它是**失準偵測**的基礎,第 13、14 步會整段講\n- `terms`——可收合的術語卡(你現在看到的這些)\n- `items`——說明元件(下方那些方塊)\n\n上方那一大段 JSDoc 是另一個合約:`narration` 這類**長文欄位**支援六種 markdown 語法(行內程式碼、粗體、連結、無序/有序清單、`##` 小標),而 `title`、`term.term`、`quiz.question` 這些**短欄位**只支援行內三種。這個分級不是靠過濾程式碼實現的,第 22 步會看到它怎麼變成「選對函式就是規格」。\n\n因為這是對外合約,任何欄位改名或刪除都等同破壞性 API 變更——別人 repo 裡放著的舊 JSON 會立刻壞掉。專案規則因此要求:格式變更一律走 OpenSpec change 流程,而且定義只准住在這一個檔案裡。",
       "terms": [
         {
@@ -78,30 +78,30 @@
           "kind": "snippet",
           "label": "CodewalkItem:六種說明元件的 discriminated union",
           "file": "shared/schema.ts",
-          "startLine": 8,
-          "endLine": 23,
-          "anchor": "export type CodewalkItem =\n  // tip/todo.text、pitfall.misconception/reality 為長文欄位;reference/snippet/diff.label 為短欄位——見 CodewalkStep.narration 的說明。\n  | { kind: 'tip'; text: string }\n  | { kind: 'pitfall'; misconception: string; reality: string }\n  | { kind: 'todo'; text: string }\n  | { kind: 'reference'; label: string; url: string }\n  | { kind: 'snippet'; label: string; file: string; startLine: number; endLine: number; anchor?: string }\n  | {\n      kind: 'diff';\n      label: string;\n      file: string;\n      startLine: number;\n      endLine: number;\n      oldStartLine: number;\n      diffText: string;\n    };"
+          "startLine": 35,
+          "endLine": 70,
+          "anchor": "export type CodewalkItem =\n  /** A side note worth knowing but not essential to the step. */\n  | { kind: 'tip'; text: string }\n  /**\n   * A belief readers commonly hold that is wrong, paired with what is actually\n   * true. Rendered as a two-line \"Misconception / Reality\" block.\n   */\n  | { kind: 'pitfall'; misconception: string; reality: string }\n  /** Known work left undone in the code being walked through — not a task for the reader. */\n  | { kind: 'todo'; text: string }\n  /** An external link. Only http/https URLs are accepted; anything else fails validation. */\n  | { kind: 'reference'; label: string; url: string }\n  /**\n   * A quotable region of a file, shown inline with syntax highlighting and\n   * clickable to jump to. Content is read live from the workspace, so it stays\n   * current; `anchor` (the code as it was when generated) lets the player\n   * detect drift and fall back to the original when the file has changed.\n   */\n  | { kind: 'snippet'; label: string; file: string; startLine: number; endLine: number; anchor?: string }\n  /**\n   * A change, rendered as a two-column diff. `diffText` holds the hunk body\n   * only — no `diff --git`, `---`/`+++` or `@@` headers — with each line\n   * prefixed `+`, `-`, or a space for context. `oldStartLine` is where the hunk\n   * starts in the pre-change file; `startLine` is where it starts in the\n   * post-change file. At least one `+` or `-` line is required (otherwise\n   * nothing changed and the content should be a `snippet` instead).\n   */\n  | {\n      kind: 'diff';\n      label: string;\n      file: string;\n      startLine: number;\n      endLine: number;\n      oldStartLine: number;\n      diffText: string;\n    };"
         },
         {
           "kind": "snippet",
           "label": "頂層 CodewalkFile——注意 regenerateHint,第 15 步會用到",
           "file": "shared/schema.ts",
-          "startLine": 68,
-          "endLine": 78,
-          "anchor": "export interface CodewalkFile {\n  /** 短欄位,markdown 子集僅行內三種——見 CodewalkStep.narration 的說明。 */\n  title: string;\n  ref: string;\n  steps: CodewalkStep[];\n  quiz: CodewalkQuizQuestion[];\n  /** 過關門檻(答對題數)。省略時預設為簡單多數(ceil(題數/2))。 */\n  passThreshold?: number;\n  /** 重新產生本導讀的方式,由產生器自述;播放器只顯示與複製,不解讀內容。 */\n  regenerateHint?: string;\n}"
+          "startLine": 175,
+          "endLine": 200,
+          "anchor": "export interface CodewalkFile {\n  /** Short field — inline markdown only. See {@link CodewalkStep.narration}. */\n  title: string;\n  /**\n   * The commit SHA this walk was generated against. The player compares it with\n   * the workspace HEAD and warns the reader when they differ, since line numbers\n   * may have drifted. Steps carrying an `anchor` get per-step detection instead,\n   * which is more precise.\n   */\n  ref: string;\n  /** The walk itself, played in order. At least one step is required. */\n  steps: CodewalkStep[];\n  /** Self-check questions shown after the last step. At least one is required. */\n  quiz: CodewalkQuizQuestion[];\n  /**\n   * How many correct answers count as a pass. Defaults to a simple majority,\n   * `ceil(quiz.length / 2)`. Must be between 1 and the number of questions.\n   */\n  passThreshold?: number;\n  /**\n   * How to regenerate this walk, described by whatever produced it — typically a\n   * command line. The player only displays it and copies it to the clipboard; it\n   * never parses or executes it.\n   */\n  regenerateHint?: string;\n}"
         },
         {
           "kind": "tip",
           "text": "你正在讀的這一步下方那幾個方塊,就是 `items` 的實際渲染結果:黃燈泡是 `tip`、紫框是 `pitfall`、圓圈是 `todo`、外連按鈕是 `reference`、有行號的程式碼區塊是 `snippet`、有加減行與雙欄行號的是 `diff`。這份導讀刻意把六種都用過,方便你順便驗收播放器。"
         }
       ],
-      "anchor": "export interface CodewalkStep {\n  /** 短欄位,markdown 子集僅行內三種——見下方 narration 的說明。 */\n  title: string;\n  file: string;\n  startLine: number;\n  endLine: number;\n  /**\n   * 播放器將此欄位依封閉的 markdown 子集渲染(markdown-rendering capability),\n   * 而非顯示原始標記字元。**長文欄位**(narration、term.explanation、tip/todo.text、\n   * pitfall.misconception/reality、quiz.optionExplanations)支援全部六種語法:\n   *\n   * - 行內程式碼:`` `code` ``\n   * - 粗體:`**text**`\n   * - 連結:`[文字](https://...)`——僅 http/https 生效,其餘網址原樣顯示、不可點擊\n   * - 無序清單:`- 項目`(支援縮排巢狀)\n   * - 有序清單:`1. 項目`\n   * - 二級小標:`## 標題`(僅 depth 2;`#`、`###` 以下不支援)\n   *\n   * **短欄位**(walk.title、step.title、term.term、quiz.question、quiz.options、\n   * item.label)只支援行內三種(程式碼/粗體/連結),清單與小標不生效、原樣顯示為\n   * 純文字(在按鈕、`<summary>` 這類元件裡放區塊語法本來就會破壞版面)。\n   *\n   * **降級規則統一**:表格、圖片、引用區塊、程式碼區塊(```)、`#`/`###` 以下標題、\n   * 原始 HTML、格式錯誤的語法——一律原樣顯示為純文字,不影響同一份導讀其餘部分\n   * 的載入與播放。單一換行維持斷行(不會被合併成一行),空行才分段落。\n   */\n  narration: string;\n  /** 產出當下該行段的程式碼原文,用於失準偵測(見 stale-step-detection capability)。 */\n  anchor?: string;\n  terms?: CodewalkTerm[];\n  items?: CodewalkItem[];\n}"
+      "anchor": "export interface CodewalkStep {\n  /** Short field — inline markdown only. See {@link CodewalkStep.narration}. */\n  title: string;\n  /** Path relative to the workspace root, using forward slashes. */\n  file: string;\n  /** First line of the region, 1-based and inclusive. */\n  startLine: number;\n  /** Last line of the region, 1-based and inclusive; must be >= `startLine`. */\n  endLine: number;\n  /**\n   * The prose explaining this step. The player renders it as a closed markdown\n   * subset (markdown-rendering capability) rather than showing raw markup.\n   *\n   * **Long-form fields** (`narration`, `term.explanation`, `tip`/`todo.text`,\n   * `pitfall.misconception`/`reality`, `quiz.optionExplanations`) support all\n   * six constructs:\n   *\n   * - inline code: `` `code` ``\n   * - bold: `**text**`\n   * - links: `[text](https://...)` — http/https only; other URLs render as\n   *   plain text and are not clickable\n   * - unordered lists: `- item` (nesting by indentation is supported)\n   * - ordered lists: `1. item`\n   * - level-2 headings: `## Heading` (depth 2 only; `#` and `###` or deeper\n   *   are not supported)\n   *\n   * **Short fields** (`walk.title`, `step.title`, `term.term`, `quiz.question`,\n   * `quiz.options`, any `item.label`) support only the three inline constructs\n   * (code, bold, links). Lists and headings render as literal text, since block\n   * markup inside a button or `<summary>` would break the layout anyway.\n   *\n   * **One degradation rule for everything else**: tables, images, blockquotes,\n   * fenced code blocks, headings other than depth 2, raw HTML, and malformed\n   * markup all render as literal text. A walk never fails to load because of\n   * unsupported markup — the rest of it plays normally.\n   *\n   * A single newline is preserved as a line break; a blank line starts a new\n   * paragraph.\n   */\n  narration: string;\n  /**\n   * The source text of lines `startLine`–`endLine` exactly as it was when this\n   * walk was generated. Optional, but supplying it is what lets the player tell\n   * the reader that a step no longer matches the code, and follow the region if\n   * it merely moved (stale-step-detection capability).\n   */\n  anchor?: string;\n  /** Glossary entries offered alongside this step, each collapsed until opened. */\n  terms?: CodewalkTerm[];\n  /** Explanatory elements rendered below the narration, in the order given. */\n  items?: CodewalkItem[];\n}"
     },
     {
       "title": "第 4 步:六種元件怎麼各驗各的——validateItem",
       "file": "shared/schema.ts",
-      "startLine": 214,
-      "endLine": 275,
+      "startLine": 356,
+      "endLine": 417,
       "narration": "`validateItem()` 是一個對 `kind` 的 switch,每個分支只檢查該種元件真正需要的欄位:`tip`/`todo` 只要 `text`,`reference` 要 `label` 加一個**合法的 http/https 網址**,`snippet` 要檔案與行號範圍,`diff` 還額外要 `oldStartLine` 與 `diffText`。\n\n兩個細節值得看:\n\n1. **`default` 分支會報錯**,不是安靜略過。未知的 `kind` 代表這份 JSON 來自比播放器更新的產生器,與其半吊子渲染,不如明確告訴讀者這份檔案讀不了。\n2. **`diffText` 有語意檢查**(`hasAtLeastOneChangedLine`)——至少要有一行以 `+` 或 `-` 開頭。沒有任何改動的內容語意上該用 `snippet` 表達,不算 diff。這是型別系統管不到、只能靠 validator 表達的規則。\n\n注意 `errors` 陣列是一路傳下去的(`errors.push(...)`),不是拋例外中斷。一次驗完全部,讀者一次看到所有問題,而不是修一個冒一個。",
       "terms": [
         {
@@ -114,9 +114,9 @@
           "kind": "snippet",
           "label": "isHttpUrl:reference.url 與 markdown 內嵌連結共用同一個判定",
           "file": "shared/schema.ts",
-          "startLine": 120,
-          "endLine": 129,
-          "anchor": "/** 判定是否為合法 http/https 網址;`reference.url` 驗證與 ui/markdown.ts 的內嵌連結降級共用同一判定。 */\nexport function isHttpUrl(value: unknown): value is string {\n  if (typeof value !== 'string') return false;\n  try {\n    const url = new URL(value);\n    return url.protocol === 'http:' || url.protocol === 'https:';\n  } catch {\n    return false;\n  }\n}"
+          "startLine": 262,
+          "endLine": 278,
+          "anchor": "/**\n * Whether a value is a well-formed http or https URL.\n *\n * @remarks\n * Shared deliberately: `reference.url` validation and the inline-link\n * degradation in `ui/markdown.ts` must agree on what counts as a usable link,\n * or a URL could pass validation and then render as unclickable text.\n */\nexport function isHttpUrl(value: unknown): value is string {\n  if (typeof value !== 'string') return false;\n  try {\n    const url = new URL(value);\n    return url.protocol === 'http:' || url.protocol === 'https:';\n  } catch {\n    return false;\n  }\n}"
         },
         {
           "kind": "diff",
@@ -133,8 +133,8 @@
     {
       "title": "第 5 步:為什麼要手寫一個 200 多行的 validator",
       "file": "shared/schema.ts",
-      "startLine": 313,
-      "endLine": 358,
+      "startLine": 466,
+      "endLine": 511,
       "narration": "`validateCodewalk()` 收 `unknown`,回傳一個 discriminated union:`{ valid: true, value }` 或 `{ valid: false, errors }`。呼叫端沒辦法忘記檢查——TypeScript 不讓你在確認 `valid` 之前碰 `value`。\n\n可能會想:為什麼不用 Zod 或 JSON Schema?幾個理由:\n\n- **零執行期相依**。這個檔案同時被 extension host 與 webview 兩邊 import,加一個 runtime 相依就是兩份 bundle 都變大\n- **錯誤訊息可以寫成人話**——雖然 `add-interface-localization` change(2026-08-08)之後這裡的訊息一律固定英文(它們是格式合約的診斷輸出,常被貼進 issue、CI log 等跨語言情境,見 `shared/i18n.ts` 檔頭的說明),但仍比函式庫產生的泛用訊息好懂得多,例如 `steps[3].endLine must not be less than startLine`\n- **可以塞進型別系統表達不了的規則**,像上一步的 `diffText` 語意檢查、`passThreshold` 必須落在 1 到題數之間、`optionExplanations` 長度必須等於 `options`\n\n代價是這 200 多行要自己維護。這是 rule of three 的另一面:**在確定會長期存在的核心合約上,手寫比引入抽象更划算**。",
       "items": [
         {
@@ -152,8 +152,8 @@
     {
       "title": "第 6 步:誰去讀那些 JSON——walkLoader",
       "file": "src/walkLoader.ts",
-      "startLine": 32,
-      "endLine": 61,
+      "startLine": 71,
+      "endLine": 100,
       "narration": "`listWalkFiles()` 掃描 `.codewalk/` 目錄、讀取每個 `*.codewalk.json`、驗證,然後組出一份給面板顯示的清單。三個設計選擇:\n\n1. **`Promise.all` 而非逐一 await**。並行讀檔,而且回傳順序保證等同 `filePaths`,與哪個檔案先讀完無關——列表順序因此是穩定的\n2. **壞掉的檔案不會消失**,而是退回顯示檔名(`basename(filePath)`)。讀者看得到「這個檔案在,但讀不了」,而不是它憑空不見\n3. **`getAttempt` / `getProgress` 是注入進來的函式**,不是 import 進來的模組。walkLoader 因此完全不知道作答紀錄與閱讀進度存在哪、怎麼存——這讓它能在 Vitest 裡不碰 VS Code API 直接測\n\n上方的 `findCodewalkFiles()` 用 `try/catch` 包 `readdir`,目錄不存在就回空陣列。**沒有 `.codewalk/` 目錄是完全正常的狀態**(大部分 repo 都沒有),不是錯誤。",
       "terms": [
         {
@@ -166,9 +166,9 @@
           "kind": "snippet",
           "label": "副檔名過濾與排序被抽成純函式,方便獨立測試",
           "file": "src/walkLoader.ts",
-          "startLine": 6,
-          "endLine": 19,
-          "anchor": "export function filterCodewalkFileNames(fileNames: string[]): string[] {\n  return fileNames.filter((name) => name.endsWith('.codewalk.json')).sort();\n}\n\nexport async function findCodewalkFiles(workspaceRoot: string): Promise<string[]> {\n  const codewalkDir = join(workspaceRoot, '.codewalk');\n  let entries: string[];\n  try {\n    entries = await readdir(codewalkDir);\n  } catch {\n    return [];\n  }\n  return filterCodewalkFileNames(entries).map((name) => join(codewalkDir, name));\n}"
+          "startLine": 18,
+          "endLine": 37,
+          "anchor": "export function filterCodewalkFileNames(fileNames: string[]): string[] {\n  return fileNames.filter((name) => name.endsWith('.codewalk.json')).sort();\n}\n\n/**\n * 列出 workspace 中所有導讀檔的絕對路徑。\n *\n * @returns `.codewalk/` 不存在或無法讀取時回傳空陣列——沒有導讀不是錯誤,\n * 面板顯示空列表即可\n */\nexport async function findCodewalkFiles(workspaceRoot: string): Promise<string[]> {\n  const codewalkDir = join(workspaceRoot, '.codewalk');\n  let entries: string[];\n  try {\n    entries = await readdir(codewalkDir);\n  } catch {\n    return [];\n  }\n  return filterCodewalkFileNames(entries).map((name) => join(codewalkDir, name));\n}"
         }
       ],
       "anchor": "export async function listWalkFiles(\n  workspaceRoot: string,\n  getAttempt?: (filePath: string, ref: string) => AttemptSummary | undefined,\n  getProgress?: (filePath: string, ref: string) => WalkProgressSummary | undefined,\n): Promise<WalkFileSummary[]> {\n  const filePaths = await findCodewalkFiles(workspaceRoot);\n  // 並行讀取:Promise.all 保證回傳順序等同 filePaths,與檔案讀完的先後無關\n  return Promise.all(\n    filePaths.map(async (filePath) => {\n      const result = await loadCodewalkFile(filePath);\n      const summary: WalkFileSummary = {\n        path: filePath,\n        title: result.valid ? result.value.title : basename(filePath),\n      };\n      if (result.valid && getAttempt) {\n        const lastAttempt = getAttempt(filePath, result.value.ref);\n        if (lastAttempt) {\n          summary.lastAttempt = lastAttempt;\n        }\n      }\n      if (result.valid && getProgress) {\n        const progress = getProgress(filePath, result.value.ref);\n        if (progress) {\n          summary.progress = progress;\n        }\n      }\n      return summary;\n    }),\n  );\n}"
@@ -176,8 +176,8 @@
     {
       "title": "第 7 步:extension 的入口 activate()",
       "file": "src/extension.ts",
-      "startLine": 5,
-      "endLine": 25,
+      "startLine": 10,
+      "endLine": 30,
       "narration": "整個 extension 的進入點約 20 行,做三件事:設定介面語言、註冊 webview provider、註冊四個指令。後兩者全部推進 `context.subscriptions`,VS Code 會在 extension 停用時統一清理。\n\n**`setLocale(resolveLocale(vscode.env.language))` 必須是第一行**——它比 `WalkPlayerViewProvider` 的建構還早,因為面板的 HTML(下一步)在建構時就要用到判定好的語言。`shared/i18n.ts` 是 host(這裡)與 webview 共用的同一份翻譯表,但兩邊是各自獨立的 bundle,各自持有一份模組狀態——所以 webview 那邊(第 21 步)也會看到一次幾乎一樣的 `setLocale()` 呼叫,不是遺漏或重複。\n\n真正的重點藏在那個選項物件裡:**`retainContextWhenHidden: true`**。\n\n預設情況下,讀者把側邊面板切走(去看檔案總管、再切回來),VS Code 會把 webview 整個銷毀重建——讀到第幾步、捲到哪、展開了哪些術語,全部歸零。這對一個「導讀播放器」是致命的。這個選項讓 webview 在隱藏時保留在記憶體裡,切回來原封不動。\n\n代價是佔記憶體。這是官方文件明講「盡量避免」的選項,但這裡的取捨很清楚:一個閱讀工具,讀者切走再切回來就失憶是不能接受的。\n\n它也不是萬靈丹——webview 仍可能因為別的原因被重建(view 被拖到別的容器、系統資源壓力)。第 23 步會看到剩下那層防線。",
       "terms": [
         {
@@ -202,8 +202,8 @@
     {
       "title": "第 8 步:webview 的 HTML 是 host 手工組出來的(CSP 與 nonce)",
       "file": "src/viewProvider.ts",
-      "startLine": 304,
-      "endLine": 335,
+      "startLine": 328,
+      "endLine": 359,
       "narration": "面板裡的 HTML 沒有對應的 `.html` 檔,是這個字串樣板組出來的。三個非做不可的動作:\n\n1. **`asWebviewUri()`**:webview 在自己的沙箱裡,不能直接用檔案路徑。所有資源(js/css/字型)都得轉成特殊的 `vscode-webview://` URI,而且來源限定在 `localResourceRoots` 允許的目錄內(這裡只開放 `dist/`)。\n2. **CSP + nonce**:`default-src 'none'` 預設封死一切,再逐項開放。`script-src 'nonce-...'` 表示只有帶正確 nonce 屬性的 `<script>` 才准執行——nonce 每次載入重新亂數產生,注入進來的腳本猜不到,自然執行不了。\n3. **`<link>` 的順序是有意義的**。中間那段註解說明:codicon.css 用 `font` 這個 shorthand 設定 `.codicon` 的字級,跟 theme.css 的覆寫 selector specificity 打平——specificity 相同時 cascade 後者勝,所以 theme.css 必須排在後面,覆寫才生效。\n\n第 3 點是那種讀原始碼看不出來、只能靠註解留住的知識。這個 repo 到處都是這種註解,它們比程式碼本身更難重建。\n\n**第四個小動作**:`<html lang=\"${htmlLang}\">` 也在這裡決定。`getLocale()` 讀的是 `activate()` 第一行已經算好的語言,轉成語意正確的 HTML 語言標籤(`zh-Hant` 或 `en`)寫進標籤——webview 開機時再從 `document.documentElement.lang` 讀回同一個值,兩邊靠這一個字串同步,不需要額外的 postMessage 欄位。",
       "terms": [
         {
@@ -231,8 +231,8 @@
     {
       "title": "第 9 步:兩層之間唯一的管道——postMessage 協定",
       "file": "shared/protocol.ts",
-      "startLine": 88,
-      "endLine": 121,
+      "startLine": 123,
+      "endLine": 162,
       "narration": "extension host 與 webview 是兩個不同的執行環境:host 是 Node.js,能碰檔案系統與 VS Code API;webview 是沙箱裡的瀏覽器環境,只能做 DOM。**它們之間唯一的溝通方式是 `postMessage`**,而這個檔案就是那份協定的單一定義處。\n\n`HostToWebviewMessage` 這個聯集列出 host 能送的每一種訊息。值得注意的是它們攜帶的東西:\n\n- `walkLoaded` 一次帶齊 `walk` + `stepIndex` + `refDrifted` + `anchorReport` + `snippetPreviews`——**webview 拿到就能畫完整個畫面,不需要再往回問**\n- `walkRestored` 欄位跟 `walkLoaded` 完全一樣,卻是獨立的一種訊息。因為語意不同:一個是「讀者選了新導讀」(該跳轉編輯器),一個是「面板被重建了,把畫面還給你」(**不該**動編輯器)。同樣的資料、不同的意圖,分成兩種訊息比多加一個布林旗標清楚\n\n這種「一次送齊」的設計讓 webview 不需要任何非同步查詢,狀態更新是原子的:收到訊息 → 換掉狀態 → 重繪。",
       "terms": [
         {
@@ -249,22 +249,22 @@
           "kind": "snippet",
           "label": "webview → host 的訊息種類,以及 backToList 為何不能重用 webviewReady",
           "file": "shared/protocol.ts",
-          "startLine": 123,
-          "endLine": 141,
-          "anchor": "export type WebviewToHostMessage =\n  | { type: 'webviewReady' }\n  | { type: 'selectWalkFile'; path: string }\n  | { type: 'nextStep' }\n  | { type: 'prevStep' }\n  | { type: 'jumpToStep'; stepIndex: number }\n  | { type: 'quizSubmitted'; answers: number[] }\n  | { type: 'openReference'; url: string }\n  | { type: 'jumpToSnippet'; stepIndex: number; itemIndex: number }\n  | { type: 'clearAttempt'; path: string }\n  | { type: 'copyRegenerateHint' }\n  | { type: 'resumeWalk'; path: string }\n  | { type: 'revealCurrentStep' }\n  /**\n   * 從走讀/quiz 結果畫面返回列表——與 webviewReady 分開,因為 host 用\n   * currentWalk 是否存在判斷「該不該回灌 walkRestored」(design.md 決策 1);\n   * 若沿用 webviewReady 讓 host 誤以為仍在同一份導讀,回列表會被立刻拉回去。\n   */\n  | { type: 'backToList' };"
+          "startLine": 170,
+          "endLine": 198,
+          "anchor": "export type WebviewToHostMessage =\n  /** webview 腳本啟動完成。host 回以主題、導讀列表,必要時回灌目前導讀。 */\n  | { type: 'webviewReady' }\n  /** 從列表選定一份導讀,從第一步開始。 */\n  | { type: 'selectWalkFile'; path: string }\n  | { type: 'nextStep' }\n  | { type: 'prevStep' }\n  /** 直接跳到指定步驟。也用於重播當前步驟的跳轉(取消 quiz、重走導讀、開啟失準檔案)。 */\n  | { type: 'jumpToStep'; stepIndex: number }\n  /** 送出 quiz 答案。未作答的題目以 -1 表示(見 shared/schema.ts 的 scoreQuiz)。 */\n  | { type: 'quizSubmitted'; answers: number[] }\n  /** 開啟外部連結。host 交給 VS Code 處理,webview 本身無法開啟瀏覽器。 */\n  | { type: 'openReference'; url: string }\n  /** 點擊 snippet 或 diff 的標題列,跳到它指向的位置。 */\n  | { type: 'jumpToSnippet'; stepIndex: number; itemIndex: number }\n  /** 清除某份導讀的 Quiz 作答紀錄。 */\n  | { type: 'clearAttempt'; path: string }\n  /** 把導讀的 regenerateHint 複製到剪貼簿。 */\n  | { type: 'copyRegenerateHint' }\n  /** 從列表接續上次的閱讀進度;與 selectWalkFile 的差別是起始步驟與不跳轉編輯器。 */\n  | { type: 'resumeWalk'; path: string }\n  /** 把編輯器帶回目前步驟的位置(面板按鈕或 Home 鍵)。 */\n  | { type: 'revealCurrentStep' }\n  /**\n   * 從走讀/quiz 結果畫面返回列表——與 webviewReady 分開,因為 host 用\n   * currentWalk 是否存在判斷「該不該回灌 walkRestored」(design.md 決策 1);\n   * 若沿用 webviewReady 讓 host 誤以為仍在同一份導讀,回列表會被立刻拉回去。\n   */\n  | { type: 'backToList' };"
         },
         {
           "kind": "tip",
           "text": "`effectiveLineRange()` 也住在這個檔案。它是 host 與 webview **共用**的純函式:失準位移時該用新行號還是舊行號,兩邊必須算出同一個答案,否則面板顯示的行號會跟實際跳轉的位置對不上。放在 protocol.ts 是因為這裡是兩邊都 import 得到的唯一地方。"
         }
       ],
-      "anchor": "export type HostToWebviewMessage =\n  | { type: 'walkFileList'; files: WalkFileSummary[] }\n  | {\n      type: 'walkLoaded';\n      walk: CodewalkFile;\n      stepIndex: number;\n      refDrifted: boolean;\n      anchorReport: AnchorReport;\n      snippetPreviews: SnippetPreviewResult[];\n    }\n  | { type: 'stepChanged'; stepIndex: number; snippetPreviews: SnippetPreviewResult[] }\n  | { type: 'loadError'; message: string }\n  | { type: 'stepJumpError'; message: string }\n  | {\n      type: 'themeChanged';\n      /** host 無法解析讀者當前主題時為 null,webview 改依 kind 選用內建主題。 */\n      theme: ResolvedEditorTheme | null;\n      kind: 'light' | 'dark';\n    }\n  | {\n      /**\n       * webview 在同一個 session 內真的被重建(非常態的面板隱藏/顯示,例如\n       * view 被拖到別的容器)時,host 依然持有的導讀內容回灌——webview 收到\n       * 後只帶 walk 與 host 端的 stepIndex,細部畫面(walking/quiz/quizResult)\n       * 由 webview 自己保留的 setState 決定(reading-progress capability\n       * 「面板重建後還原閱讀位置」,design.md 決策 1、4)。\n       */\n      type: 'walkRestored';\n      walk: CodewalkFile;\n      stepIndex: number;\n      refDrifted: boolean;\n      anchorReport: AnchorReport;\n      snippetPreviews: SnippetPreviewResult[];\n    };"
+      "anchor": "export type HostToWebviewMessage =\n  /** 可選的導讀清單。webview 收到即切到列表畫面(含首次開啟與返回列表)。 */\n  | { type: 'walkFileList'; files: WalkFileSummary[] }\n  /** 讀者選定的導讀已載入完成,webview 切到走讀畫面。 */\n  | {\n      type: 'walkLoaded';\n      walk: CodewalkFile;\n      /** 起始步驟——「接續上次」時為留存的進度,一般選取時為 0。 */\n      stepIndex: number;\n      refDrifted: boolean;\n      anchorReport: AnchorReport;\n      snippetPreviews: SnippetPreviewResult[];\n    }\n  /** 步驟已切換(可能來自面板按鈕、鍵盤,或 VS Code 指令),webview 據此更新畫面。 */\n  | { type: 'stepChanged'; stepIndex: number; snippetPreviews: SnippetPreviewResult[] }\n  /** 導讀載入或格式驗證失敗,webview 切到錯誤畫面。訊息內容固定英文(見 shared/schema.ts)。 */\n  | { type: 'loadError'; message: string }\n  /** 跳轉到目標檔案失敗(通常是檔案不存在)。屬於當前步驟的暫時性警告,不影響走讀狀態。 */\n  | { type: 'stepJumpError'; message: string }\n  | {\n      type: 'themeChanged';\n      /** host 無法解析讀者當前主題時為 null,webview 改依 kind 選用內建主題。 */\n      theme: ResolvedEditorTheme | null;\n      kind: 'light' | 'dark';\n    }\n  | {\n      /**\n       * webview 在同一個 session 內真的被重建(非常態的面板隱藏/顯示,例如\n       * view 被拖到別的容器)時,host 依然持有的導讀內容回灌——webview 收到\n       * 後只帶 walk 與 host 端的 stepIndex,細部畫面(walking/quiz/quizResult)\n       * 由 webview 自己保留的 setState 決定(reading-progress capability\n       * 「面板重建後還原閱讀位置」,design.md 決策 1、4)。\n       */\n      type: 'walkRestored';\n      walk: CodewalkFile;\n      stepIndex: number;\n      refDrifted: boolean;\n      anchorReport: AnchorReport;\n      snippetPreviews: SnippetPreviewResult[];\n    };"
     },
     {
       "title": "第 10 步:host 不信任 webview 送來的任何東西",
       "file": "shared/protocol.ts",
-      "startLine": 147,
-      "endLine": 185,
+      "startLine": 214,
+      "endLine": 252,
       "narration": "上一步定義的 `WebviewToHostMessage` 是編譯期的型別。但 TypeScript 的型別編譯後就消失了——`onDidReceiveMessage` 實際收到的是 `unknown`。\n\n`parseWebviewToHostMessage()` 就是那道把 `unknown` 變回型別的關卡。它對 `d.type` 做 switch,每個分支**逐一檢查該訊息真正需要的欄位型別**,對不上就回傳 `null`,host 直接忽略。\n\n這不是形式主義。webview 裡跑的是任意 JavaScript,而導讀 JSON 可能來自別人的 repo——「host 一律不信任 webview」是這個架構的預設姿態,跟瀏覽器不信任前端送來的表單是同一個道理。\n\n注意每個分支的寫法:`typeof d.path === 'string' ? { type: 'selectWalkFile', path: d.path } : null`。它**重新建構**一個乾淨的物件,而不是把原始物件轉型後放行。這樣即使對方多送了欄位,也不會被夾帶進 host 的處理流程。",
       "items": [
         {
@@ -282,8 +282,8 @@
     {
       "title": "第 11 步:載入一份導讀時,host 做了哪五件事",
       "file": "src/viewProvider.ts",
-      "startLine": 210,
-      "endLine": 246,
+      "startLine": 235,
+      "endLine": 271,
       "narration": "`loadWalk()` 是整個 host 端最密集的一段。讀者點一份導讀,依序發生:\n\n1. **讀檔 + 驗證**——失敗就送 `loadError`,把所有錯誤用 `; ` 串起來給讀者看,流程到此為止\n2. **比對 ref 與 HEAD**——算出 `refDrifted`(第 12 步)\n3. **建錨驗證報告**——`buildAnchorReport()` 逐步檢查每個錨點是否還對得上(第 14、15 步)\n4. **決定起始步驟**——這裡是 `resume` 選項的分水嶺\n5. **一次送齊 `walkLoaded`**,然後(視情況)跳轉編輯器\n\n第 4、5 點的細節值得停一下。決定起始步驟的是這一行:\n\n`this.stepIndex = Math.min(Math.max(progress?.stepIndex ?? 0, 0), maxIndex);`\n\n它同時處理三件事:沒有進度就從 0 開始、進度不可能是負的、**進度不可能超過現有步數**。最後一項是真實會發生的情況——導讀重新產生後步驟變少,舊進度就會越界。用 clamp 一次擋掉,不需要特判。\n\n最後 `if (!options.resume)` 才跳轉編輯器。**接續閱讀不該擅自打開檔案**——讀者可能正在看別的東西,恢復閱讀位置是面板自己的事,不該動編輯器。這條規則在第 23 步的面板重建路徑上再次出現。",
       "terms": [
         {
@@ -296,8 +296,8 @@
           "kind": "snippet",
           "label": "handleMessage:webview 送來的每種訊息各自對應一個處理",
           "file": "src/viewProvider.ts",
-          "startLine": 62,
-          "endLine": 110,
+          "startLine": 83,
+          "endLine": 131,
           "anchor": "  private async handleMessage(raw: unknown): Promise<void> {\n    const msg = parseWebviewToHostMessage(raw);\n    if (!msg) return;\n\n    switch (msg.type) {\n      case 'webviewReady':\n        await this.sendTheme();\n        await this.sendFileList();\n        await this.sendRestoreIfActive();\n        break;\n      case 'selectWalkFile':\n        await this.loadWalk(msg.path);\n        break;\n      case 'resumeWalk':\n        await this.loadWalk(msg.path, { resume: true });\n        break;\n      case 'revealCurrentStep':\n        await this.jumpToCurrentStep();\n        break;\n      case 'nextStep':\n        await this.moveStep(1);\n        break;\n      case 'prevStep':\n        await this.moveStep(-1);\n        break;\n      case 'jumpToStep':\n        await this.setStep(msg.stepIndex);\n        break;\n      case 'quizSubmitted':\n        await this.handleQuizSubmitted(msg.answers);\n        break;\n      case 'openReference':\n        await vscode.env.openExternal(vscode.Uri.parse(msg.url));\n        break;\n      case 'jumpToSnippet':\n        await this.handleJumpToSnippet(msg.stepIndex, msg.itemIndex);\n        break;\n      case 'clearAttempt':\n        await this.handleClearAttempt(msg.path);\n        break;\n      case 'copyRegenerateHint':\n        await this.handleCopyRegenerateHint();\n        break;\n      case 'backToList':\n        this.clearActiveWalk();\n        await this.sendFileList();\n        break;\n    }\n  }"
         },
         {
@@ -310,8 +310,8 @@
     {
       "title": "第 12 步:ref 漂移偵測——衍生快照的自知之明",
       "file": "src/refDrift.ts",
-      "startLine": 6,
-      "endLine": 17,
+      "startLine": 14,
+      "endLine": 31,
       "narration": "一份導讀是對「某個 commit 當下的程式碼」寫的,`ref` 欄位就是那個 commit sha。但讀者的 workspace 隨時可能在別的 commit 上——這時導讀裡的行號可能已經指錯地方。\n\n這個檔案只有 17 行:跑 `git rev-parse HEAD`,跟 `ref` 比對,不同就是漂移。拿不到 HEAD(不是 git repo、沒裝 git)就回 `null`,**不當成漂移**——不確定的時候不要嚇讀者。\n\n這是本專案一個反覆出現的姿態:**導讀是程式碼的衍生快照,它必須知道自己可能過期**。但 ref 比對很粗——只要 HEAD 動了就整份警告,即使改的是完全無關的檔案。\n\n下一步的錨點驗證就是為了取代它:比對的不是 commit,而是**那幾行程式碼本身有沒有變**。所以當導讀有提供 `anchor` 時,面板會改用逐步的失準狀態,而不是這個整份的警告。",
       "items": [
         {
@@ -325,13 +325,13 @@
           "reality": "多數情況下 HEAD 前進只動了幾個檔案,導讀多半仍然準確。所以這裡只是提示、不阻擋,而且一旦導讀有提供 `anchor`,整份警告就會被更精準的逐步偵測取代——`anchorReport.anyAnchored` 為 true 時,面板不再顯示這個粗糙的 ref 警告。"
         }
       ],
-      "anchor": "export function isRefDrifted(headSha: string, ref: string): boolean {\n  return headSha.trim() !== ref.trim();\n}\n\nexport async function getWorkspaceHead(workspaceRoot: string): Promise<string | null> {\n  try {\n    const { stdout } = await exec('git rev-parse HEAD', { cwd: workspaceRoot });\n    return stdout.trim();\n  } catch {\n    return null;\n  }\n}"
+      "anchor": "export function isRefDrifted(headSha: string, ref: string): boolean {\n  return headSha.trim() !== ref.trim();\n}\n\n/**\n * 取得 workspace 目前的 HEAD commit SHA。\n *\n * @returns 非 git 專案、git 不可用、或指令失敗時回傳 null——此時單純不做漂移\n * 偵測,不影響導讀播放\n */\nexport async function getWorkspaceHead(workspaceRoot: string): Promise<string | null> {\n  try {\n    const { stdout } = await exec('git rev-parse HEAD', { cwd: workspaceRoot });\n    return stdout.trim();\n  } catch {\n    return null;\n  }\n}"
     },
     {
       "title": "第 13 步:錨點驗證——判斷「這幾行到底變了沒」",
       "file": "src/anchorCheck.ts",
-      "startLine": 42,
-      "endLine": 77,
+      "startLine": 50,
+      "endLine": 85,
       "narration": "這是 stale-step-detection 的核心。每個 step 的 `anchor` 欄位存著產出當下那段程式碼的原文,這個函式拿它跟現行檔案比對,回答四種結果之一:\n\n- **`unanchored`**——沒提供 anchor,無從判斷(舊格式的導讀都是這種)\n- **`matched`**——原位置的內容一字不差,完全準確\n- **`shifted`**——原位置對不上,但**整份檔案裡剛好只有一處**逐字相同,那就是它移到的新位置\n- **`stale`**——找不到(`notFound`)、找到多處無法確定(`ambiguous`)、或檔案不存在(`fileMissing`)\n\n判定順序是有意義的:未錨定 → 檔案不存在 → 相符 → 位移 → 失準。先便宜的、確定的,再貴的、需要掃全檔的。\n\n最關鍵的一個決定藏在註解裡:**比對前只正規化換行,刻意不 trim**。縮排或尾隨空白的差異,代表的是真實的程式碼改動——把它 trim 掉會讓「重新縮排過的程式碼」被誤判為沒變,而讀者跳過去會看到跟導讀敘述對不上的內容。\n\n這也解釋了專案為什麼把「改完程式碼一定要跑 `pnpm format`」寫進 CLAUDE.md:格式化結果不一致,錨點就會誤判成內容改動。",
       "terms": [
         {
@@ -363,16 +363,16 @@
     {
       "title": "第 14 步:整份導讀一次驗完,每個檔案只讀一次",
       "file": "src/anchorCheck.ts",
-      "startLine": 89,
-      "endLine": 125,
+      "startLine": 97,
+      "endLine": 133,
       "narration": "`buildAnchorReport()` 把上一步的單點判定,擴展成整份導讀的報告——每個 step 一次、每個 `snippet` 元件各一次。\n\n三個實作細節:\n\n1. **`lineCache`**:同一個檔案在導讀裡可能被引用很多次(這份導讀裡 `shared/schema.ts` 就出現三次)。用 Map 快取,每個檔案只讀一次磁碟。註解裡有實測數字:21 步、40 個錨、23 個相異檔案,最壞情況 0.70 ms\n2. **`track()`** 是一個「順便統計」的包裝函式。每筆狀態流經它時累加 `anyAnchored` 與 `staleCount`,不需要事後再走訪一次結果陣列\n3. **`flatMap` + 回傳 `[]`**:只有 `snippet` 元件需要驗證(`tip`、`reference` 沒有行號),非 snippet 直接回空陣列被攤平掉。比 `filter` 再 `map` 少一次走訪,也不用中途建立中間陣列\n\n`anyAnchored` 這個旗標的用途在第 12 步已經提過:只要導讀提供了任何錨點,面板就改用逐步的失準狀態,不再顯示粗糙的整份 ref 警告。\n\n**這份導讀自己就帶著 anchor**。如果你在讀的時候看到某一步標示失準,那不是 bug,是這個功能正在對你示範它的用途。",
       "items": [
         {
           "kind": "snippet",
           "label": "jumpModeFor:失準時只開檔、不選取任何行",
           "file": "src/anchorCheck.ts",
-          "startLine": 127,
-          "endLine": 130,
+          "startLine": 135,
+          "endLine": 138,
           "anchor": "/** 失準時只開檔、不選取任何行——不假裝知道游標該落在哪(design.md 決策 6)。 */\nexport function jumpModeFor(status: AnchorStatus): 'select' | 'openOnly' {\n  return status.kind === 'stale' ? 'openOnly' : 'select';\n}"
         },
         {
@@ -385,8 +385,8 @@
     {
       "title": "第 15 步:失準之後怎麼辦——重生引導",
       "file": "ui/render/walking.ts",
-      "startLine": 27,
-      "endLine": 44,
+      "startLine": 32,
+      "endLine": 49,
       "narration": "偵測到失準只解決一半問題。讀者接下來會問:那我該怎麼辦?\n\n這就是 `regenerateHint` 的用途。它是 `.codewalk.json` 的一個選填欄位,由**產生器自述**「要怎麼重新產生這份導讀」——可能是一行 CLI 指令、一段 prompt、或一個內部工具的連結。\n\n關鍵在於:**播放器只顯示與複製,完全不解讀內容**。它不知道那串字是什麼意思,也不會去執行。這守住了 MVP 的分界線——播放器不碰產生邏輯,但可以幫讀者把產生的方法遞過去。\n\n這是一個小而重要的架構姿態:當你不想讓 A 依賴 B,又希望使用者能從 A 走到 B,「讓資料自己攜帶說明、由人接手執行」往往比「A 直接呼叫 B」更好——後者會把兩者永久綁死。\n\n下方 snippet 裡的 `renderStepStaleBlock()` 是另一半:失準的那一步會插入一個區塊,顯示 anchor 存的**舊內容**,並提供一個「開啟現行檔案」按鈕讓讀者自己比對。舊內容仍然顯示,是因為它至少說明了作者當初在講什麼。",
       "terms": [
         {
@@ -399,8 +399,8 @@
           "kind": "snippet",
           "label": "renderStepStaleBlock:失準時顯示 anchor 舊內容 + 開啟現行檔案",
           "file": "ui/render/walking.ts",
-          "startLine": 47,
-          "endLine": 71,
+          "startLine": 52,
+          "endLine": 76,
           "anchor": "function renderStepStaleBlock(\n  step: CodewalkStep,\n  status: Extract<AnchorStatus, { kind: 'stale' }>,\n  onOpenStaleFile: () => void,\n): HTMLElement {\n  const container = el('div', 'codewalk-snippet codewalk-snippet--stale');\n  const canOpen = status.reason !== 'fileMissing';\n  const header = el(canOpen ? 'button' : 'div', 'codewalk-snippet-header');\n  header.appendChild(icon('warning'));\n  const headerText = el('span', 'codewalk-snippet-header-text');\n  headerText.appendChild(\n    el('span', 'codewalk-snippet-label', canOpen ? t('stale.openCurrentFile') : t('stale.fileNotFound')),\n  );\n  headerText.appendChild(el('span', 'codewalk-snippet-file-ref', step.file));\n  header.appendChild(headerText);\n  if (canOpen && header instanceof HTMLButtonElement) {\n    header.addEventListener('click', onOpenStaleFile);\n  }\n  container.appendChild(header);\n  container.appendChild(renderStaleLabel());\n  if (step.anchor && step.anchor.trim().length > 0) {\n    container.appendChild(renderSnippetCode(step.anchor, detectLanguage(step.file), step.startLine));\n  }\n  return container;\n}"
         },
         {
@@ -413,16 +413,16 @@
     {
       "title": "第 16 步:跳轉到程式碼——那個 preserveFocus 是關鍵",
       "file": "src/fileJump.ts",
-      "startLine": 22,
-      "endLine": 46,
+      "startLine": 40,
+      "endLine": 64,
       "narration": "跳轉本身只有幾行:開檔、算範圍、設 selection、`revealRange`。但有兩個參數決定了整個播放體驗:\n\n**`preserveFocus: true`** — 不搶走 CodeWalk 面板的焦點。少了它,第一次跳轉後焦點就跑到編輯器,方向鍵快捷鍵立刻失效,讀者得手動點回面板才能按下一步。「讀者的手不離方向鍵」是這個產品寫在 CLAUDE.md 裡的設計原則,而它幾乎完全由這一個布林值撐著。\n\n**`preview: false`** — 不要用預覽分頁(標題斜體、下一次開檔就被取代)。導讀會反覆跳同幾個檔案,用預覽分頁會讓它們互相覆蓋。\n\n`mode` 參數則接上了失準偵測:`openOnly` 時只開檔、不設 selection、不 reveal。**失準時不假裝知道游標該落在哪**——highlight 一段可能完全無關的程式碼,比什麼都不做更誤導。\n\n上方那段註解坦白說明了測試策略:成功路徑需要真實的 vscode API,Vitest(node 環境)測不了,所以只把「檔案不存在」這個可獨立驗證的分支抽出來做 TDD,其餘走手動驗證 checklist。**誠實標示測不到的地方,比假裝覆蓋率完整好。**",
       "items": [
         {
           "kind": "snippet",
           "label": "endLine 的 clamp:檔案變短時不會炸",
           "file": "src/fileJump.ts",
-          "startLine": 39,
-          "endLine": 43,
+          "startLine": 58,
+          "endLine": 62,
           "anchor": "  const startLine = target.startLine - 1;\n  const endLine = Math.min(target.endLine - 1, doc.lineCount - 1);\n  const range = new vscode.Range(startLine, 0, endLine, doc.lineAt(endLine).text.length);\n  editor.selection = new vscode.Selection(range.start, range.end);\n  editor.revealRange(range, vscode.TextEditorRevealType.InCenter);"
         },
         {
@@ -457,29 +457,29 @@
       "title": "第 18 步:副檔名怎麼變成語言——兩個檔案的隱形契約",
       "file": "shared/language.ts",
       "startLine": 1,
-      "endLine": 42,
+      "endLine": 50,
       "narration": "一張副檔名到語言 id 的對照表,`detectLanguage()` 查表、查不到回 `'text'`。看起來平凡,但它跟 `ui/highlight.ts` 之間有一個**沒有型別保護的契約**:\n\n這裡吐出的語言 id,必須是 highlight.ts 那份 `LANGS` 陣列裡真的註冊過的 grammar。少註冊一個會怎樣?snippet 安靜地退回純文字。**不報錯、不警告**,只是沒有顏色——這種失敗最難察覺,因為它看起來只像是「這段程式碼剛好沒上色」。\n\n專案的處置是寫一支測試,把對照表與註冊清單綁在一起:任一邊多了或少了,測試就紅。\n\n這是一個值得記住的模式:**當兩個模組之間有型別系統管不到的一致性要求,測試就是唯一能自動化的守門員**。註解會被忽略,文件會過期,只有紅色的測試會逼人處理。",
       "items": [
         {
           "kind": "snippet",
           "label": "detectLanguage:查不到就是 text,不猜",
           "file": "shared/language.ts",
-          "startLine": 43,
-          "endLine": 47,
-          "anchor": "\nexport function detectLanguage(file: string): string {\n  const ext = file.split('.').pop()?.toLowerCase() ?? '';\n  return EXTENSION_LANGUAGE[ext] ?? 'plaintext';\n}"
+          "startLine": 52,
+          "endLine": 61,
+          "anchor": "/**\n * 由檔名副檔名判定語法高亮語言。\n *\n * @returns 對應表中沒有的副檔名回傳 `'plaintext'`,上色時等同不上色——猜錯顏色\n * 比不上色更容易誤導讀者(syntax-highlighting capability 的語言判定 requirement)\n */\nexport function detectLanguage(file: string): string {\n  const ext = file.split('.').pop()?.toLowerCase() ?? '';\n  return EXTENSION_LANGUAGE[ext] ?? 'plaintext';\n}"
         },
         {
           "kind": "todo",
           "text": "目前對照表涵蓋 23 種語言。新增語言時要同步三個地方:這張表、`ui/highlight.ts` 的 `LANGS` 匯入與陣列、以及跑一次 `scripts/compare-shiki-engines.mjs` 確認 JS regex 引擎對新 grammar 的輸出與 oniguruma 一致。"
         }
       ],
-      "anchor": "/**\n * 這裡的值必須是 `ui/highlight.ts` 有註冊的 Shiki 語言 id,否則\n * `isLanguageSupported()` 會判定為不支援、`highlightSnippetLines()` 退回\n * 純文字——新增副檔名時兩邊要一起改。\n */\nexport const EXTENSION_LANGUAGE: Record<string, string> = {\n  ts: 'typescript',\n  tsx: 'typescript',\n  js: 'javascript',\n  jsx: 'javascript',\n  json: 'json',\n  py: 'python',\n  go: 'go',\n  rs: 'rust',\n  java: 'java',\n  kt: 'kotlin',\n  kts: 'kotlin', // build.gradle.kts 也走這裡\n  groovy: 'groovy',\n  gradle: 'groovy',\n  scala: 'scala',\n  dart: 'dart',\n  swift: 'swift',\n  cs: 'csharp',\n  c: 'c',\n  h: 'c', // C++ header 也常用 .h,兩者文法差異不影響上色結果\n  cpp: 'cpp',\n  cc: 'cpp',\n  cxx: 'cpp',\n  hpp: 'cpp',\n  hh: 'cpp',\n  hxx: 'cpp',\n  php: 'php',\n  rb: 'ruby',\n  sql: 'sql',\n  css: 'css',\n  html: 'html',\n  md: 'markdown',\n  sh: 'bash',\n  bash: 'bash',\n  yml: 'yaml',\n  yaml: 'yaml',\n};"
+      "anchor": "/*\n * 副檔名到語法高亮語言的對應。host(讀 snippet 內容時判定語言)與 webview\n * (實際上色)共用同一份,避免兩邊對同一個檔案得出不同語言。\n */\n\n/**\n * 副檔名(不含點、全小寫)到 Shiki 語言 id 的對應表。\n *\n * @remarks\n * 這裡的值必須是 `ui/highlight.ts` 有註冊的語言 id,否則 `isLanguageSupported()`\n * 會判定為不支援、`highlightSnippetLines()` 安靜退回純文字——**新增副檔名時兩邊\n * 要一起改**。`ui/highlight.test.ts` 有測試把兩份清單綁在一起,漏改會被測到。\n */\nexport const EXTENSION_LANGUAGE: Record<string, string> = {\n  ts: 'typescript',\n  tsx: 'typescript',\n  js: 'javascript',\n  jsx: 'javascript',\n  json: 'json',\n  py: 'python',\n  go: 'go',\n  rs: 'rust',\n  java: 'java',\n  kt: 'kotlin',\n  kts: 'kotlin', // build.gradle.kts 也走這裡\n  groovy: 'groovy',\n  gradle: 'groovy',\n  scala: 'scala',\n  dart: 'dart',\n  swift: 'swift',\n  cs: 'csharp',\n  c: 'c',\n  h: 'c', // C++ header 也常用 .h,兩者文法差異不影響上色結果\n  cpp: 'cpp',\n  cc: 'cpp',\n  cxx: 'cpp',\n  hpp: 'cpp',\n  hh: 'cpp',\n  hxx: 'cpp',\n  php: 'php',\n  rb: 'ruby',\n  sql: 'sql',\n  css: 'css',\n  html: 'html',\n  md: 'markdown',\n  sh: 'bash',\n  bash: 'bash',\n  yml: 'yaml',\n  yaml: 'yaml',\n};"
     },
     {
       "title": "第 19 步:讀者的編輯器主題,host 要自己去解析出來",
       "file": "src/themeSource.ts",
-      "startLine": 26,
-      "endLine": 47,
+      "startLine": 28,
+      "endLine": 49,
       "narration": "要讓 snippet 的配色跟讀者的編輯器一致,光靠 CSS 變數不夠——**VS Code 沒有把「目前主題的 token 配色」開放給 extension 讀**。所以只能自己動手:\n\n1. 讀 `workbench.colorTheme` 設定拿到主題名稱\n2. 掃過所有已安裝 extension 的 `contributes.themes`,找出對應的定義檔\n3. 讀檔、解析——主題檔常是帶註解的 JSONC(所以 repo 裡有一支 `src/jsonc.ts`),還可能用 `include` 繼承別的主題\n4. 把 `tokenColors` 正規化後送給 webview\n\n這條鏈上**任何一環失敗都回傳 `null`**,面板照常運作、只是配色退回 Shiki 內建的 dark-plus / light-plus。一個純粹的視覺增強,不值得讓它有能力弄壞主要功能。\n\n另一個細節藏在 `name` 欄位:每次解析都用遞增計數器產生新名字。因為 Shiki 的 `loadTheme()` 對**同名主題重載是 no-op**(已實測),沿用舊名字會讓「切換主題後重繪」整個失效——畫面重繪了,但顏色沒變。這種 bug 極難從症狀反推原因,所以註解裡特別記了「已實測」。",
       "terms": [
         {
@@ -502,8 +502,8 @@
     {
       "title": "第 20 步:高亮的降級鏈——寧可不上色,也不猜錯",
       "file": "ui/highlight.ts",
-      "startLine": 139,
-      "endLine": 153,
+      "startLine": 145,
+      "endLine": 166,
       "narration": "`highlightSnippetLines()` 的第一行就是降級判斷:引擎還沒就緒、或這個語言沒註冊 grammar,一律回傳「一整行純文字 token」。\n\n這裡有兩個獨立的降級點:\n\n- **時間上的**:Shiki 引擎初始化是非同步的。就緒之前 snippet 已經以純文字先顯示了,`ui/main.ts` 的 `onHighlightReady()` 會在就緒後補一次重繪讓它們換上顏色。讀者感受到的是「先看到內容、顏色慢半拍」,而不是「等一下才看到內容」\n- **能力上的**:未支援的語言不上色。猜錯顏色比不上色更容易誤導——把註解染成字串色,讀者會以為那真的是字串\n\n注意回傳型別是 `HighlightToken[][]`(逐行的 token 陣列),**不是 HTML 字串**。這是刻意的:`ui/render/dom.ts` 的 `appendTokens()` 逐個建立 span 再設 `textContent`,整條路徑上沒有任何一處碰過 `innerHTML`。\n\n選 Shiki 而非 highlight.js 的理由也在這:Shiki 用的是跟 VS Code 同一套 TextMate grammar,而且 `codeToTokens()` 原生依行輸出——不像 highlight.js 要輸出一整塊 HTML、再手動追蹤標籤堆疊把跨行 `<span>` 切開。",
       "terms": [
         {
@@ -522,13 +522,13 @@
           "reality": "選用前有一支 `scripts/compare-shiki-engines.mjs` 逐一比對過 23 種 grammar 的 token 輸出,**差異為 0**。體積省下來、行為沒差。但這個結論綁在「目前這 23 種」上——新增語言時應該重跑一次再決定引擎是否仍夠用。"
         }
       ],
-      "anchor": "/**\n * 未支援語言、或高亮引擎尚未就緒時,回傳一整行純文字 token(不上色)——\n * 猜錯顏色比不上色更容易誤導讀者,見 syntax-highlighting spec 的語言判定 requirement。\n */\nfunction plainTextLines(content: string): HighlightToken[][] {\n  return content.split('\\n').map((line) => [{ content: line }]);\n}\n\nexport function highlightSnippetLines(content: string, language: string): HighlightToken[][] {\n  if (!highlighter || !isLanguageSupported(language)) {\n    return plainTextLines(content);\n  }\n  const { tokens } = highlighter.codeToTokens(content, { lang: language, theme: activeThemeName });\n  return tokens.map((line) => line.map(toHighlightToken));\n}"
+      "anchor": "/**\n * 未支援語言、或高亮引擎尚未就緒時,回傳一整行純文字 token(不上色)——\n * 猜錯顏色比不上色更容易誤導讀者,見 syntax-highlighting spec 的語言判定 requirement。\n */\nfunction plainTextLines(content: string): HighlightToken[][] {\n  return content.split('\\n').map((line) => [{ content: line }]);\n}\n\n/**\n * 把一段程式碼切成逐行、逐 token 的上色結果,套用目前生效的主題。\n *\n * @param language - Shiki 語言 id(由 `shared/language.ts` 的 detectLanguage 判定)\n * @returns 外層陣列每個元素是一行。語言未支援或引擎尚未就緒時,每行回傳單一無色\n * token,呈現為純文字——猜錯顏色比不上色更容易誤導讀者\n */\nexport function highlightSnippetLines(content: string, language: string): HighlightToken[][] {\n  if (!highlighter || !isLanguageSupported(language)) {\n    return plainTextLines(content);\n  }\n  const { tokens } = highlighter.codeToTokens(content, { lang: language, theme: activeThemeName });\n  return tokens.map((line) => line.map(toHighlightToken));\n}"
     },
     {
       "title": "第 21 步:跨進 webview——一個沒有框架的渲染迴圈",
       "file": "ui/main.ts",
-      "startLine": 123,
-      "endLine": 184,
+      "startLine": 127,
+      "endLine": 188,
       "narration": "從這裡開始是 webview,**不能碰任何 vscode API**,只有 DOM 與 `postMessage`。整個 UI 沒有 React、沒有 Vue,渲染邏輯就是這個 `render()`:清空 `#app`,依 `current.screen` 呼叫對應的 render 函式,把回傳的 DOM 樹掛上去。\n\n`root.innerHTML = ''` 這種全樹重繪,在真正的應用裡通常是效能災難。這裡可行是因為面板同時只顯示一步,DOM 節點少。**用最笨的方法直到它真的變慢**,是 MVP 階段正確的取捨。\n\n但全樹重繪也帶來三個必須自己補的問題,程式碼裡對應三個模組層級的變數:\n\n- **`lastWalkingStepIndex`**——若進場動畫直接掛在容器上,連「展開一個術語」這種重繪都會整頁重播動畫。記住上次畫的步數,只有真的換步才播\n- **`menuFocusPath`**——重繪會銷毀舊 DOM 連同焦點,鍵盤操作者會被彈回文件最前面。記住剛互動過的那一列,重繪後把焦點還回去\n- **`pendingScrollRestore`**——還原捲動位置得等新畫面畫出來才能設定,用這個變數把意圖從訊息處理帶到 render 之後\n\n這三個變數就是「不用框架」的實際代價:框架幫你處理的 DOM 保存與焦點管理,現在得自己記帳。",
       "terms": [
         {
@@ -541,8 +541,8 @@
           "kind": "snippet",
           "label": "鍵盤事件直接在 webview 內監聽,不走 VS Code 指令系統",
           "file": "ui/main.ts",
-          "startLine": 390,
-          "endLine": 417,
+          "startLine": 404,
+          "endLine": 431,
           "anchor": "window.addEventListener('keydown', (event: KeyboardEvent) => {\n  if (current.screen === 'fileList') {\n    if (event.key === 'Escape' && current.openMenuPath !== null) {\n      menuFocusPath = current.openMenuPath;\n      current = closeAttemptMenu(current);\n      render();\n    }\n    return;\n  }\n  if (current.screen === 'walking') {\n    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {\n      event.preventDefault();\n      onNextStep();\n    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {\n      event.preventDefault();\n      onPrevStep();\n    } else if (event.key === 'Escape') {\n      event.preventDefault();\n      onBackToList();\n    } else if (event.key === 'Home' || event.key === 'r' || event.key === 'R') {\n      // 主鍵是 Home,不是字母鍵——中文輸入法作用中時,字母鍵的 keydown 可能被\n      // 輸入法攔截去組字,事件到不了這裡(實測 R 在中文輸入法環境下完全無反應,\n      // 方向鍵/Escape 因為不是字母鍵而不受影響)。保留 r/R 給英文鍵盤環境當備用鍵。\n      event.preventDefault();\n      onRevealCurrentStep();\n    }\n  }\n});"
         },
         {
@@ -556,8 +556,8 @@
     {
       "title": "第 22 步:markdown 渲染——只取 token,不取 HTML",
       "file": "ui/markdown.ts",
-      "startLine": 29,
-      "endLine": 77,
+      "startLine": 41,
+      "endLine": 95,
       "narration": "`narration` 這類欄位要支援 markdown,但 `ui/render/` 全目錄立有明文紀律:**一律用 `textContent`,禁止 `innerHTML`**。一般 markdown 套件的 renderer 直接吐 HTML 字串,要嘛違反紀律、要嘛得自己消毒字串——而消毒字串正是這條紀律當初要避免的事。\n\n解法是用 `marked` 比較少人用的 `Lexer` API:只回傳**結構化的 token 陣列**,不產生任何 HTML。拿到 token 後自己用 `createElement` + `textContent` 組回 DOM。\n\n每個 token 都帶 `raw` 欄位(產生它的原始字元),這一個欄位同時解決兩個問題:不支援的語法(表格、引用區塊)直接輸出 `raw` 就是「原樣呈現」;輸出走 `textContent`,天然無注入面。\n\n兩個對外函式的回傳型別都是 `DocumentFragment` **而不是字串**——這讓「這個模組不可能產出 HTML 字串」變成型別層面的事實,不用靠 code review 把關。\n\n第 3 步提到的長短欄位分級,答案就在這:`renderMarkdownBlock()` 用 `lex()` 六種全開,`renderMarkdownInline()` 用 `lexInline()` 只解析行內三種。**分級不是靠過濾程式碼,而是選對入口就是規格**——`lexInline()` 眼中 `- 項目` 本來就不成清單 token,自然落為普通文字。",
       "terms": [
         {
@@ -574,8 +574,8 @@
           "kind": "snippet",
           "label": "link token 的降級:巢狀互動元素裡一律退回純文字",
           "file": "ui/markdown.ts",
-          "startLine": 151,
-          "endLine": 163,
+          "startLine": 169,
+          "endLine": 181,
           "anchor": "    case 'link': {\n      if (onOpenLink === null || !isHttpUrl(token.href)) {\n        parent.appendChild(document.createTextNode(token.raw));\n        return;\n      }\n      const button = document.createElement('button');\n      button.type = 'button';\n      button.className = 'codewalk-md-link';\n      appendInlineTokens(button, token.tokens as MarkedToken[], onOpenLink);\n      button.addEventListener('click', () => onOpenLink(token.href));\n      parent.appendChild(button);\n      return;\n    }"
         },
         {
@@ -583,13 +583,13 @@
           "text": "`gfm: false` 是封閉子集的第一層防線——關掉 GitHub Flavored Markdown 後,表格、裸網址 autolink、刪除線在 lexer 這一層就不會被辨識成 token,不必再寫程式碼過濾。**能用設定關掉的,就別用程式碼擋。**"
         }
       ],
-      "anchor": "export function renderMarkdownBlock(source: string, onOpenLink: MaybeOpenLinkHandler): DocumentFragment {\n  const fragment = document.createDocumentFragment();\n  const tokens = new Lexer(LEXER_OPTIONS).lex(source) as MarkedToken[];\n  for (const token of tokens) {\n    appendBlockToken(fragment, token, onOpenLink);\n  }\n  return fragment;\n}\n\nexport function renderMarkdownInline(source: string, onOpenLink: MaybeOpenLinkHandler): DocumentFragment {\n  const fragment = document.createDocumentFragment();\n  const tokens = Lexer.lexInline(source, LEXER_OPTIONS) as MarkedToken[];\n  appendInlineTokens(fragment, tokens, onOpenLink);\n  return fragment;\n}\n\nfunction appendBlockToken(\n  parent: DocumentFragment | HTMLElement,\n  token: MarkedToken,\n  onOpenLink: MaybeOpenLinkHandler,\n): void {\n  switch (token.type) {\n    case 'space':\n      return;\n    case 'paragraph': {\n      const p = document.createElement('p');\n      p.className = 'codewalk-md-p';\n      appendInlineTokens(p, token.tokens as MarkedToken[], onOpenLink);\n      parent.appendChild(p);\n      return;\n    }\n    case 'heading': {\n      if (token.depth !== 2) {\n        appendBlockFallback(parent, token.raw);\n        return;\n      }\n      const heading = document.createElement('h3');\n      heading.className = 'codewalk-md-h';\n      appendInlineTokens(heading, token.tokens as MarkedToken[], onOpenLink);\n      parent.appendChild(heading);\n      return;\n    }\n    case 'list':\n      parent.appendChild(renderList(token, onOpenLink));\n      return;\n    default:\n      appendBlockFallback(parent, token.raw);\n  }\n}"
+      "anchor": "export function renderMarkdownBlock(source: string, onOpenLink: MaybeOpenLinkHandler): DocumentFragment {\n  const fragment = document.createDocumentFragment();\n  const tokens = new Lexer(LEXER_OPTIONS).lex(source) as MarkedToken[];\n  for (const token of tokens) {\n    appendBlockToken(fragment, token, onOpenLink);\n  }\n  return fragment;\n}\n\n/**\n * 渲染**短欄位**:只支援行內的程式碼/粗體/連結。清單與小標不會生效,原樣顯示為\n * 純文字——標題、按鈕文字這類位置放區塊語法本來就會破壞版面。\n *\n * @param onOpenLink - 傳 `null` 讓連結降級為純文字(見 {@link renderMarkdownBlock})\n */\nexport function renderMarkdownInline(source: string, onOpenLink: MaybeOpenLinkHandler): DocumentFragment {\n  const fragment = document.createDocumentFragment();\n  const tokens = Lexer.lexInline(source, LEXER_OPTIONS) as MarkedToken[];\n  appendInlineTokens(fragment, tokens, onOpenLink);\n  return fragment;\n}\n\nfunction appendBlockToken(\n  parent: DocumentFragment | HTMLElement,\n  token: MarkedToken,\n  onOpenLink: MaybeOpenLinkHandler,\n): void {\n  switch (token.type) {\n    case 'space':\n      return;\n    case 'paragraph': {\n      const p = document.createElement('p');\n      p.className = 'codewalk-md-p';\n      appendInlineTokens(p, token.tokens as MarkedToken[], onOpenLink);\n      parent.appendChild(p);\n      return;\n    }\n    case 'heading': {\n      if (token.depth !== 2) {\n        appendBlockFallback(parent, token.raw);\n        return;\n      }\n      const heading = document.createElement('h3');\n      heading.className = 'codewalk-md-h';\n      appendInlineTokens(heading, token.tokens as MarkedToken[], onOpenLink);\n      parent.appendChild(heading);\n      return;\n    }\n    case 'list':\n      parent.appendChild(renderList(token, onOpenLink));\n      return;\n    default:\n      appendBlockFallback(parent, token.raw);\n  }\n}"
     },
     {
       "title": "第 23 步:導覽邏輯是一組不碰 DOM 的純函式",
       "file": "ui/state.ts",
-      "startLine": 60,
-      "endLine": 118,
+      "startLine": 87,
+      "endLine": 157,
       "narration": "`nextStep`、`prevStep`、`toggleTerm`、`enterQuiz`、`submitQuiz`——全部是「舊 state 進、新 state 出」的純函式,一行 DOM 都不碰。所以 `ui/state.test.ts` 有 26 個測試在 node 環境下跑,不需要瀏覽器、不需要 VS Code。\n\n注意每個函式都回傳 `{ ...state, 改動 }` 而非就地修改。搭配全樹重繪,心智模型變得極簡單:**畫面 = f(當前 state)**,沒有中間態。\n\n邊界也都在這裡處理,不在 UI:`nextStep` 用 `Math.min` 夾住上界、`prevStep` 用 `Math.max` 夾住下界。UI 不必知道「現在能不能按下一步」,按了就是了,狀態機自己不會越界。\n\n`cancelQuiz()` 是個有意思的小地方:從 quiz 退回走讀時,**回到最後一步而不是第一步**——讀者是走完才進 quiz 的,退出當然該回到他離開的地方。這種細節寫不進型別,只能靠有人想過。",
       "terms": [
         {
@@ -602,8 +602,8 @@
           "kind": "snippet",
           "label": "applyPersistedUiState:面板重建後,把 webview 自己記的細節接回來",
           "file": "ui/state.ts",
-          "startLine": 155,
-          "endLine": 183,
+          "startLine": 200,
+          "endLine": 228,
           "anchor": "export function applyPersistedUiState(\n  walk: CodewalkFile,\n  hostStepIndex: number,\n  refDrifted: boolean,\n  anchorReport: AnchorReport,\n  persisted: PersistedUiState | null,\n): WalkingState | QuizState | QuizResult {\n  const base = createWalkingState(walk, refDrifted, anchorReport);\n  if (!persisted || persisted.ref !== walk.ref) {\n    return { ...base, stepIndex: hostStepIndex };\n  }\n\n  const maxIndex = walk.steps.length - 1;\n  const walking: WalkingState = {\n    ...base,\n    stepIndex: Math.min(Math.max(persisted.stepIndex, 0), maxIndex),\n    expandedTerms: new Set(persisted.expandedTerms),\n  };\n  if (persisted.screen === 'walking') {\n    return walking;\n  }\n\n  const quiz = enterQuiz(walking);\n  const restoredQuiz: QuizState = {\n    ...quiz,\n    answers: walk.quiz.map((_, i) => persisted.answers[i] ?? null),\n  };\n  return persisted.screen === 'quiz' ? restoredQuiz : submitQuiz(restoredQuiz);\n}"
         },
         {
@@ -611,13 +611,13 @@
           "text": "上面那段 snippet 是三層進度防線的**第二層**。第一層是 `retainContextWhenHidden`(第 7 步),擋住面板隱藏/顯示;第二層是 webview 自己的 `setState`,擋住 webview 被重建;第三層是 host 寫進 `workspaceState` 的 `ProgressStore`,擋住整個 VS Code 重啟。三層各自獨立,擋的是不同的失效情境。"
         }
       ],
-      "anchor": "export function createWalkingState(\n  walk: CodewalkFile,\n  refDrifted: boolean,\n  anchorReport: AnchorReport,\n): WalkingState {\n  return { screen: 'walking', walk, stepIndex: 0, refDrifted, anchorReport, expandedTerms: new Set() };\n}\n\nexport function isAtLastStep(state: WalkingState): boolean {\n  return state.stepIndex === state.walk.steps.length - 1;\n}\n\nexport function nextStep(state: WalkingState): WalkingState {\n  const maxIndex = state.walk.steps.length - 1;\n  return { ...state, stepIndex: Math.min(state.stepIndex + 1, maxIndex) };\n}\n\nexport function prevStep(state: WalkingState): WalkingState {\n  return { ...state, stepIndex: Math.max(state.stepIndex - 1, 0) };\n}\n\nexport function toggleTerm(state: WalkingState, term: string): WalkingState {\n  const expandedTerms = new Set(state.expandedTerms);\n  if (expandedTerms.has(term)) {\n    expandedTerms.delete(term);\n  } else {\n    expandedTerms.add(term);\n  }\n  return { ...state, expandedTerms };\n}\n\nexport function enterQuiz(state: WalkingState): QuizState {\n  return {\n    screen: 'quiz',\n    walk: state.walk,\n    refDrifted: state.refDrifted,\n    anchorReport: state.anchorReport,\n    answers: state.walk.quiz.map(() => null),\n  };\n}\n\nexport function cancelQuiz(state: QuizState): WalkingState {\n  const walking = createWalkingState(state.walk, state.refDrifted, state.anchorReport);\n  return { ...walking, stepIndex: state.walk.steps.length - 1 };\n}\n\nexport function selectQuizAnswer(state: QuizState, questionIndex: number, optionIndex: number): QuizState {\n  const answers = [...state.answers];\n  answers[questionIndex] = optionIndex;\n  return { ...state, answers };\n}\n\nexport function restartWalk(state: QuizResult): WalkingState {\n  return createWalkingState(state.walk, state.refDrifted, state.anchorReport);\n}\n\nexport function retryQuiz(state: QuizResult): QuizState {\n  return enterQuiz(createWalkingState(state.walk, state.refDrifted, state.anchorReport));\n}"
+      "anchor": "export function createWalkingState(\n  walk: CodewalkFile,\n  refDrifted: boolean,\n  anchorReport: AnchorReport,\n): WalkingState {\n  return { screen: 'walking', walk, stepIndex: 0, refDrifted, anchorReport, expandedTerms: new Set() };\n}\n\n/** 是否已在最後一步。決定「下一步」按鈕是否停用,以及是否顯示進入 quiz 的入口。 */\nexport function isAtLastStep(state: WalkingState): boolean {\n  return state.stepIndex === state.walk.steps.length - 1;\n}\n\n/** 前進一步。已在最後一步時維持不動,不繞回第一步。 */\nexport function nextStep(state: WalkingState): WalkingState {\n  const maxIndex = state.walk.steps.length - 1;\n  return { ...state, stepIndex: Math.min(state.stepIndex + 1, maxIndex) };\n}\n\n/** 後退一步。已在第一步時維持不動,不繞回最後一步。 */\nexport function prevStep(state: WalkingState): WalkingState {\n  return { ...state, stepIndex: Math.max(state.stepIndex - 1, 0) };\n}\n\n/** 展開或收合某個術語卡。多個術語可同時展開,彼此不互斥。 */\nexport function toggleTerm(state: WalkingState, term: string): WalkingState {\n  const expandedTerms = new Set(state.expandedTerms);\n  if (expandedTerms.has(term)) {\n    expandedTerms.delete(term);\n  } else {\n    expandedTerms.add(term);\n  }\n  return { ...state, expandedTerms };\n}\n\n/** 從走讀進入 quiz,所有題目重置為未作答。 */\nexport function enterQuiz(state: WalkingState): QuizState {\n  return {\n    screen: 'quiz',\n    walk: state.walk,\n    refDrifted: state.refDrifted,\n    anchorReport: state.anchorReport,\n    answers: state.walk.quiz.map(() => null),\n  };\n}\n\n/**\n * 取消作答,回到走讀畫面的**最後一步**——讀者是從那裡進來的,回到第一步等於\n * 把人丟回導讀開頭。已填的答案一併捨棄。\n */\nexport function cancelQuiz(state: QuizState): WalkingState {\n  const walking = createWalkingState(state.walk, state.refDrifted, state.anchorReport);\n  return { ...walking, stepIndex: state.walk.steps.length - 1 };\n}\n\n/** 選定某題的答案。可重複改答,送出前都不算定案。 */\nexport function selectQuizAnswer(state: QuizState, questionIndex: number, optionIndex: number): QuizState {\n  const answers = [...state.answers];\n  answers[questionIndex] = optionIndex;\n  return { ...state, answers };\n}\n\n/** 從結果畫面重走整份導讀,回到第一步。 */\nexport function restartWalk(state: QuizResult): WalkingState {\n  return createWalkingState(state.walk, state.refDrifted, state.anchorReport);\n}\n\n/** 從結果畫面重新作答,答案全部清空。 */\nexport function retryQuiz(state: QuizResult): QuizState {\n  return enterQuiz(createWalkingState(state.walk, state.refDrifted, state.anchorReport));\n}"
     },
     {
       "title": "第 24 步:六種說明元件怎麼被畫出來,以及最後兩塊拼圖",
       "file": "ui/render/items.ts",
-      "startLine": 255,
-      "endLine": 293,
+      "startLine": 274,
+      "endLine": 312,
       "narration": "`renderItems()` 是一個對 `kind` 的 switch,六種元件各自對應一個建構函式,依陣列原始順序逐一 append——所以 JSON 裡 `items` 的排列順序就是畫面由上而下的順序,作者可以自由交錯,不會被重新分組。\n\n整個 `ui/render/` 目錄全部用 `createElement` 加 `textContent` 組 DOM,**沒有任何字串樣板拼接**(這條紀律寫在 `ui/render/dom.ts` 的檔頭)。這不只是風格偏好:導讀 JSON 可能來自別人,把它的字串直接當 HTML 塞進去就是一個現成的注入漏洞。第 22 步的 markdown 渲染是同一條紀律的延伸,連 Shiki 的語法高亮也不例外。\n\n最後兩塊拼圖:\n\n- **`ProgressStore`**(`src/progressStore.ts`)——閱讀進度寫進 VS Code 的 `workspaceState`,跨重啟留存。這是三層防線的最外層\n- **`AttemptStore`**(`src/attemptStore.ts`)——quiz 作答紀錄,結構跟 ProgressStore 幾乎相同\n\n兩者都用 `ref` 當有效性判斷:**記錄的 ref 跟現在這份導讀的 ref 不符,就視同沒有紀錄**。導讀重新產生後,舊進度與舊分數自動失效——沒有清除邏輯、沒有遷移程式碼,只是一個相等比較。\n\n它們幾乎一模一樣卻沒有抽共用父類別,這是刻意的:專案的抽象門檻是 **rule of three**,重複第三次才抽。兩份相似的 50 行,比一個為了容納兩種用途而長出參數的基底類別更好維護。\n\n走完了。按下方按鈕進 quiz 驗收一下。",
       "terms": [
         {
@@ -634,9 +634,9 @@
           "kind": "snippet",
           "label": "ProgressStore:ref 不符就視同沒有進度",
           "file": "src/progressStore.ts",
-          "startLine": 36,
-          "endLine": 43,
-          "anchor": "  /** ref 不符(導讀已重新產生)時視同沒有進度。 */\n  get(workspaceRoot: string, absolutePath: string, ref: string): WalkProgressSummary | undefined {\n    const record = this.readAll()[this.toRelativePath(workspaceRoot, absolutePath)];\n    if (!record || record.ref !== ref) {\n      return undefined;\n    }\n    return { stepIndex: record.stepIndex };\n  }"
+          "startLine": 40,
+          "endLine": 52,
+          "anchor": "  /**\n   * 取得該導讀留存的閱讀進度,用於列表上的「接續上次」入口。\n   *\n   * @returns 沒有進度、或進度的 ref 與現行導讀不符(導讀已重新產生)時回傳\n   * undefined——舊的步驟編號對新內容可能指到完全不同的地方\n   */\n  get(workspaceRoot: string, absolutePath: string, ref: string): WalkProgressSummary | undefined {\n    const record = this.readAll()[this.toRelativePath(workspaceRoot, absolutePath)];\n    if (!record || record.ref !== ref) {\n      return undefined;\n    }\n    return { stepIndex: record.stepIndex };\n  }"
         },
         {
           "kind": "tip",

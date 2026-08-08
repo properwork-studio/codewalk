@@ -1,6 +1,7 @@
 import type { AnchorReport, HostToWebviewMessage, SnippetPreviewResult } from '../shared/protocol';
 import type { CodewalkFile } from '../shared/schema';
 
+/** host 對「目前正在走的導讀」持有的狀態快照。沒有導讀進行中時為 undefined。 */
 export interface ActiveWalkState {
   walk: CodewalkFile;
   stepIndex: number;

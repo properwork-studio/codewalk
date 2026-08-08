@@ -2,22 +2,40 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { t } from '../shared/i18n';
 
+/** 跳轉目標的行段。行號 1-based、頭尾皆含,與 `.codewalk.json` 的欄位語意一致。 */
 export interface JumpTarget {
+  /** 相對於 workspace 根目錄的路徑。 */
   file: string;
   startLine: number;
   endLine: number;
 }
 
+/** 跳轉結果。失敗訊息已經過 t() 翻譯,可直接顯示給讀者。 */
 export type JumpResult = { ok: true } | { ok: false; reason: 'fileNotFound'; message: string };
 
-/** 'openOnly':只開檔、不設 selection、不 revealRange——用於失準的 step/snippet,
- * 不假裝知道游標該落在哪(design.md 決策 6)。 */
+/**
+ * 跳轉方式。
+ *
+ * `'select'`:開檔、選取目標行段、捲動到畫面中央。
+ * `'openOnly'`:只開檔,不設 selection 也不捲動——用於失準的 step/snippet,
+ * 因為原本的行號已經不可信,不假裝知道游標該落在哪(design.md 決策 6)。
+ */
 export type JumpMode = 'select' | 'openOnly';
 
 /**
- * 正常跳轉並高亮的成功路徑需要真實 vscode API(revealRange、Selection),
- * 無法在 Vitest(node 環境)裡驗證,依 design.md 的測試策略走手動驗證 checklist。
- * 這裡只把可獨立驗證的「檔案不存在」錯誤分支抽出來做 TDD。
+ * 在編輯器開啟目標檔案,並依 `mode` 選取行段、捲動到畫面中央。
+ *
+ * 開檔一律以非預覽分頁(`preview: false`)且不搶焦點的方式進行——焦點留在
+ * CodeWalk 面板,讀者才能連按方向鍵連續切換步驟,否則第一次跳轉後快捷鍵就失效。
+ *
+ * @param target - `endLine` 超出檔案實際行數時會自動夾到最後一行
+ * @returns 檔案不存在時回傳 `{ ok: false }` 而不拋出;呼叫端把訊息轉給 webview 顯示
+ *
+ * @remarks
+ * 成功路徑需要真實的 vscode API(`revealRange`、`Selection`),在 Vitest 的 node
+ * 環境無法驗證,依 design.md 的測試策略走手動驗證 checklist;單元測試只涵蓋
+ * 「檔案不存在」這條可獨立驗證的分支。`vscode` 採動態 import,讓本模組在測試
+ * 環境載入時不會因為找不到 vscode runtime 而失敗。
  */
 export async function jumpToStep(
   workspaceRoot: string,

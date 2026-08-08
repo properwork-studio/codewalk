@@ -3,10 +3,18 @@ import { dirname, join, resolve } from 'node:path';
 import type { ThemeTokenColorRule } from '../shared/protocol';
 import { parseJsonc } from './jsonc';
 
+/*
+ * VS Code 主題定義檔的解析,與 vscode API 無關的純邏輯部分。串接 vscode 的
+ * 部分在 `themeSource.ts`——拆開讓這裡能獨立跑單元測試。
+ */
+
 const MAX_INCLUDE_DEPTH = 5;
 
+/** 主題定義檔的原始內容,只取用得到的兩個欄位。 */
 export interface RawThemeFile {
+  /** 繼承來源的相對路徑;VS Code 主題可用它疊在另一份主題之上。 */
   include?: string;
+  /** 尚未驗證的 tokenColors,經 {@link normalizeTokenColors} 過濾後才可用。 */
   tokenColors?: unknown;
 }
 
@@ -72,10 +80,18 @@ export function normalizeTokenColors(raw: unknown): ThemeTokenColorRule[] | null
   return rules.length > 0 ? rules : null;
 }
 
+/**
+ * 由主題的 `uiTheme` 值判定明暗。VS Code 的四個值中,`vs` 與 `hc-light` 是淺色,
+ * `vs-dark` 與 `hc-black` 是深色;未知值一律當深色(與 CodeWalk 的預設一致)。
+ */
 export function themeKindFromUiTheme(uiTheme: string): 'light' | 'dark' {
   return uiTheme === 'vs' || uiTheme === 'hc-light' ? 'light' : 'dark';
 }
 
+/**
+ * extension 的 `contributes.themes` 條目。欄位全為 `unknown`——這是別的 extension
+ * 的 package.json,不能假設它符合宣告的格式,取用前一律先檢查型別。
+ */
 export interface ExtensionThemeContribution {
   label?: unknown;
   id?: unknown;
@@ -83,6 +99,10 @@ export interface ExtensionThemeContribution {
   uiTheme?: unknown;
 }
 
+/**
+ * `vscode.Extension` 的形狀子集——只取查主題用得到的欄位,讓測試能餵不依賴
+ * vscode runtime 的假物件進來。
+ */
 export interface ExtensionLike {
   extensionPath: string;
   packageJSON: { contributes?: { themes?: ExtensionThemeContribution[] } };

@@ -32,10 +32,14 @@ pnpm watch        # 編譯監看
 # F5 → Extension Development Host 除錯
 pnpm test         # Vitest
 pnpm format       # Prettier 全專案格式化(改完程式碼收工前一定要跑,見下方紀律)
+pnpm relocate-anchors          # 檢查 .codewalk/ 導讀的 anchor 是否仍對得上(唯讀預覽)
+pnpm relocate-anchors --write --ref HEAD   # 實際對齊並把 ref 更新為目前 HEAD
 pnpm package      # vsce 打包 VSIX({起手後補})
 ```
 
 **格式化紀律**:專案已裝 Prettier(`.prettierrc.json`)並設定 VS Code format-on-save;AI 或人手改完 `.ts` 檔**收工前務必跑 `pnpm format`**——讓已提交的程式碼跟讀者存檔時觸發的格式化結果一致,否則讀者一開檔隨手存個檔,`git diff` 就會混進大量無意義的排版變動,連帶讓錨定驗證(見 stale-step-detection capability)誤判成內容改動。
+
+**導讀錨定紀律**:改到任何被 `.codewalk/` 導讀引用的程式碼(連只改註解都算)就會讓 anchor 失準,`tests/repoWalks.test.ts` 會紅。跑 `pnpm relocate-anchors` 檢查、`--write` 對齊——它只動 anchor 與行號,不改 narration;敘述本身也過時了才需要依 regenerateHint 重新產生整份導讀。
 
 ## 開發流程
 

@@ -1,12 +1,17 @@
-import type { HighlightToken } from '../highlight';
-
-/**
+/*
  * 本目錄的共用 DOM 工具。整個 render 層一律用 `createElement` + `textContent`
  * 組樹,**不做任何字串樣板拼接**——導讀 JSON 可能來自別人的產生器,把它的字串
  * 直接當 HTML 塞進去就是一個現成的注入漏洞。這條紀律在 `ui/markdown.ts`
  * (只取 marked 的 token,不取 HTML)與下方的 `appendTokens` 都是同一套。
  */
 
+import type { HighlightToken } from '../highlight';
+
+/**
+ * 建立元素並選填 class 與文字內容。文字一律經 `textContent` 寫入,不走 innerHTML。
+ *
+ * @param text - 省略時不設定文字;傳空字串會實際寫入空文字節點
+ */
 export function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className?: string,
@@ -18,6 +23,14 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/**
+ * 建立一個 codicon 圖示(VS Code 內建圖示字型)。
+ *
+ * @param name - codicon 名稱,不含 `codicon-` 前綴,例如 `'book'`、`'warning'`
+ * @remarks
+ * 一律標上 `aria-hidden`——圖示都伴隨文字或 aria-label,讓螢幕閱讀器重複朗讀
+ * 只會造成干擾。
+ */
 export function icon(name: string, extraClass?: string): HTMLSpanElement {
   const span = document.createElement('span');
   span.className = `codicon codicon-${name}${extraClass ? ` ${extraClass}` : ''}`;

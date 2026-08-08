@@ -2,6 +2,11 @@ import * as vscode from 'vscode';
 import { resolveLocale, setLocale } from '../shared/i18n';
 import { WalkPlayerViewProvider } from './viewProvider';
 
+/**
+ * Extension 進入點,由 VS Code 依 package.json 的 activationEvents 呼叫。
+ * 註冊側邊面板的 view provider 與四個指令,全部掛進 `context.subscriptions`
+ * 交給 VS Code 在停用時一併釋放。
+ */
 export function activate(context: vscode.ExtensionContext): void {
   // 必須早於 WalkPlayerViewProvider 的建構——getHtml() 會用到判定結果
   // (design.md 決策 5)。
@@ -24,4 +29,8 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 }
 
+/**
+ * 停用時的清理鉤子。刻意留空:所有需要釋放的資源都已註冊在 `context.subscriptions`,
+ * 由 VS Code 自動處理。
+ */
 export function deactivate(): void {}

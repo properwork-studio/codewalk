@@ -78,8 +78,10 @@ function readPersistedUiState(): PersistedUiState | null {
   return isPersistedUiState(raw) ? raw : null;
 }
 
-/** 每次 render() 後把目前畫面存進 vscode.setState()——webview 真的被重建時,
- * VS Code 會把這份 state 原樣還給重建後的 script(design.md 決策 4)。 */
+/**
+ * 每次 render() 後把目前畫面存進 vscode.setState()——webview 真的被重建時,
+ * VS Code 會把這份 state 原樣還給重建後的 script(design.md 決策 4)。
+ */
 function persistUiState(): void {
   if (current.screen !== 'walking' && current.screen !== 'quiz' && current.screen !== 'quizResult') return;
   const state: PersistedUiState = {
@@ -111,9 +113,11 @@ function restoreFileListFocus(root: HTMLElement, state: FileListState): void {
   (trigger ?? row.querySelector<HTMLButtonElement>('.codewalk-file-item'))?.focus();
 }
 
-/** event.composedPath() 在事件派發當下就固定路徑,不受後續 render() 整棵樹
+/**
+ * event.composedPath() 在事件派發當下就固定路徑,不受後續 render() 整棵樹
  * 重建、把原始 target 逐出 DOM 影響——用它判斷「這次點擊是否發生在選單內」
- * 才不會撞上時序問題(design.md 決策 6)。 */
+ * 才不會撞上時序問題(design.md 決策 6)。
+ */
 function isInsideAttemptMenu(event: MouseEvent): boolean {
   return event
     .composedPath()
@@ -244,8 +248,10 @@ function onJumpToSnippet(itemIndex: number): void {
   }
 }
 
-/** 失準的主 step 沒有既有的點擊跳轉(只有 snippet 項目有),重用既有的
- * jumpToStep 訊息重新觸發 host 端的自動跳轉——host 會依失準狀態走開檔不選取模式。 */
+/**
+ * 失準的主 step 沒有既有的點擊跳轉(只有 snippet 項目有),重用既有的
+ * jumpToStep 訊息重新觸發 host 端的自動跳轉——host 會依失準狀態走開檔不選取模式。
+ */
 function onOpenStaleFile(): void {
   if (current.screen === 'walking') {
     vscode.postMessage({ type: 'jumpToStep', stepIndex: current.stepIndex });

@@ -81,7 +81,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "format": "prettier --write \"{src,shared,ui}/**/*.ts\" \"*.js\"",
-    "format:check": "prettier --check \"{src,shared,ui}/**/*.ts\" \"*.js\""
+    "format:check": "prettier --check \"{src,shared,ui}/**/*.ts\" \"*.js\"",
+    "relocate-anchors": "node scripts/relocate-anchors.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

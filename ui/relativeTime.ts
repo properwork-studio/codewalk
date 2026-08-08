@@ -16,14 +16,20 @@ function calendarDayDiff(at: number, now: number): number {
   return Math.round((nowMidnight - atMidnight) / DAY);
 }
 
-// 絕對日期不隨介面語言變動——ISO 8601 是格式而非語言,且沒有 MM/DD 與
-// DD/MM 的歧義風險(design.md 決策 9,walk-player capability「作答時間的
-// 相對顯示」MODIFIED requirement)。
+/**
+ * 格式化為 `YYYY-MM-DD`。
+ *
+ * @remarks
+ * 絕對日期刻意不隨介面語言變動——ISO 8601 是格式而非語言,且沒有 MM/DD 與 DD/MM
+ * 的歧義風險(design.md 決策 9,walk-player capability「作答時間的相對顯示」
+ * MODIFIED requirement)。
+ */
 export function formatAbsoluteDate(at: number): string {
   const d = new Date(at);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** 格式化為 `YYYY-MM-DD HH:mm`,用於 hover 才顯示的完整時間。同樣不隨語言變動。 */
 export function formatAbsoluteDateTime(at: number): string {
   const d = new Date(at);
   return `${formatAbsoluteDate(at)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;

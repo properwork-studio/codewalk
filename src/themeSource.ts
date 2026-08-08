@@ -11,17 +11,19 @@ import {
 let themeNameCounter = 0;
 
 /**
- * 解析讀者當前 VS Code 主題,轉成可送往 webview 的 ResolvedEditorTheme。
- * 任一環節失敗(讀不到設定、找不到主題定義、讀檔失敗、JSON 解析失敗、
- * include 過深、沒有可用的 tokenColors)一律回傳 null——面板照常運作,
- * 只是配色退回內建的 dark-plus/light-plus(見 design.md 決策 3)。
+ * 解析讀者當前的 VS Code 主題,轉成可送往 webview 的 {@link ResolvedEditorTheme},
+ * 讓面板裡的程式碼上色跟編輯器一致。
  *
- * name 每次呼叫都不同(遞增計數器):Shiki 的 loadTheme() 對同名主題重載
- * 是 no-op(已實測),同名會讓「切換主題後重繪」失效。
+ * @returns 任一環節失敗(讀不到設定、找不到主題定義、讀檔或 JSON 解析失敗、
+ * include 過深、沒有可用的 tokenColors)一律回傳 null。這不是錯誤路徑——面板照常
+ * 運作,只是配色退回 Shiki 內建的 dark-plus/light-plus(design.md 決策 3)
  *
- * 純解析邏輯(findThemeDefinition/loadRawTheme/normalizeTokenColors/
- * themeKindFromUiTheme)拆在 themeParsing.ts 獨立測試;這裡只負責串接 vscode API,
- * 不寫進單元測試(依專案慣例,見 tasks.md 2.6 的 Extension Development Host 驗證)。
+ * @remarks
+ * 回傳的 `name` 每次呼叫都不同(遞增計數器)。Shiki 的 `loadTheme()` 對同名主題
+ * 重載是無操作(已實測),沿用同名會讓「切換主題後重繪」整個失效。
+ *
+ * 純解析邏輯拆在 `themeParsing.ts` 獨立測試;這裡只負責串接 vscode API,依專案
+ * 慣例不寫單元測試,改走 Extension Development Host 的手動驗證。
  */
 export async function resolveEditorTheme(): Promise<ResolvedEditorTheme | null> {
   try {
