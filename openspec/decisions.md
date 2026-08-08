@@ -8,7 +8,7 @@
 - **quiz 互動住 extension**:文件版做不到的互動正是本產品的存在理由之一
 - MVP 只做播放;「產生」按鈕(shell out `claude -p`)是二期,出場條件:MVP 自用滿意後
   - **注意「錄製」不等於「產生」**:產生是 AI 讀 diff 自動寫出導讀,錄製是人手動選一段程式碼寫敘述、不涉及 AI。上面那條禁的是產生;錄製是另一個決策,評估見 `docs/future-work.md`(含格式合約的時機問題——若要做錄製,`.codewalk.json` 很可能得加欄位,而使用者數是 0 的現在改它沒有成本)
-- **發佈已定案**(2026-08-07,取代原本「上架等實際使用需求出現再說」):走 Marketplace 公開發佈,上架欄位已備齊
+- **發佈已定案**(2026-08-07,取代原本「等實際使用需求出現再說」):走 Marketplace 公開發佈,上架欄位已備齊
   - **publisher `properworkstudio`**,extension 完整識別碼 `properworkstudio.codewalk`——**註冊後永久不可改**,它會出現在安裝指令與所有外部連結裡
   - **MIT 授權**:VS Code extension 生態的預設(含 VS Code 本身);Apache 2.0 的主要優勢是明文專利授權與報復條款,本專案沒有專利也不打算申請,用不上那份長度
   - **repo public**:`.codewalk.json` 定位為開放格式,要讓別人寫產生器就得有參考實作;附帶條件是 marketplace 頁面的圖片由 vsce 轉成 GitHub raw URL,**repo 沒推上去或不是 public,README 的圖就會破**
