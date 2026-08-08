@@ -24,6 +24,8 @@ Search for `CodeWalk` in the VS Code Extensions panel. After installing, a path 
 
 Create a `.codewalk/` folder at your repo root and add a `*.codewalk.json` file ([format below](#codewalkjson-format)).
 
+Don't want to write JSON by hand? [**Authoring walks**](docs/authoring-walks.md) has a prompt you can hand to any AI assistant — it covers three scopes: the whole codebase, the current git diff, or an area you name.
+
 > CodeWalk is a player only — **it does not generate walks for you**. Write the file however you like: by hand, with an AI, or with any tool — as long as it matches the format.
 
 **3. Start walking**

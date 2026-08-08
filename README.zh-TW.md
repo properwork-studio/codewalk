@@ -24,6 +24,8 @@ CodeWalk 會讀 repo 裡的導讀檔，一步一步帶著走：自動跳到對�
 
 在 repo 根目錄開一個 `.codewalk/` 資料夾，放進 `*.codewalk.json`（[格式見下方](#codewalkjson-格式)）。
 
+不想手寫 JSON？[**產生導讀的指引**](docs/authoring-walks.zh-TW.md) 附了一份可直接交給任何 AI 的 prompt，涵蓋三種範圍：整個 codebase、目前的 git diff，或你指定的特定部分。
+
 > CodeWalk 目前只播放，**不會幫你產生導讀**。檔案要自己來：手寫、請 AI 寫、用任何工具產都行，只要符合格式就可以使用。
 
 **3. 開始走**
