@@ -1,0 +1,731 @@
+{
+  "title": "CodeWalk end-to-end walk: from the JSON contract to the side panel",
+  "ref": "363320c8ee164652a0a859b68e1a14427207803c",
+  "regenerateHint": "Walk through CodeWalk's src/, shared/, and ui/ layers again, produce an English walk aligned to the current HEAD, output it to .codewalk/, and fill in the anchor field for every step and snippet.",
+  "passThreshold": 4,
+  "steps": [
+    {
+      "title": "Step 1: The big picture — what this project actually does",
+      "file": "README.md",
+      "startLine": 1,
+      "endLine": 9,
+      "narration": "CodeWalk is a VS Code extension: it reads JSON files from the `.codewalk/` directory in a repo and guides readers through the code step by step in the side panel. Each step automatically jumps to and highlights the matching file and line range, adds narration, collapsible glossary terms, and code snippets, and finishes with a self-check quiz.\n\n**You're using it to read itself right now** — this walk is a `.codewalk.json` file living under this repo's `.codewalk/` directory.\n\nTwo things are worth remembering up front — they explain a lot of the design choices that follow:\n\n1. **The MVP stage is player-only, no generator**. Where the JSON comes from isn't this extension's concern — AI-generated, hand-written, or produced by any other tool all work. A \"Generate\" button is a phase-two feature.\n2. **`.codewalk.json` is an open format**. It isn't tied to any specific tool, so the format itself is this product's external contract — this point keeps resurfacing from the next step onward.",
+      "terms": [
+        {
+          "term": "extension host",
+          "explanation": "The Node.js process VS Code uses to run extension code. It can touch the filesystem, open editors, and read settings, but it is **not** a browser environment — what you see in the panel runs in a separate sandbox (the webview), and the two can only talk to each other through messages. This boundary is the backbone of the whole architecture."
+        }
+      ],
+      "items": [
+        {
+          "kind": "tip",
+          "text": "Navigation: `→` / `↓` next step, `←` / `↑` previous step, `Esc` back to the list, `Home` reveal this step's code location (the panel needs focus first — just click anywhere in it)."
+        }
+      ],
+      "anchor": "# CodeWalk\n\n[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)\n\nEnglish | [繁體中文](README.zh-TW.md)\n\n> **Note:** The extension UI follows your VS Code display language (Traditional Chinese or English). Walk content (narration, quiz questions, etc.) is written by each walk's author and is shown as-is, unaffected by this setting.\n\nThe fastest way to actually understand someone else's code is to have a mentor sit next to you and walk you through it. CodeWalk brings that experience into the VS Code side panel.\n"
+    },
+    {
+      "title": "Step 2: How the extension claims a spot in the Activity Bar (the answer isn't code)",
+      "file": "package.json",
+      "startLine": 17,
+      "endLine": 35,
+      "narration": "The CodeWalk icon in the Activity Bar and the panel it opens — **not a single line of code creates them**. They're entirely declared through `package.json`'s `contributes` field. VS Code reads this manifest and knows what to draw.\n\nTwo things are declared here:\n\n- `viewsContainers.activitybar`: opens a container called `codewalk` in the Activity Bar, using `resources/icon.svg` as its icon\n- `views.codewalk`: places a view inside that container with id `codewalk.playerView` and `type: \"webview\"`\n\nThat id shows up again shortly — `WalkPlayerViewProvider.viewId` in `viewProvider.ts` must be **character-for-character identical** to the string here, or VS Code can't find the matching provider and the panel stays blank. It's a string contract with no type-level protection — you just have to remember it.\n\nThe `activationEvents` array above is empty on purpose: since VS Code 1.74, activation timing can be inferred automatically from `contributes` — declaring a view already means \"activate me when this view is opened,\" so there's no need to hand-write an `onView:` event.",
+      "terms": [
+        {
+          "term": "contributes",
+          "explanation": "The declarative section of a VS Code extension manifest, used to tell the editor what the extension provides — commands, menus, settings, views, themes, and so on. It's declarative: written in JSON, no registration code needed. VS Code already knows these items exist before the extension has even activated."
+        },
+        {
+          "term": "lazy activation",
+          "explanation": "By default an extension doesn't start with the editor — it loads only when actually needed (e.g. the first time a reader opens this panel). This keeps editors with dozens of installed extensions fast to open. An empty `activationEvents` doesn't mean \"never activates\" — it just hands the timing decision over to inference from `contributes`."
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "The four commands are also declared here — searchable in the command palette, and bindable to shortcuts",
+          "file": "package.json",
+          "startLine": 43,
+          "endLine": 66,
+          "anchor": "    \"views\": {\n      \"codewalk\": [\n        {\n          \"id\": \"codewalk.playerView\",\n          \"name\": \"Walk\",\n          \"type\": \"webview\"\n        }\n      ]\n    },\n    \"commands\": [\n      {\n        \"command\": \"codewalk.openWalk\",\n        \"title\": \"%command.openWalk.title%\",\n        \"category\": \"CodeWalk\"\n      },\n      {\n        \"command\": \"codewalk.nextStep\",\n        \"title\": \"%command.nextStep.title%\",\n        \"category\": \"CodeWalk\"\n      },\n      {\n        \"command\": \"codewalk.prevStep\",\n        \"title\": \"%command.prevStep.title%\",\n        \"category\": \"CodeWalk\""
+        },
+        {
+          "kind": "pitfall",
+          "misconception": "The panel's id is just an internal name — it can be anything, since the code maps it on its own anyway.",
+          "reality": "The string `codewalk.playerView` appears in both `package.json` and `src/viewProvider.ts`, and the two must match exactly. TypeScript can't see values inside JSON, so a typo won't fail compilation — it only shows up at runtime as a permanently blank panel, with no error message."
+        }
+      ],
+      "anchor": "    \"onboarding\",\n    \"code tour\",\n    \"walkthrough\",\n    \"code reading\"\n  ],\n  \"icon\": \"resources/icon-128.png\",\n  \"main\": \"./dist/extension.js\",\n  \"activationEvents\": [],\n  \"contributes\": {\n    \"viewsContainers\": {\n      \"activitybar\": [\n        {\n          \"id\": \"codewalk\",\n          \"title\": \"CodeWalk\",\n          \"icon\": \"resources/icon.svg\"\n        }\n      ]\n    },\n    \"views\": {"
+    },
+    {
+      "title": "Step 3: The one external contract for the whole project — the CodewalkFile type",
+      "file": "shared/schema.ts",
+      "startLine": 25,
+      "endLine": 56,
+      "narration": "This is the single most important thing in the whole product: the format definition for `.codewalk.json`. A step's required fields are `title` / `file` / `startLine` / `endLine` / `narration`, plus three optional ones:\n\n- `anchor` — the verbatim original code at that point in time. It's the basis for **staleness detection**, covered in full in steps 13 and 14\n- `terms` — collapsible glossary cards (the ones you're seeing right now)\n- `items` — supporting content components (the blocks below)\n\nThe large JSDoc block above is another contract: **long-form fields** like `narration` support six markdown syntax forms (inline code, bold, links, ordered/unordered lists, `##` subheadings), while **short fields** like `title`, `term.term`, and `quiz.question` support only the three inline forms. This tiering isn't implemented with filtering code — step 22 shows how it becomes \"picking the right function is the spec.\"\n\nBecause this is an external contract, renaming or removing any field is a breaking API change — old JSON sitting in someone else's repo would break immediately. The project rule is therefore: format changes always go through an OpenSpec change, and the definition is allowed to live in exactly this one file.",
+      "terms": [
+        {
+          "term": "external contract",
+          "explanation": "An interface between the product and the outside world (other tools, files hand-written by other people) that promises not to change casually. Here it's the JSON's field structure — its stability takes priority over internal code tidiness. Refactoring can happen any time; renaming a field can't."
+        },
+        {
+          "term": "discriminated union",
+          "explanation": "A union type made of objects distinguished by one common field (here, `kind`). TypeScript can narrow the type automatically inside a `switch` on this field, cutting down on type assertions — step 24's `renderItems()` runs entirely on this."
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "CodewalkItem: a discriminated union of the six supporting content kinds",
+          "file": "shared/schema.ts",
+          "startLine": 8,
+          "endLine": 23,
+          "anchor": "export type CodewalkItem =\n  // tip/todo.text、pitfall.misconception/reality 為長文欄位;reference/snippet/diff.label 為短欄位——見 CodewalkStep.narration 的說明。\n  | { kind: 'tip'; text: string }\n  | { kind: 'pitfall'; misconception: string; reality: string }\n  | { kind: 'todo'; text: string }\n  | { kind: 'reference'; label: string; url: string }\n  | { kind: 'snippet'; label: string; file: string; startLine: number; endLine: number; anchor?: string }\n  | {\n      kind: 'diff';\n      label: string;\n      file: string;\n      startLine: number;\n      endLine: number;\n      oldStartLine: number;\n      diffText: string;\n    };"
+        },
+        {
+          "kind": "snippet",
+          "label": "The top-level CodewalkFile — note regenerateHint, used in step 15",
+          "file": "shared/schema.ts",
+          "startLine": 68,
+          "endLine": 78,
+          "anchor": "export interface CodewalkFile {\n  /** 短欄位,markdown 子集僅行內三種——見 CodewalkStep.narration 的說明。 */\n  title: string;\n  ref: string;\n  steps: CodewalkStep[];\n  quiz: CodewalkQuizQuestion[];\n  /** 過關門檻(答對題數)。省略時預設為簡單多數(ceil(題數/2))。 */\n  passThreshold?: number;\n  /** 重新產生本導讀的方式,由產生器自述;播放器只顯示與複製,不解讀內容。 */\n  regenerateHint?: string;\n}"
+        },
+        {
+          "kind": "tip",
+          "text": "The blocks below the step you're reading right now are the actual rendered output of `items`: the yellow lightbulb is `tip`, the purple-bordered box is `pitfall`, the circle is `todo`, the external-link button is `reference`, the code block with line numbers is `snippet`, and the one with added/removed lines and two-column line numbers is `diff`. This walk deliberately uses all six, so you can check off the player's rendering along the way."
+        }
+      ],
+      "anchor": "export interface CodewalkStep {\n  /** 短欄位,markdown 子集僅行內三種——見下方 narration 的說明。 */\n  title: string;\n  file: string;\n  startLine: number;\n  endLine: number;\n  /**\n   * 播放器將此欄位依封閉的 markdown 子集渲染(markdown-rendering capability),\n   * 而非顯示原始標記字元。**長文欄位**(narration、term.explanation、tip/todo.text、\n   * pitfall.misconception/reality、quiz.optionExplanations)支援全部六種語法:\n   *\n   * - 行內程式碼:`` `code` ``\n   * - 粗體:`**text**`\n   * - 連結:`[文字](https://...)`——僅 http/https 生效,其餘網址原樣顯示、不可點擊\n   * - 無序清單:`- 項目`(支援縮排巢狀)\n   * - 有序清單:`1. 項目`\n   * - 二級小標:`## 標題`(僅 depth 2;`#`、`###` 以下不支援)\n   *\n   * **短欄位**(walk.title、step.title、term.term、quiz.question、quiz.options、\n   * item.label)只支援行內三種(程式碼/粗體/連結),清單與小標不生效、原樣顯示為\n   * 純文字(在按鈕、`<summary>` 這類元件裡放區塊語法本來就會破壞版面)。\n   *\n   * **降級規則統一**:表格、圖片、引用區塊、程式碼區塊(```)、`#`/`###` 以下標題、\n   * 原始 HTML、格式錯誤的語法——一律原樣顯示為純文字,不影響同一份導讀其餘部分\n   * 的載入與播放。單一換行維持斷行(不會被合併成一行),空行才分段落。\n   */\n  narration: string;\n  /** 產出當下該行段的程式碼原文,用於失準偵測(見 stale-step-detection capability)。 */\n  anchor?: string;\n  terms?: CodewalkTerm[];\n  items?: CodewalkItem[];\n}"
+    },
+    {
+      "title": "Step 4: How each of the six components validates itself — validateItem",
+      "file": "shared/schema.ts",
+      "startLine": 214,
+      "endLine": 275,
+      "narration": "`validateItem()` is a switch on `kind`, and each branch checks only the fields that specific component actually needs: `tip`/`todo` just need `text`; `reference` needs `label` plus a **valid http/https URL**; `snippet` needs a file and line range; `diff` additionally needs `oldStartLine` and `diffText`.\n\nTwo details worth a closer look:\n\n1. **The `default` branch reports an error** instead of silently passing through. An unrecognized `kind` means this JSON came from a generator newer than the player — rather than half-rendering it, it's better to tell the reader plainly that the file can't be read.\n2. **`diffText` gets a semantic check** (`hasAtLeastOneChangedLine`) — it must have at least one line starting with `+` or `-`. Content with no actual change should be expressed as a `snippet`, not a `diff`. This is a rule the type system can't enforce — only the validator can.\n\nNote that the `errors` array is threaded all the way through (`errors.push(...)`) rather than throwing to abort. Validation runs to completion in one pass, so the reader sees every problem at once instead of fixing one only to hit the next.",
+      "terms": [
+        {
+          "term": "validator",
+          "explanation": "Code that actually checks, at runtime, whether data matches the expected shape. TypeScript's types disappear after compilation and offer zero protection for \"JSON read off disk\" — the validator is the only bridge between types and reality."
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "isHttpUrl: reference.url and inline markdown links share the same check",
+          "file": "shared/schema.ts",
+          "startLine": 120,
+          "endLine": 129,
+          "anchor": "/** 判定是否為合法 http/https 網址;`reference.url` 驗證與 ui/markdown.ts 的內嵌連結降級共用同一判定。 */\nexport function isHttpUrl(value: unknown): value is string {\n  if (typeof value !== 'string') return false;\n  try {\n    const url = new URL(value);\n    return url.protocol === 'http:' || url.protocol === 'https:';\n  } catch {\n    return false;\n  }\n}"
+        },
+        {
+          "kind": "diff",
+          "label": "This is what a diff component looks like (this is a demo diff for illustration, not a real change)",
+          "file": "shared/schema.ts",
+          "startLine": 256,
+          "endLine": 260,
+          "oldStartLine": 256,
+          "diffText": "     } else if (!hasAtLeastOneChangedLine(it.diffText)) {\n-      errors.push(`${path}.diffText 內容有問題`);\n+      errors.push(`${path}.diffText 至少要有一行新增(+)或刪除(-)`);\n     }\n     break;"
+        }
+      ],
+      "anchor": "function validateItem(item: unknown, path: string, errors: string[]): void {\n  if (typeof item !== 'object' || item === null) {\n    errors.push(`${path} must be an object`);\n    return;\n  }\n  const it = item as Record<string, unknown>;\n  switch (it.kind) {\n    case 'tip':\n    case 'todo':\n      if (!isNonEmptyString(it.text)) {\n        errors.push(`${path}.text must be a non-empty string`);\n      }\n      break;\n    case 'pitfall':\n      if (!isNonEmptyString(it.misconception)) {\n        errors.push(`${path}.misconception must be a non-empty string`);\n      }\n      if (!isNonEmptyString(it.reality)) {\n        errors.push(`${path}.reality must be a non-empty string`);\n      }\n      break;\n    case 'reference':\n      if (!isNonEmptyString(it.label)) {\n        errors.push(`${path}.label must be a non-empty string`);\n      }\n      if (!isHttpUrl(it.url)) {\n        errors.push(`${path}.url must be a valid http/https URL`);\n      }\n      break;\n    case 'snippet':\n      if (!isNonEmptyString(it.label)) {\n        errors.push(`${path}.label must be a non-empty string`);\n      }\n      if (!isNonEmptyString(it.file)) {\n        errors.push(`${path}.file must be a non-empty string`);\n      }\n      validateLineRange(it, path, errors);\n      if (!isOptionalString(it.anchor)) {\n        errors.push(`${path}.anchor must be a string`);\n      }\n      break;\n    case 'diff':\n      if (!isNonEmptyString(it.label)) {\n        errors.push(`${path}.label must be a non-empty string`);\n      }\n      if (!isNonEmptyString(it.file)) {\n        errors.push(`${path}.file must be a non-empty string`);\n      }\n      validateLineRange(it, path, errors);\n      if (!isPositiveInteger(it.oldStartLine)) {\n        errors.push(`${path}.oldStartLine must be a positive integer`);\n      }\n      if (!isNonEmptyString(it.diffText)) {\n        errors.push(`${path}.diffText must be a non-empty string`);\n      } else if (!hasAtLeastOneChangedLine(it.diffText)) {\n        errors.push(`${path}.diffText must contain at least one added (+) or removed (-) line`);\n      }\n      break;\n    default:\n      errors.push(`${path}.kind must be one of tip/pitfall/todo/reference/snippet/diff`);\n  }\n}"
+    },
+    {
+      "title": "Step 5: Why hand-write a 200-plus-line validator",
+      "file": "shared/schema.ts",
+      "startLine": 313,
+      "endLine": 358,
+      "narration": "`validateCodewalk()` takes `unknown` and returns a discriminated union: `{ valid: true, value }` or `{ valid: false, errors }`. Callers can't forget to check — TypeScript won't let you touch `value` before confirming `valid`.\n\nYou might wonder: why not Zod or JSON Schema? A few reasons:\n\n- **Zero runtime dependency**. This file is imported by both the extension host and the webview — adding a runtime dependency would bloat both bundles\n- **Error messages can be written for humans** — though as of the `add-interface-localization` change (2026-08-08), these messages are always fixed English (they're diagnostic output for a format contract, often pasted into issues and CI logs across language boundaries; see the header comment in `shared/i18n.ts`) — still far more legible than a library's generic messages, e.g. `steps[3].endLine must not be less than startLine`\n- **It can express rules the type system can't**, like the previous step's `diffText` semantic check, `passThreshold` having to fall between 1 and the question count, or `optionExplanations` needing the same length as `options`\n\nThe cost is maintaining these 200-plus lines yourself. This is the flip side of rule of three: **on a core contract you know will stick around long-term, hand-writing it beats bringing in an abstraction.**",
+      "items": [
+        {
+          "kind": "reference",
+          "label": "TypeScript Handbook: Discriminated Unions",
+          "url": "https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions"
+        },
+        {
+          "kind": "tip",
+          "text": "`shared/schema.test.ts` has 64 tests riding entirely on this file — the most densely tested spot in the whole repo, because it's the external contract, and the cost of it regressing is the highest."
+        }
+      ],
+      "anchor": "export function validateCodewalk(data: unknown): ValidationResult {\n  const errors: string[] = [];\n\n  if (typeof data !== 'object' || data === null) {\n    return { valid: false, errors: ['The walk file must be a JSON object'] };\n  }\n  const d = data as Record<string, unknown>;\n\n  if (!isNonEmptyString(d.title)) {\n    errors.push('title must be a non-empty string');\n  }\n  if (!isNonEmptyString(d.ref)) {\n    errors.push('ref must be a non-empty string');\n  }\n  if (!Array.isArray(d.steps) || d.steps.length === 0) {\n    errors.push('steps must be an array with at least 1 element');\n  } else {\n    d.steps.forEach((step, i) => validateStep(step, `steps[${i}]`, errors));\n  }\n  if (!Array.isArray(d.quiz) || d.quiz.length === 0) {\n    errors.push('quiz must be an array with at least 1 question');\n  } else {\n    d.quiz.forEach((q, i) => validateQuizQuestion(q, `quiz[${i}]`, errors));\n  }\n\n  if (d.passThreshold !== undefined) {\n    const quizLength = Array.isArray(d.quiz) ? d.quiz.length : undefined;\n    if (\n      typeof d.passThreshold !== 'number' ||\n      !Number.isInteger(d.passThreshold) ||\n      d.passThreshold < 1 ||\n      (quizLength !== undefined && d.passThreshold > quizLength)\n    ) {\n      errors.push('passThreshold must be an integer between 1 and the number of quiz questions');\n    }\n  }\n\n  if (d.regenerateHint !== undefined && !isNonEmptyString(d.regenerateHint)) {\n    errors.push('regenerateHint must be a non-empty string');\n  }\n\n  if (errors.length > 0) {\n    return { valid: false, errors };\n  }\n  return { valid: true, value: data as CodewalkFile };\n}"
+    },
+    {
+      "title": "Step 6: Who reads all that JSON — walkLoader",
+      "file": "src/walkLoader.ts",
+      "startLine": 32,
+      "endLine": 61,
+      "narration": "`listWalkFiles()` scans the `.codewalk/` directory, reads every `*.codewalk.json` file, validates it, and assembles a list for the panel to display. Three design choices stand out:\n\n1. **`Promise.all` instead of awaiting one at a time**. Files are read in parallel, and the returned order is guaranteed to match `filePaths` regardless of which file finishes reading first — so the list order stays stable\n2. **A broken file doesn't disappear** — it falls back to showing its filename (`basename(filePath)`). The reader can see \"this file exists but can't be read,\" rather than it silently vanishing\n3. **`getAttempt` / `getProgress` are injected functions**, not imported modules. This means walkLoader has no idea where quiz records or reading progress are stored, or how — which lets it be tested directly in Vitest without touching the VS Code API\n\nThe `findCodewalkFiles()` function above wraps `readdir` in a `try/catch` and returns an empty array if the directory doesn't exist. **Not having a `.codewalk/` directory is a perfectly normal state** (most repos don't have one) — not an error.",
+      "terms": [
+        {
+          "term": "dependency injection",
+          "explanation": "Passing in whatever a piece of code needs as a parameter, instead of importing it internally. The benefit is that the caller can swap the implementation — a fake one in tests, a real one in production. `getAttempt` / `getProgress` here work exactly this way, letting walkLoader's tests run with zero VS Code runtime."
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "Extension filtering and sorting are pulled out into pure functions for easy independent testing",
+          "file": "src/walkLoader.ts",
+          "startLine": 6,
+          "endLine": 19,
+          "anchor": "export function filterCodewalkFileNames(fileNames: string[]): string[] {\n  return fileNames.filter((name) => name.endsWith('.codewalk.json')).sort();\n}\n\nexport async function findCodewalkFiles(workspaceRoot: string): Promise<string[]> {\n  const codewalkDir = join(workspaceRoot, '.codewalk');\n  let entries: string[];\n  try {\n    entries = await readdir(codewalkDir);\n  } catch {\n    return [];\n  }\n  return filterCodewalkFileNames(entries).map((name) => join(codewalkDir, name));\n}"
+        }
+      ],
+      "anchor": "export async function listWalkFiles(\n  workspaceRoot: string,\n  getAttempt?: (filePath: string, ref: string) => AttemptSummary | undefined,\n  getProgress?: (filePath: string, ref: string) => WalkProgressSummary | undefined,\n): Promise<WalkFileSummary[]> {\n  const filePaths = await findCodewalkFiles(workspaceRoot);\n  // 並行讀取:Promise.all 保證回傳順序等同 filePaths,與檔案讀完的先後無關\n  return Promise.all(\n    filePaths.map(async (filePath) => {\n      const result = await loadCodewalkFile(filePath);\n      const summary: WalkFileSummary = {\n        path: filePath,\n        title: result.valid ? result.value.title : basename(filePath),\n      };\n      if (result.valid && getAttempt) {\n        const lastAttempt = getAttempt(filePath, result.value.ref);\n        if (lastAttempt) {\n          summary.lastAttempt = lastAttempt;\n        }\n      }\n      if (result.valid && getProgress) {\n        const progress = getProgress(filePath, result.value.ref);\n        if (progress) {\n          summary.progress = progress;\n        }\n      }\n      return summary;\n    }),\n  );\n}"
+    },
+    {
+      "title": "Step 7: The extension's entry point, activate()",
+      "file": "src/extension.ts",
+      "startLine": 5,
+      "endLine": 25,
+      "narration": "The whole extension's entry point is about 20 lines, doing three things: setting the interface language, registering the webview provider, and registering four commands. The latter two are all pushed into `context.subscriptions`, which VS Code cleans up together when the extension deactivates.\n\n**`setLocale(resolveLocale(vscode.env.language))` has to be the first line** — it runs before `WalkPlayerViewProvider` is even constructed, because the panel's HTML (next step) needs the resolved language at construction time. `shared/i18n.ts` is the same translation table shared by the host (here) and the webview, but the two are separate bundles, each holding its own module state — so the webview side (step 21) has its own near-identical `setLocale()` call too. That's not an oversight or duplication.\n\nThe real point of interest is hiding in that options object: **`retainContextWhenHidden: true`**.\n\nBy default, when a reader switches the side panel away (to the Explorer, say) and back, VS Code destroys and rebuilds the whole webview — which step they were on, scroll position, which terms were expanded, all reset to zero. For a \"walkthrough player,\" that's fatal. This option keeps the webview alive in memory while hidden, so switching back restores it exactly as it was.\n\nThe cost is memory. This is an option the official docs explicitly say to \"avoid when possible\" — but the trade-off here is clear: for a reading tool, losing your place every time you switch away and back is unacceptable.\n\nIt's not a silver bullet either — the webview can still be rebuilt for other reasons (the view being dragged to a different container, system resource pressure). Step 23 covers the remaining line of defense.",
+      "terms": [
+        {
+          "term": "subscriptions",
+          "explanation": "VS Code's cleanup convention. Any registration (a command, a listener, a provider) returns an object with a `dispose()` method. Once pushed into `context.subscriptions`, VS Code automatically calls dispose on all of them when the extension deactivates — no manual cleanup code needed."
+        }
+      ],
+      "items": [
+        {
+          "kind": "pitfall",
+          "misconception": "Once `retainContextWhenHidden` is on, the webview's state can never be lost.",
+          "reality": "It only guards against one kind of rebuild: the panel being hidden and shown again. The webview can still be rebuilt if the view is dragged to a different container, or the editor reclaims resources — and a full VS Code restart always rebuilds it. The project has two more layers for this: the webview's own `setState` (step 23) and progress written to workspaceState on the host side (step 24)."
+        },
+        {
+          "kind": "reference",
+          "label": "VS Code docs: Webview persistence and retainContextWhenHidden",
+          "url": "https://code.visualstudio.com/api/extension-guides/webview#persistence"
+        }
+      ],
+      "anchor": "export function activate(context: vscode.ExtensionContext): void {\n  // 必須早於 WalkPlayerViewProvider 的建構——getHtml() 會用到判定結果\n  // (design.md 決策 5)。\n  setLocale(resolveLocale(vscode.env.language));\n  const provider = new WalkPlayerViewProvider(context);\n\n  context.subscriptions.push(\n    // retainContextWhenHidden:面板隱藏(切到其他側邊面板)時不重建 webview,\n    // 讀者切走再切回來能維持原本讀到哪、捲動位置與展開中的術語(reading-progress\n    // capability「面板重建後還原閱讀位置」,design.md 決策 1 第 1 層)。\n    vscode.window.registerWebviewViewProvider(WalkPlayerViewProvider.viewId, provider, {\n      webviewOptions: { retainContextWhenHidden: true },\n    }),\n    vscode.commands.registerCommand('codewalk.openWalk', () => {\n      void vscode.commands.executeCommand(`${WalkPlayerViewProvider.viewId}.focus`);\n    }),\n    vscode.commands.registerCommand('codewalk.nextStep', () => provider.handleNextStep()),\n    vscode.commands.registerCommand('codewalk.prevStep', () => provider.handlePrevStep()),\n    vscode.commands.registerCommand('codewalk.revealCurrentStep', () => provider.handleRevealCurrentStep()),\n  );\n}"
+    },
+    {
+      "title": "Step 8: The webview's HTML is hand-assembled by the host (CSP and nonce)",
+      "file": "src/viewProvider.ts",
+      "startLine": 304,
+      "endLine": 335,
+      "narration": "There's no `.html` file behind what's in the panel — it's built from this string template. Three things that are non-negotiable:\n\n1. **`asWebviewUri()`**: the webview lives in its own sandbox and can't use file paths directly. Every resource (js/css/fonts) has to be converted into a special `vscode-webview://` URI, and its source is restricted to directories allowed by `localResourceRoots` (only `dist/` is opened up here).\n2. **CSP + nonce**: `default-src 'none'` locks everything down by default, then opens things up item by item. `script-src 'nonce-...'` means only a `<script>` carrying the correct nonce attribute is allowed to run — the nonce is freshly randomized on every load, so an injected script can't guess it and can't execute.\n3. **The order of the `<link>` tags matters**. The comment in the middle explains why: codicon.css sets `.codicon`'s font size using the `font` shorthand property, which ties with theme.css's override at the same selector specificity — when specificity is equal, the cascade favors whichever comes later, so theme.css must come after codicon.css for the size override to actually take effect.\n\nPoint 3 is the kind of knowledge you can't recover just by reading the code — only a comment preserves it. This repo is full of comments like that; they're harder to reconstruct than the code itself.\n\n**A fourth small thing**: `<html lang=\"${htmlLang}\">` is also decided here. `getLocale()` reads the language already resolved on the first line of `activate()`, converts it to the semantically correct HTML language tag (`zh-Hant` or `en`), and writes it into the tag — when the webview boots, it reads that same value back from `document.documentElement.lang`. The two sides stay in sync through this one string, with no extra postMessage field needed.",
+      "terms": [
+        {
+          "term": "CSP",
+          "explanation": "Content Security Policy, a browser's content security policy. Declared via an HTTP header or a `<meta>` tag, it states \"which sources this page is allowed to load or execute resources from.\" VS Code requires webviews to set a CSP, because content running in a webview often comes from untrusted sources."
+        },
+        {
+          "term": "nonce",
+          "explanation": "number used once — a fresh one-time random string generated on every page load. CSP uses it to distinguish \"a script I put here myself\" from \"an injected script\": the former can produce the correct nonce, the latter can't guess it. This one is generated from 32 random hex characters."
+        },
+        {
+          "term": "specificity",
+          "explanation": "The weighting CSS uses to decide which rule wins. ID selectors outrank class selectors, which outrank tag selectors. **When weight is equal**, source order decides (later wins) — which is exactly why the `<link>` order in this step affects the result."
+        }
+      ],
+      "items": [
+        {
+          "kind": "reference",
+          "label": "VS Code docs: Webview Content Security Policy",
+          "url": "https://code.visualstudio.com/api/extension-guides/webview#content-security-policy"
+        }
+      ],
+      "anchor": "  private getHtml(webview: vscode.Webview): string {\n    const scriptUri = webview.asWebviewUri(\n      vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview.js'),\n    );\n    const styleUri = webview.asWebviewUri(\n      vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview.css'),\n    );\n    const codiconUri = webview.asWebviewUri(\n      vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'codicon.css'),\n    );\n    const nonce = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');\n    // getLocale() 讀的是 activate() 首行已設定好的 host locale——webview 開機時\n    // 從這個標籤讀回判定結果,兩邊共用同一個 resolveLocale()(design.md 決策 4、5)。\n    const htmlLang = getLocale() === 'zh-tw' ? 'zh-Hant' : 'en';\n\n    return `<!DOCTYPE html>\n<html lang=\"${htmlLang}\">\n<head>\n  <meta charset=\"UTF-8\" />\n  <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src ${webview.cspSource}; font-src ${webview.cspSource}; script-src 'nonce-${nonce}';\" />\n  <!-- codicon.css 要先載入:它對 .codicon 的 font-size 用 font 這個 shorthand 屬性設定,\n       跟 theme.css 裡對應覆寫的 selector specificity 打平時,cascade 順序在後的會贏,\n       所以 theme.css 必須排在 codicon.css 之後,尺寸覆寫才會生效。 -->\n  <link href=\"${codiconUri}\" rel=\"stylesheet\" />\n  <link href=\"${styleUri}\" rel=\"stylesheet\" />\n</head>\n<body>\n  <div id=\"app\" tabindex=\"0\"></div>\n  <script nonce=\"${nonce}\" src=\"${scriptUri}\"></script>\n</body>\n</html>`;\n  }"
+    },
+    {
+      "title": "Step 9: The only channel between the two layers — the postMessage protocol",
+      "file": "shared/protocol.ts",
+      "startLine": 88,
+      "endLine": 121,
+      "narration": "The extension host and the webview are two different runtime environments: the host is Node.js, with access to the filesystem and the VS Code API; the webview is a sandboxed browser environment that can only touch the DOM. **`postMessage` is the only way they can talk to each other**, and this file is the single place that protocol is defined.\n\nThe `HostToWebviewMessage` union lists every kind of message the host can send. What each one carries is worth noting:\n\n- `walkLoaded` bundles `walk` + `stepIndex` + `refDrifted` + `anchorReport` + `snippetPreviews` all at once — **the webview can render the entire screen from this one message, with no need to ask anything back**\n- `walkRestored` has the exact same fields as `walkLoaded`, yet it's a separate message kind. The semantics differ: one means \"the reader picked a new walk\" (should jump the editor), the other means \"the panel got rebuilt, here's your screen back\" (should **not** touch the editor). Same shape of data, different intent — splitting it into two message kinds is clearer than adding one more boolean flag\n\nThis \"send it all at once\" design means the webview never needs an async round-trip query — state updates are atomic: receive a message → swap the state → redraw.",
+      "terms": [
+        {
+          "term": "postMessage",
+          "explanation": "The standard mechanism for passing messages across runtime environments. The object sent goes through **structured clone** — not passed by reference, but copied. So only serializable data can be sent: objects, arrays, and primitives are fine; functions, class instances, and DOM nodes are not."
+        },
+        {
+          "term": "single source of definition",
+          "explanation": "The principle that a given piece of knowledge is written in exactly one place. Here it means the protocol types live only in `shared/protocol.ts`, imported by both the host and the webview — if either side changes a message's shape, the other side fails to compile, instead of only surfacing the mismatch at runtime."
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "The webview → host message kinds, and why backToList can't reuse webviewReady",
+          "file": "shared/protocol.ts",
+          "startLine": 123,
+          "endLine": 141,
+          "anchor": "export type WebviewToHostMessage =\n  | { type: 'webviewReady' }\n  | { type: 'selectWalkFile'; path: string }\n  | { type: 'nextStep' }\n  | { type: 'prevStep' }\n  | { type: 'jumpToStep'; stepIndex: number }\n  | { type: 'quizSubmitted'; answers: number[] }\n  | { type: 'openReference'; url: string }\n  | { type: 'jumpToSnippet'; stepIndex: number; itemIndex: number }\n  | { type: 'clearAttempt'; path: string }\n  | { type: 'copyRegenerateHint' }\n  | { type: 'resumeWalk'; path: string }\n  | { type: 'revealCurrentStep' }\n  /**\n   * 從走讀/quiz 結果畫面返回列表——與 webviewReady 分開,因為 host 用\n   * currentWalk 是否存在判斷「該不該回灌 walkRestored」(design.md 決策 1);\n   * 若沿用 webviewReady 讓 host 誤以為仍在同一份導讀,回列表會被立刻拉回去。\n   */\n  | { type: 'backToList' };"
+        },
+        {
+          "kind": "tip",
+          "text": "`effectiveLineRange()` also lives in this file. It's a pure function **shared** by the host and the webview: when a step has shifted, both sides need to compute the same answer for whether to use the new line numbers or the old ones, or the line numbers shown in the panel would disagree with where the jump actually lands. It's placed in protocol.ts because that's the one place both sides can import it from."
+        }
+      ],
+      "anchor": "export type HostToWebviewMessage =\n  | { type: 'walkFileList'; files: WalkFileSummary[] }\n  | {\n      type: 'walkLoaded';\n      walk: CodewalkFile;\n      stepIndex: number;\n      refDrifted: boolean;\n      anchorReport: AnchorReport;\n      snippetPreviews: SnippetPreviewResult[];\n    }\n  | { type: 'stepChanged'; stepIndex: number; snippetPreviews: SnippetPreviewResult[] }\n  | { type: 'loadError'; message: string }\n  | { type: 'stepJumpError'; message: string }\n  | {\n      type: 'themeChanged';\n      /** host 無法解析讀者當前主題時為 null,webview 改依 kind 選用內建主題。 */\n      theme: ResolvedEditorTheme | null;\n      kind: 'light' | 'dark';\n    }\n  | {\n      /**\n       * webview 在同一個 session 內真的被重建(非常態的面板隱藏/顯示,例如\n       * view 被拖到別的容器)時,host 依然持有的導讀內容回灌——webview 收到\n       * 後只帶 walk 與 host 端的 stepIndex,細部畫面(walking/quiz/quizResult)\n       * 由 webview 自己保留的 setState 決定(reading-progress capability\n       * 「面板重建後還原閱讀位置」,design.md 決策 1、4)。\n       */\n      type: 'walkRestored';\n      walk: CodewalkFile;\n      stepIndex: number;\n      refDrifted: boolean;\n      anchorReport: AnchorReport;\n      snippetPreviews: SnippetPreviewResult[];\n    };"
+    },
+    {
+      "title": "Step 10: The host trusts nothing the webview sends it",
+      "file": "shared/protocol.ts",
+      "startLine": 147,
+      "endLine": 185,
+      "narration": "`WebviewToHostMessage`, defined in the previous step, is a compile-time type. But TypeScript's types vanish after compilation — what `onDidReceiveMessage` actually receives is `unknown`.\n\n`parseWebviewToHostMessage()` is the gate that turns `unknown` back into a type. It switches on `d.type`, and **each branch individually checks the field types that message actually needs** — if anything doesn't match, it returns `null` and the host simply ignores it.\n\nThis isn't formalism. Arbitrary JavaScript runs inside the webview, and walk JSON might come from someone else's repo — \"the host never trusts the webview\" is the default posture of this architecture, the same logic as a browser not trusting a form submitted from the frontend.\n\nNotice the pattern in each branch: `typeof d.path === 'string' ? { type: 'selectWalkFile', path: d.path } : null`. It **reconstructs** a clean object rather than casting the original one and letting it through. That way, even if the sender attached extra fields, they can't get carried along into the host's processing pipeline.",
+      "items": [
+        {
+          "kind": "pitfall",
+          "misconception": "Both sides share the type definitions in `shared/protocol.ts`, so a message the host receives is naturally that type already — no need to check it again.",
+          "reality": "Only the **compile-time** type is shared. After a message goes through postMessage's structured clone, what you see at runtime is `unknown` — it doesn't automatically become the declared type again. This one comes up in the quiz shortly."
+        },
+        {
+          "kind": "todo",
+          "text": "Right now `openReference` only checks that `url` is a string — the actual http/https check happens further upstream (`schema.ts` validating `reference.url`) and in `ui/markdown.ts`'s link degradation. If another channel is ever able to send `openReference`, it would be worth adding an `isHttpUrl()` check here too."
+        }
+      ],
+      "anchor": "export function parseWebviewToHostMessage(data: unknown): WebviewToHostMessage | null {\n  if (typeof data !== 'object' || data === null) {\n    return null;\n  }\n  const d = data as Record<string, unknown>;\n\n  switch (d.type) {\n    case 'webviewReady':\n      return { type: 'webviewReady' };\n    case 'selectWalkFile':\n      return typeof d.path === 'string' ? { type: 'selectWalkFile', path: d.path } : null;\n    case 'nextStep':\n      return { type: 'nextStep' };\n    case 'prevStep':\n      return { type: 'prevStep' };\n    case 'jumpToStep':\n      return typeof d.stepIndex === 'number' ? { type: 'jumpToStep', stepIndex: d.stepIndex } : null;\n    case 'quizSubmitted':\n      return isStringArrayLike(d.answers) ? { type: 'quizSubmitted', answers: d.answers } : null;\n    case 'openReference':\n      return typeof d.url === 'string' ? { type: 'openReference', url: d.url } : null;\n    case 'jumpToSnippet':\n      return typeof d.stepIndex === 'number' && typeof d.itemIndex === 'number'\n        ? { type: 'jumpToSnippet', stepIndex: d.stepIndex, itemIndex: d.itemIndex }\n        : null;\n    case 'clearAttempt':\n      return typeof d.path === 'string' ? { type: 'clearAttempt', path: d.path } : null;\n    case 'copyRegenerateHint':\n      return { type: 'copyRegenerateHint' };\n    case 'resumeWalk':\n      return typeof d.path === 'string' ? { type: 'resumeWalk', path: d.path } : null;\n    case 'revealCurrentStep':\n      return { type: 'revealCurrentStep' };\n    case 'backToList':\n      return { type: 'backToList' };\n    default:\n      return null;\n  }\n}"
+    },
+    {
+      "title": "Step 11: The five things the host does when loading a walk",
+      "file": "src/viewProvider.ts",
+      "startLine": 210,
+      "endLine": 246,
+      "narration": "`loadWalk()` is the densest stretch of code on the host side. When a reader clicks a walk, this happens in order:\n\n1. **Read the file + validate** — on failure, send `loadError` with all errors joined by `; ` for the reader, and stop here\n2. **Compare `ref` against HEAD** — computes `refDrifted` (step 12)\n3. **Build the anchor verification report** — `buildAnchorReport()` checks step by step whether each anchor still matches (steps 14, 15)\n4. **Decide the starting step** — this is where the `resume` option branches\n5. **Send `walkLoaded` all at once**, then (depending on the situation) jump the editor\n\nPoints 4 and 5 are worth pausing on. The starting step is decided by this one line:\n\n`this.stepIndex = Math.min(Math.max(progress?.stepIndex ?? 0, 0), maxIndex);`\n\nIt handles three things at once: start at 0 if there's no progress, progress can never be negative, and **progress can never exceed the current step count**. That last case genuinely happens — regenerate a walk with fewer steps than before, and old progress goes out of bounds. One clamp handles it, with no special-casing needed.\n\nOnly at the end does `if (!options.resume)` jump the editor. **Resuming shouldn't unilaterally open a file** — the reader might be looking at something else; restoring the reading position is the panel's own business and shouldn't touch the editor. This same rule shows up again in step 23's panel-rebuild path.",
+      "terms": [
+        {
+          "term": "clamp",
+          "explanation": "The operation of confining a value between an upper and lower bound, typically written `Math.min(Math.max(x, lo), hi)`. Compared to handling every out-of-range case with separate ifs, clamp collapses \"pull any unreasonable value back into range\" into one line, leaving fewer chances to miss a case."
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "handleMessage: each kind of message from the webview maps to its own handler",
+          "file": "src/viewProvider.ts",
+          "startLine": 62,
+          "endLine": 110,
+          "anchor": "  private async handleMessage(raw: unknown): Promise<void> {\n    const msg = parseWebviewToHostMessage(raw);\n    if (!msg) return;\n\n    switch (msg.type) {\n      case 'webviewReady':\n        await this.sendTheme();\n        await this.sendFileList();\n        await this.sendRestoreIfActive();\n        break;\n      case 'selectWalkFile':\n        await this.loadWalk(msg.path);\n        break;\n      case 'resumeWalk':\n        await this.loadWalk(msg.path, { resume: true });\n        break;\n      case 'revealCurrentStep':\n        await this.jumpToCurrentStep();\n        break;\n      case 'nextStep':\n        await this.moveStep(1);\n        break;\n      case 'prevStep':\n        await this.moveStep(-1);\n        break;\n      case 'jumpToStep':\n        await this.setStep(msg.stepIndex);\n        break;\n      case 'quizSubmitted':\n        await this.handleQuizSubmitted(msg.answers);\n        break;\n      case 'openReference':\n        await vscode.env.openExternal(vscode.Uri.parse(msg.url));\n        break;\n      case 'jumpToSnippet':\n        await this.handleJumpToSnippet(msg.stepIndex, msg.itemIndex);\n        break;\n      case 'clearAttempt':\n        await this.handleClearAttempt(msg.path);\n        break;\n      case 'copyRegenerateHint':\n        await this.handleCopyRegenerateHint();\n        break;\n      case 'backToList':\n        this.clearActiveWalk();\n        await this.sendFileList();\n        break;\n    }\n  }"
+        },
+        {
+          "kind": "tip",
+          "text": "In the same class, `setStep()`'s order is: clamp first, **save progress**, send `stepChanged`, then jump the editor last. Saving progress before sending the message means \"which step the reader is on\" is already persisted before the screen updates — even if the editor crashes right after, the progress is still there."
+        }
+      ],
+      "anchor": "  private async loadWalk(path: string, options: { resume?: boolean } = {}): Promise<void> {\n    const result = await loadCodewalkFile(path);\n    if (!result.valid) {\n      this.post({ type: 'loadError', message: result.errors.join('; ') });\n      return;\n    }\n\n    this.currentWalk = result.value;\n    this.currentWalkPath = path;\n    this.refDrifted = false;\n\n    const root = getWorkspaceRoot();\n    if (root) {\n      const head = await getWorkspaceHead(root);\n      this.refDrifted = head !== null && isRefDrifted(head, result.value.ref);\n      this.anchorReport = buildAnchorReport(root, result.value);\n    } else {\n      this.anchorReport = emptyAnchorReport(result.value);\n    }\n\n    const maxIndex = this.currentWalk.steps.length - 1;\n    const progress =\n      options.resume && root ? this.progressStore.get(root, path, result.value.ref) : undefined;\n    this.stepIndex = Math.min(Math.max(progress?.stepIndex ?? 0, 0), maxIndex);\n\n    this.post({\n      type: 'walkLoaded',\n      walk: this.currentWalk,\n      stepIndex: this.stepIndex,\n      refDrifted: this.refDrifted,\n      anchorReport: this.anchorReport,\n      snippetPreviews: await this.readCurrentSnippetPreviews(),\n    });\n    if (!options.resume) {\n      await this.jumpToCurrentStep();\n    }\n  }"
+    },
+    {
+      "title": "Step 12: Ref drift detection — a derived snapshot's self-awareness",
+      "file": "src/refDrift.ts",
+      "startLine": 6,
+      "endLine": 17,
+      "narration": "A walk is written against \"the code as of some commit,\" and the `ref` field is that commit's sha. But a reader's workspace could be on any commit at any time — and when it is, the walk's line numbers might already be pointing at the wrong place.\n\nThis file is only 17 lines: run `git rev-parse HEAD`, compare it to `ref`, and anything different counts as drift. If HEAD can't be obtained (not a git repo, git not installed), it returns `null` — **not treated as drift**; don't scare the reader when you're not sure.\n\nThis is a posture that keeps recurring in this project: **a walk is a derived snapshot of the code, and it has to know it might be out of date**. But comparing refs is coarse — the whole file gets a warning as soon as HEAD moves, even if the change touched something completely unrelated.\n\nThe anchor verification in the next step exists to replace it: instead of comparing commits, it compares **whether those specific lines of code actually changed**. So whenever a walk provides `anchor`, the panel switches to the finer-grained per-step staleness state instead of this whole-file warning.",
+      "items": [
+        {
+          "kind": "reference",
+          "label": "git rev-parse docs",
+          "url": "https://git-scm.com/docs/git-rev-parse"
+        },
+        {
+          "kind": "pitfall",
+          "misconception": "A different ref means the walk is invalid and the reader should be blocked.",
+          "reality": "Most of the time HEAD moving forward only touched a handful of files, and the walk is still accurate for the most part. So this is just a hint, not a block — and once a walk provides `anchor`, this whole-file warning gets replaced by the more precise per-step detection: when `anchorReport.anyAnchored` is true, the panel stops showing this coarse ref warning."
+        }
+      ],
+      "anchor": "export function isRefDrifted(headSha: string, ref: string): boolean {\n  return headSha.trim() !== ref.trim();\n}\n\nexport async function getWorkspaceHead(workspaceRoot: string): Promise<string | null> {\n  try {\n    const { stdout } = await exec('git rev-parse HEAD', { cwd: workspaceRoot });\n    return stdout.trim();\n  } catch {\n    return null;\n  }\n}"
+    },
+    {
+      "title": "Step 13: Anchor verification — deciding whether these lines actually changed",
+      "file": "src/anchorCheck.ts",
+      "startLine": 42,
+      "endLine": 77,
+      "narration": "This is the core of staleness detection. Every step's `anchor` field stores the verbatim original code at the time it was generated; this function compares it against the current file and answers with one of four outcomes:\n\n- **`unanchored`** — no anchor provided, nothing to judge (every walk in the old format is like this)\n- **`matched`** — the content at the original position is character-for-character identical, fully accurate\n- **`shifted`** — the original position no longer matches, but the exact same content appears **exactly once** elsewhere in the whole file — that's where it moved to\n- **`stale`** — not found (`notFound`), found in multiple places with no way to be sure (`ambiguous`), or the file no longer exists (`fileMissing`)\n\nThe order of checks matters: unanchored → file missing → matched → shifted → stale. Cheap and certain checks first, expensive whole-file scans last.\n\nOne of the most important decisions is hidden in a comment: **newlines are normalized before comparison, but trimming is deliberately skipped**. A difference in indentation or trailing whitespace represents a real code change — trimming it away would let \"code that's been re-indented\" be misjudged as unchanged, and the reader would land on content that doesn't match the walk's narration.\n\nThis is also why the project writes \"always run `pnpm format` after changing code\" into CLAUDE.md: inconsistent formatting output would make anchors misjudge formatting noise as content changes.",
+      "terms": [
+        {
+          "term": "anchor",
+          "explanation": "The technique of storing \"the verbatim content at the time of generation\" and later using it to check the current state. Line numbers drift, but content usually doesn't — so anchoring to content is far more reliable than anchoring to line numbers. git's diff and an IDE's refactor tracking follow a similar idea."
+        },
+        {
+          "term": "ambiguous",
+          "explanation": "The content is found verbatim in more than one place. There's no safe way to guess here — picking the wrong one leads the reader to something that looks similar but means something completely different, which is worse than honestly saying \"not sure.\" So this is classified as stale rather than an arbitrary pick."
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "findLineAlignedOffsets: why indexOf alone isn't enough",
+          "file": "src/anchorCheck.ts",
+          "startLine": 13,
+          "endLine": 31,
+          "anchor": "/**\n * 找出 anchor 在整份檔案內「行邊界對齊」的出現位置——起訖都落在換行字元或\n * 檔案頭尾,避免把恰好橫跨兩行邊界的子字串誤判成匹配(見 design.md 決策 2)。\n * 回傳的是字元位移(相對於 whole),供後續換算成行號。\n */\nfunction findLineAlignedOffsets(whole: string, anchor: string): number[] {\n  const offsets: number[] = [];\n  let fromIndex = 0;\n  for (;;) {\n    const idx = whole.indexOf(anchor, fromIndex);\n    if (idx === -1) break;\n    const startsAtBoundary = idx === 0 || whole[idx - 1] === '\\n';\n    const endIdx = idx + anchor.length;\n    const endsAtBoundary = endIdx === whole.length || whole[endIdx] === '\\n';\n    if (startsAtBoundary && endsAtBoundary) offsets.push(idx);\n    fromIndex = idx + 1;\n  }\n  return offsets;\n}"
+        },
+        {
+          "kind": "pitfall",
+          "misconception": "Finding where the anchor sits in the file is just `whole.indexOf(anchor)`.",
+          "reality": "That misjudges cases. `indexOf` matches any substring, including one that happens to straddle a line boundary — even though that's not semantically the same block of code. So the start and end need an extra check that they land on a newline or the start/end of the file — that's what the `startsAtBoundary` / `endsAtBoundary` lines do."
+        }
+      ],
+      "anchor": "export function checkAnchorAgainstLines(\n  fileLines: string[] | null,\n  startLine: number,\n  endLine: number,\n  anchor: string | undefined,\n): AnchorStatus {\n  if (anchor === undefined || anchor.trim().length === 0) {\n    return { kind: 'unanchored' };\n  }\n  if (fileLines === null) {\n    return { kind: 'stale', reason: 'fileMissing' };\n  }\n\n  const normalizedAnchor = normalizeNewlines(anchor);\n  const currentSlice = fileLines.slice(startLine - 1, endLine).join('\\n');\n  if (currentSlice === normalizedAnchor) {\n    return { kind: 'matched' };\n  }\n\n  const whole = fileLines.join('\\n');\n  const offsets = findLineAlignedOffsets(whole, normalizedAnchor);\n  if (offsets.length === 0) {\n    return { kind: 'stale', reason: 'notFound' };\n  }\n  if (offsets.length > 1) {\n    return { kind: 'stale', reason: 'ambiguous' };\n  }\n\n  const newStartLine = lineNumberAtOffset(whole, offsets[0]);\n  const anchorLineCount = normalizedAnchor.split('\\n').length;\n  return {\n    kind: 'shifted',\n    startLine: newStartLine,\n    endLine: newStartLine + anchorLineCount - 1,\n  };\n}"
+    },
+    {
+      "title": "Step 14: Verifying the whole walk in one pass, reading each file only once",
+      "file": "src/anchorCheck.ts",
+      "startLine": 89,
+      "endLine": 125,
+      "narration": "`buildAnchorReport()` extends the previous step's single-point check into a report for the whole walk — once per step, once per `snippet` component.\n\nThree implementation details:\n\n1. **`lineCache`**: the same file can be referenced many times across a walk (`shared/schema.ts` shows up three times in this very walk). A Map caches it so each file is only read from disk once. The comment includes measured numbers: 21 steps, 40 anchors, 23 distinct files, 0.70 ms worst case\n2. **`track()`** is a \"tally as you go\" wrapper. Every status that flows through it increments `anyAnchored` and `staleCount`, so there's no need for a second pass over the results array afterward\n3. **`flatMap` + returning `[]`**: only `snippet` components need verification (`tip` and `reference` have no line numbers), so anything that isn't a snippet returns an empty array that gets flattened away. That's one fewer pass than `filter` followed by `map`, and no intermediate array built along the way\n\nThe `anyAnchored` flag's purpose was already mentioned in step 12: as soon as a walk provides any anchor, the panel switches to per-step staleness instead of the coarse whole-file ref warning.\n\n**This walk carries its own anchors**. If you see a step flagged as stale while reading this, that's not a bug — it's this feature demonstrating exactly what it's for.",
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "jumpModeFor: when stale, only open the file — don't select any lines",
+          "file": "src/anchorCheck.ts",
+          "startLine": 127,
+          "endLine": 130,
+          "anchor": "/** 失準時只開檔、不選取任何行——不假裝知道游標該落在哪(design.md 決策 6)。 */\nexport function jumpModeFor(status: AnchorStatus): 'select' | 'openOnly' {\n  return status.kind === 'stale' ? 'openOnly' : 'select';\n}"
+        },
+        {
+          "kind": "tip",
+          "text": "`emptyAnchorReport()` at the end of this same file is the fallback for when there's no workspace root: everything is reported unanchored, behaving exactly like a walk with no anchors at all. **A degraded state that matches an existing, already-normal state** — that saves upstream code from having to branch for a brand-new \"error mode\"."
+        }
+      ],
+      "anchor": "export function buildAnchorReport(workspaceRoot: string, walk: CodewalkFile): AnchorReport {\n  const lineCache = new Map<string, string[] | null>();\n  function linesFor(file: string): string[] | null {\n    if (!lineCache.has(file)) {\n      lineCache.set(file, readLinesOrNull(workspaceRoot, file));\n    }\n    return lineCache.get(file) ?? null;\n  }\n\n  let anyAnchored = false;\n  let staleCount = 0;\n\n  function track(status: AnchorStatus): AnchorStatus {\n    if (status.kind !== 'unanchored') anyAnchored = true;\n    if (status.kind === 'stale') staleCount++;\n    return status;\n  }\n\n  const steps: AnchorStepReport[] = walk.steps.map((step) => {\n    const stepStatus = track(\n      checkAnchorAgainstLines(linesFor(step.file), step.startLine, step.endLine, step.anchor),\n    );\n\n    const items: AnchorItemStatus[] = (step.items ?? []).flatMap((item, itemIndex) => {\n      if (item.kind !== 'snippet') return [];\n      const snippet = item as Extract<CodewalkItem, { kind: 'snippet' }>;\n      const status = track(\n        checkAnchorAgainstLines(linesFor(snippet.file), snippet.startLine, snippet.endLine, snippet.anchor),\n      );\n      return [{ itemIndex, status }];\n    });\n\n    return { step: stepStatus, items };\n  });\n\n  return { anyAnchored, anyStale: staleCount > 0, staleCount, steps };\n}"
+    },
+    {
+      "title": "Step 15: What to do after something goes stale — the regeneration prompt",
+      "file": "ui/render/walking.ts",
+      "startLine": 27,
+      "endLine": 44,
+      "narration": "Detecting staleness only solves half the problem. The reader's next question is: now what?\n\nThat's what `regenerateHint` is for. It's an optional field on `.codewalk.json`, **self-described by the generator**, describing how to regenerate this walk — it could be a CLI command, a prompt, or a link to some internal tool.\n\nThe key point: **the player only displays and copies it, and never interprets the content**. It has no idea what that string means, and it never executes it. This is exactly where the MVP line is held — the player doesn't touch generation logic, but it can hand the reader a way to get there.\n\nThis is a small but important architectural posture: when you don't want A to depend on B, but still want the user to be able to get from A to B, \"let the data carry its own instructions, and let a person take it from there\" often beats \"A calls B directly\" — the latter permanently couples the two.\n\nThe `renderStepStaleBlock()` in the snippet below is the other half: a stale step inserts a block showing the **old** content stored in the anchor, with an \"Open current file\" button so the reader can compare for themselves. The old content is still shown because it at least explains what the author was originally talking about.",
+      "terms": [
+        {
+          "term": "regenerate",
+          "explanation": "Since a walk is a derivative of the code, when the code changes the walk should be regenerated, not hand-patched. This product's position is: a walk is cheap and disposable — regenerating it beats fixing it. So the point of detecting staleness isn't to patch — it's to prompt the reader that it's time to regenerate."
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "renderStepStaleBlock: shows the anchor's old content plus an Open current file button when stale",
+          "file": "ui/render/walking.ts",
+          "startLine": 47,
+          "endLine": 71,
+          "anchor": "function renderStepStaleBlock(\n  step: CodewalkStep,\n  status: Extract<AnchorStatus, { kind: 'stale' }>,\n  onOpenStaleFile: () => void,\n): HTMLElement {\n  const container = el('div', 'codewalk-snippet codewalk-snippet--stale');\n  const canOpen = status.reason !== 'fileMissing';\n  const header = el(canOpen ? 'button' : 'div', 'codewalk-snippet-header');\n  header.appendChild(icon('warning'));\n  const headerText = el('span', 'codewalk-snippet-header-text');\n  headerText.appendChild(\n    el('span', 'codewalk-snippet-label', canOpen ? t('stale.openCurrentFile') : t('stale.fileNotFound')),\n  );\n  headerText.appendChild(el('span', 'codewalk-snippet-file-ref', step.file));\n  header.appendChild(headerText);\n  if (canOpen && header instanceof HTMLButtonElement) {\n    header.addEventListener('click', onOpenStaleFile);\n  }\n  container.appendChild(header);\n  container.appendChild(renderStaleLabel());\n  if (step.anchor && step.anchor.trim().length > 0) {\n    container.appendChild(renderSnippetCode(step.anchor, detectLanguage(step.file), step.startLine));\n  }\n  return container;\n}"
+        },
+        {
+          "kind": "todo",
+          "text": "`regenerateHint` currently only supports copy-to-clipboard. Once a \"Generate\" feature lands in phase two, this could become a real regenerate button — but that would make the player start depending on a generator, which is a decision that needs to go through the change process to re-weigh, not something to bolt on casually."
+        }
+      ],
+      "anchor": "function renderRegeneratePrompt(\n  regenerateHint: string | undefined,\n  onCopyRegenerateHint: () => void,\n): HTMLElement {\n  const warning = el('div', 'codewalk-warning codewalk-regenerate-prompt');\n  warning.appendChild(icon('warning'));\n  const text = el('div', 'codewalk-regenerate-prompt-text');\n  text.appendChild(el('span', undefined, t('walking.regeneratePrompt')));\n  warning.appendChild(text);\n  if (regenerateHint) {\n    const copyButton = el('button', 'codewalk-regenerate-copy');\n    copyButton.appendChild(icon('copy'));\n    copyButton.appendChild(el('span', undefined, t('walking.copyRegenerateHint')));\n    copyButton.addEventListener('click', onCopyRegenerateHint);\n    warning.appendChild(copyButton);\n  }\n  return warning;\n}"
+    },
+    {
+      "title": "Step 16: Jumping to code — that preserveFocus is the key detail",
+      "file": "src/fileJump.ts",
+      "startLine": 22,
+      "endLine": 46,
+      "narration": "The jump itself is only a few lines: open the file, compute the range, set the selection, `revealRange`. But two parameters shape the entire playback experience:\n\n**`preserveFocus: true`** — doesn't steal focus away from the CodeWalk panel. Without it, focus moves to the editor after the very first jump, the arrow-key shortcuts immediately stop working, and the reader has to manually click back into the panel just to press next. \"The reader's hands never leave the arrow keys\" is a design principle written into this product's CLAUDE.md, and it rests almost entirely on this one boolean.\n\n**`preview: false`** — don't use a preview tab (italic title, replaced the next time a file opens). A walk jumps back to the same handful of files repeatedly, and a preview tab would let them keep overwriting each other.\n\nThe `mode` parameter ties into staleness detection: with `openOnly`, it only opens the file — no selection, no reveal. **When something's stale, don't pretend to know where the cursor should land** — highlighting a possibly-unrelated block of code is more misleading than doing nothing at all.\n\nThe comment above is honest about the testing strategy: the success path needs the real vscode API, which Vitest (running in a node environment) can't exercise, so only the independently verifiable branch — \"file doesn't exist\" — is pulled out for TDD; everything else goes through a manual verification checklist. **Being upfront about what can't be tested beats pretending coverage is complete.**",
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "Clamping endLine: doesn't blow up when the file gets shorter",
+          "file": "src/fileJump.ts",
+          "startLine": 39,
+          "endLine": 43,
+          "anchor": "  const startLine = target.startLine - 1;\n  const endLine = Math.min(target.endLine - 1, doc.lineCount - 1);\n  const range = new vscode.Range(startLine, 0, endLine, doc.lineAt(endLine).text.length);\n  editor.selection = new vscode.Selection(range.start, range.end);\n  editor.revealRange(range, vscode.TextEditorRevealType.InCenter);"
+        },
+        {
+          "kind": "pitfall",
+          "misconception": "Handing focus to the editor on jump feels more natural — the reader is there to look at the code anyway.",
+          "reality": "That would break the arrow-key shortcuts right after the first jump. This product's core experience is \"press the arrow keys all the way through,\" so focus has to stay on the panel. When a reader wants to edit the code, they can just click over themselves — the initiative should stay in the reader's hands."
+        }
+      ],
+      "anchor": "export async function jumpToStep(\n  workspaceRoot: string,\n  target: JumpTarget,\n  mode: JumpMode = 'select',\n): Promise<JumpResult> {\n  const absPath = join(workspaceRoot, target.file);\n  if (!existsSync(absPath)) {\n    return { ok: false, reason: 'fileNotFound', message: t('host.fileNotFound', { file: target.file }) };\n  }\n\n  const vscode = await import('vscode');\n  const doc = await vscode.workspace.openTextDocument(absPath);\n  // preserveFocus:true — 不搶走 CodeWalk 面板的焦點,讓方向鍵快捷鍵在連續切換\n  // 好幾個 step 時持續有效(否則第一次跳轉後焦點就會留在編輯器,快捷鍵失效)。\n  const editor = await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: true });\n  if (mode === 'openOnly') {\n    return { ok: true };\n  }\n  const startLine = target.startLine - 1;\n  const endLine = Math.min(target.endLine - 1, doc.lineCount - 1);\n  const range = new vscode.Range(startLine, 0, endLine, doc.lineAt(endLine).text.length);\n  editor.selection = new vscode.Selection(range.start, range.end);\n  editor.revealRange(range, vscode.TextEditorRevealType.InCenter);\n  return { ok: true };\n}"
+    },
+    {
+      "title": "Step 17: Snippet previews — only read what \"the current step\" actually needs",
+      "file": "src/snippetPreview.ts",
+      "startLine": 20,
+      "endLine": 60,
+      "narration": "The code a `snippet` component shows **isn't stored in the JSON** — the JSON only records the file and line range; the actual content is read fresh by the host each time. The upside is the content is always current; the cost is having to handle the case where it can't be read.\n\nOnly the current step's items are read — the whole walk isn't preloaded. A walk with 20-something steps could have dozens of snippets, and preloading all of them would be unnecessary disk I/O.\n\nTied together with anchor verification, there are three paths here:\n\n1. **Normal** (`matched` / `unanchored` / `shifted`) — read the current file; when `shifted`, use the recalculated line numbers from `effectiveLineRange()`, and mark `source` as `'current'`\n2. **Stale, but the file still exists** — show the old content stored in the anchor instead, marked `source: 'anchor'`. The screen makes this explicit, so the reader knows they're looking at history\n3. **File doesn't exist** — return `ok: false` with a message, still attaching the anchor content alongside it\n\nPoint 2 is the most delicate part of this feature: **when something's stale, it's better to show outdated content clearly labeled as such than to show code whose line numbers happen to line up but whose content is entirely unrelated**. The former, readers know to discount; the latter leaves them thoroughly confused.",
+      "terms": [
+        {
+          "term": "source: 'current' | 'anchor'",
+          "explanation": "Marks whether this preview was \"read just now\" or \"what was saved at generation time.\" This field is passed all the way to the webview and decides whether to add a staleness marker to the snippet — letting the data carry its own provenance is more reliable than having the UI re-derive it."
+        }
+      ],
+      "items": [
+        {
+          "kind": "tip",
+          "text": "`itemStatuses` defaults to `[]`, and omitting it treats everything as unanchored — behaving **exactly** the same as before staleness detection was added. That's a good habit when adding a parameter to an existing function: the new parameter's default should leave the old behavior completely untouched."
+        }
+      ],
+      "anchor": "export async function readSnippetPreviews(\n  workspaceRoot: string,\n  items: CodewalkItem[],\n  itemStatuses: AnchorItemStatus[] = [],\n): Promise<SnippetPreviewResult[]> {\n  const results: SnippetPreviewResult[] = [];\n  items.forEach((item, itemIndex) => {\n    if (item.kind !== 'snippet') return;\n    const snippet = item as SnippetItem;\n    const status = itemStatuses.find((s) => s.itemIndex === itemIndex)?.status ?? {\n      kind: 'unanchored' as const,\n    };\n    const language = detectLanguage(snippet.file);\n\n    if (status.kind === 'stale') {\n      if (status.reason === 'fileMissing') {\n        results.push({\n          itemIndex,\n          ok: false,\n          message: t('host.fileNotFound', { file: snippet.file }),\n          anchorContent: snippet.anchor,\n          language,\n        });\n      } else {\n        results.push({ itemIndex, ok: true, content: snippet.anchor ?? '', language, source: 'anchor' });\n      }\n      return;\n    }\n\n    const absPath = join(workspaceRoot, snippet.file);\n    if (!existsSync(absPath)) {\n      results.push({ itemIndex, ok: false, message: t('host.fileNotFound', { file: snippet.file }) });\n      return;\n    }\n    const lines = readFileSync(absPath, 'utf8').split('\\n');\n    const { startLine, endLine } = effectiveLineRange(snippet, status);\n    const content = lines.slice(startLine - 1, endLine).join('\\n');\n    results.push({ itemIndex, ok: true, content, language, source: 'current' });\n  });\n  return results;\n}"
+    },
+    {
+      "title": "Step 18: How a file extension becomes a language — an invisible contract between two files",
+      "file": "shared/language.ts",
+      "startLine": 1,
+      "endLine": 42,
+      "narration": "A table mapping file extensions to language ids; `detectLanguage()` looks it up, and falls back to `'text'` if nothing matches. It looks unremarkable, but it has a **contract with no type-level protection** with `ui/highlight.ts`:\n\nWhatever language id this file produces has to be a grammar `ui/highlight.ts`'s `LANGS` array has actually registered. What happens if one's missing? The snippet quietly falls back to plain text. **No error, no warning** — just no color. This kind of failure is the hardest to notice, because it looks exactly like \"this snippet just happens not to be colored.\"\n\nThe project's fix is a test that ties the mapping table to the registration list together: if either side gets out of sync, the test turns red.\n\nWorth remembering as a pattern: **when two modules have a consistency requirement the type system can't enforce, a test is the only gatekeeper that can be automated**. Comments get ignored, docs go stale — only a red test forces someone to deal with it.",
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "detectLanguage: falls back to text if nothing matches, never guesses",
+          "file": "shared/language.ts",
+          "startLine": 43,
+          "endLine": 47,
+          "anchor": "\nexport function detectLanguage(file: string): string {\n  const ext = file.split('.').pop()?.toLowerCase() ?? '';\n  return EXTENSION_LANGUAGE[ext] ?? 'plaintext';\n}"
+        },
+        {
+          "kind": "todo",
+          "text": "The mapping table currently covers 23 languages. Adding a new one means updating three places in sync: this table, the `LANGS` import and array in `ui/highlight.ts`, and running `scripts/compare-shiki-engines.mjs` once to confirm the JS regex engine's output for the new grammar matches oniguruma."
+        }
+      ],
+      "anchor": "/**\n * 這裡的值必須是 `ui/highlight.ts` 有註冊的 Shiki 語言 id,否則\n * `isLanguageSupported()` 會判定為不支援、`highlightSnippetLines()` 退回\n * 純文字——新增副檔名時兩邊要一起改。\n */\nexport const EXTENSION_LANGUAGE: Record<string, string> = {\n  ts: 'typescript',\n  tsx: 'typescript',\n  js: 'javascript',\n  jsx: 'javascript',\n  json: 'json',\n  py: 'python',\n  go: 'go',\n  rs: 'rust',\n  java: 'java',\n  kt: 'kotlin',\n  kts: 'kotlin', // build.gradle.kts 也走這裡\n  groovy: 'groovy',\n  gradle: 'groovy',\n  scala: 'scala',\n  dart: 'dart',\n  swift: 'swift',\n  cs: 'csharp',\n  c: 'c',\n  h: 'c', // C++ header 也常用 .h,兩者文法差異不影響上色結果\n  cpp: 'cpp',\n  cc: 'cpp',\n  cxx: 'cpp',\n  hpp: 'cpp',\n  hh: 'cpp',\n  hxx: 'cpp',\n  php: 'php',\n  rb: 'ruby',\n  sql: 'sql',\n  css: 'css',\n  html: 'html',\n  md: 'markdown',\n  sh: 'bash',\n  bash: 'bash',\n  yml: 'yaml',\n  yaml: 'yaml',\n};"
+    },
+    {
+      "title": "Step 19: The reader's editor theme — the host has to figure it out itself",
+      "file": "src/themeSource.ts",
+      "startLine": 26,
+      "endLine": 47,
+      "narration": "To make a snippet's colors match the reader's editor, CSS variables alone aren't enough — **VS Code doesn't expose \"the current theme's token colors\" to extensions**. So it has to be done by hand:\n\n1. Read the `workbench.colorTheme` setting to get the theme's name\n2. Scan every installed extension's `contributes.themes` to find the matching definition file\n3. Read and parse the file — theme files are often commented JSONC (hence this repo's own `src/jsonc.ts`), and may inherit from another theme via `include`\n4. Normalize `tokenColors` and send it to the webview\n\n**Any failure anywhere in this chain returns `null`**, and the panel keeps working — colors just fall back to Shiki's built-in dark-plus / light-plus. It's a purely visual enhancement, not worth letting it take down the main feature.\n\nAnother detail hides in the `name` field: every resolution generates a new name from an incrementing counter. Because Shiki's `loadTheme()` is a **no-op when reloading a theme with the same name** (verified by testing), reusing the old name would make \"redraw after switching themes\" fail entirely — the screen redraws, but the colors don't change. This kind of bug is nearly impossible to trace back from its symptoms, which is why the comment specifically notes \"verified by testing.\"",
+      "terms": [
+        {
+          "term": "JSONC",
+          "explanation": "JSON with Comments — a JSON variant that allows comments and trailing commas. VS Code's settings and theme files use it heavily, and the standard `JSON.parse()` throws on it outright, so this repo wrote its own 66-line `src/jsonc.ts` to strip the comments."
+        },
+        {
+          "term": "no-op",
+          "explanation": "no operation — called, but does nothing. What makes this kind of behavior dangerous is that it doesn't error — the code looks like it ran, but nothing actually happened, discoverable only by testing."
+        }
+      ],
+      "items": [
+        {
+          "kind": "tip",
+          "text": "When the theme switches, the host only sends a single `themeChanged` message and lets the webview redraw the current step itself — **it doesn't rebuild the entire webview.html**. Rebuilding would bounce the reader back to the walk list — a color change shouldn't have that side effect."
+        }
+      ],
+      "anchor": "export async function resolveEditorTheme(): Promise<ResolvedEditorTheme | null> {\n  try {\n    const label = vscode.workspace.getConfiguration('workbench').get<string>('colorTheme');\n    if (!label) return null;\n    const extensions: ExtensionLike[] = vscode.extensions.all.map((ext) => ({\n      extensionPath: ext.extensionPath,\n      packageJSON: ext.packageJSON as ExtensionLike['packageJSON'],\n    }));\n    const found = findThemeDefinition(label, extensions);\n    if (!found) return null;\n    const raw = await loadRawTheme(found.file);\n    const tokenColors = normalizeTokenColors(raw.tokenColors);\n    if (!tokenColors) return null;\n    return {\n      name: `user-theme-${++themeNameCounter}`,\n      kind: themeKindFromUiTheme(found.uiTheme),\n      tokenColors,\n    };\n  } catch {\n    return null;\n  }\n}"
+    },
+    {
+      "title": "Step 20: The highlighting fallback chain — no color beats a wrong guess",
+      "file": "ui/highlight.ts",
+      "startLine": 139,
+      "endLine": 153,
+      "narration": "The very first line of `highlightSnippetLines()` is a fallback check: if the engine isn't ready yet, or this language has no registered grammar, it returns \"a whole line of plain-text tokens\" either way.\n\nThere are two independent fallback points here:\n\n- **Timing**: Shiki's engine initializes asynchronously. Before it's ready, snippets are already shown as plain text; `ui/main.ts`'s `onHighlightReady()` triggers one more redraw once it's ready, so they get their colors. What the reader experiences is \"content first, color a beat later,\" rather than \"nothing shows until it's ready\"\n- **Capability**: an unsupported language just isn't colored. Guessing the wrong color is more misleading than no color at all — coloring a comment like a string would make the reader think it really is one\n\nNote the return type is `HighlightToken[][]` (a per-line array of tokens), **not an HTML string**. That's deliberate: `appendTokens()` in `ui/render/dom.ts` builds a span for each token and sets `textContent` — nowhere on this path does anything ever touch `innerHTML`.\n\nThe reason for choosing Shiki over highlight.js is here too: Shiki uses the exact same TextMate grammars as VS Code, and `codeToTokens()` natively outputs per line — unlike highlight.js, which outputs one solid block of HTML that then needs manual tag-stack tracking to split spans that cross line boundaries.",
+      "terms": [
+        {
+          "term": "TextMate grammar",
+          "explanation": "A rule-file format that describes a language's syntax using regular expressions, originating from the TextMate editor and later adopted by VS Code as its syntax-highlighting standard. Shiki uses it directly, so the colors it produces match exactly what you see in the VS Code editor."
+        },
+        {
+          "term": "graceful degradation",
+          "explanation": "Falling back to a version that's still usable but has fewer capabilities when the ideal path isn't available, instead of erroring out or going blank. This repo does this everywhere: theme resolution failure falls back to a built-in theme, an unsupported language falls back to plain text, a missing workspace falls back to an empty report."
+        }
+      ],
+      "items": [
+        {
+          "kind": "pitfall",
+          "misconception": "The JS regex engine Shiki uses is lighter than the oniguruma WASM one, but surely there'd be some syntax it can't match correctly.",
+          "reality": "Before choosing it, `scripts/compare-shiki-engines.mjs` compared token output across all 23 grammars one by one, and **the difference was zero**. Smaller footprint, no behavior difference. But that conclusion is tied to \"these current 23\" — adding a new language should re-run this comparison before deciding the engine still holds up."
+        }
+      ],
+      "anchor": "/**\n * 未支援語言、或高亮引擎尚未就緒時,回傳一整行純文字 token(不上色)——\n * 猜錯顏色比不上色更容易誤導讀者,見 syntax-highlighting spec 的語言判定 requirement。\n */\nfunction plainTextLines(content: string): HighlightToken[][] {\n  return content.split('\\n').map((line) => [{ content: line }]);\n}\n\nexport function highlightSnippetLines(content: string, language: string): HighlightToken[][] {\n  if (!highlighter || !isLanguageSupported(language)) {\n    return plainTextLines(content);\n  }\n  const { tokens } = highlighter.codeToTokens(content, { lang: language, theme: activeThemeName });\n  return tokens.map((line) => line.map(toHighlightToken));\n}"
+    },
+    {
+      "title": "Step 21: Crossing into the webview — a render loop with no framework",
+      "file": "ui/main.ts",
+      "startLine": 123,
+      "endLine": 184,
+      "narration": "From here on it's the webview — **no vscode API can be touched**, only the DOM and `postMessage`. There's no React, no Vue anywhere in the UI; the entire rendering logic is this one `render()` function: clear `#app`, call the matching render function for `current.screen`, and mount the returned DOM tree.\n\n`root.innerHTML = ''` — this kind of whole-tree redraw is usually a performance disaster in a real application. It works here because the panel only ever shows one step at a time, so the node count stays small. **Doing it the dumbest way possible until it's actually too slow** is the right trade-off at the MVP stage.\n\nBut a whole-tree redraw creates three problems that have to be handled by hand, each with its own module-level variable in the code:\n\n- **`lastWalkingStepIndex`** — if an entry animation is hung directly on the container, even a redraw as small as \"expand one term\" would replay the animation across the whole screen. Remembering the last step drawn means it only plays when the step actually changes\n- **`menuFocusPath`** — a redraw destroys the old DOM along with its focus, and a keyboard user gets bounced back to the very top of the document. Remembering the row that was just interacted with lets focus be handed back after the redraw\n- **`pendingScrollRestore`** — restoring scroll position can only happen after the new screen has been drawn, so this variable carries the intent from message handling through to after the render\n\nThese three variables are the real cost of \"no framework\": DOM preservation and focus management that a framework would normally handle now have to be tracked by hand.",
+      "terms": [
+        {
+          "term": "whole-tree redraw",
+          "explanation": "Rebuilding the entire screen on every state change, rather than computing a diff and only updating what changed (what React's virtual DOM does). The upside is an extremely simple mental model — the screen is always just a function of the current state. The downside is it gets slow with many nodes, and it loses any implicit DOM state (focus, scroll position, in-progress typed text)."
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "Keyboard events are listened for directly inside the webview, bypassing the VS Code command system",
+          "file": "ui/main.ts",
+          "startLine": 390,
+          "endLine": 417,
+          "anchor": "window.addEventListener('keydown', (event: KeyboardEvent) => {\n  if (current.screen === 'fileList') {\n    if (event.key === 'Escape' && current.openMenuPath !== null) {\n      menuFocusPath = current.openMenuPath;\n      current = closeAttemptMenu(current);\n      render();\n    }\n    return;\n  }\n  if (current.screen === 'walking') {\n    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {\n      event.preventDefault();\n      onNextStep();\n    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {\n      event.preventDefault();\n      onPrevStep();\n    } else if (event.key === 'Escape') {\n      event.preventDefault();\n      onBackToList();\n    } else if (event.key === 'Home' || event.key === 'r' || event.key === 'R') {\n      // 主鍵是 Home,不是字母鍵——中文輸入法作用中時,字母鍵的 keydown 可能被\n      // 輸入法攔截去組字,事件到不了這裡(實測 R 在中文輸入法環境下完全無反應,\n      // 方向鍵/Escape 因為不是字母鍵而不受影響)。保留 r/R 給英文鍵盤環境當備用鍵。\n      event.preventDefault();\n      onRevealCurrentStep();\n    }\n  }\n});"
+        },
+        {
+          "kind": "pitfall",
+          "misconception": "Going back to the list can just reuse the `webviewReady` message — the host has to resend the file list anyway.",
+          "reality": "It can't. The host decides whether to send `walkRestored` based on whether `currentWalk` is still set. If `backToList` reused `webviewReady`, the host would assume the webview merely got rebuilt and is still on the same walk, and would immediately pull the reader right back into it. So `backToList` has to be its own message kind — it's simultaneously \"give me the list\" and \"I've left this walk.\""
+        }
+      ],
+      "anchor": "function render(): void {\n  const root = document.getElementById('app');\n  if (!root) return;\n  root.innerHTML = '';\n\n  if (current.screen === 'fileList') {\n    lastWalkingStepIndex = null;\n    root.appendChild(\n      renderFileList(\n        current.files,\n        { openMenuPath: current.openMenuPath, pendingClearPath: current.pendingClearPath },\n        {\n          onSelect: onSelectFile,\n          onToggleMenu: onToggleAttemptMenu,\n          onTriggerClear: onTriggerClearAttempt,\n          onResume: onResumeWalk,\n        },\n      ),\n    );\n    restoreFileListFocus(root, current);\n  } else if (current.screen === 'error') {\n    lastWalkingStepIndex = null;\n    root.appendChild(renderError(current.message, onBackToList));\n  } else if (current.screen === 'walking') {\n    const isStepTransition = lastWalkingStepIndex !== current.stepIndex;\n    lastWalkingStepIndex = current.stepIndex;\n    root.appendChild(\n      renderWalking(\n        current,\n        {\n          onNext: onNextStep,\n          onPrev: onPrevStep,\n          onToggleTerm: onToggleTerm,\n          onEnterQuiz: onEnterQuiz,\n          onOpenReference: onOpenReference,\n          onJumpToSnippet: onJumpToSnippet,\n          onBackToList: onBackToList,\n          onOpenStaleFile: onOpenStaleFile,\n          onCopyRegenerateHint: onCopyRegenerateHint,\n          onRevealCurrentStep: onRevealCurrentStep,\n        },\n        stepJumpError,\n        isStepTransition,\n        snippetPreviews,\n      ),\n    );\n  } else if (current.screen === 'quiz') {\n    lastWalkingStepIndex = null;\n    root.appendChild(renderQuiz(current, { onSelectAnswer, onSubmitQuiz, onCancelQuiz, onOpenReference }));\n  } else if (current.screen === 'quizResult') {\n    lastWalkingStepIndex = null;\n    root.appendChild(\n      renderQuizResult(current, {\n        onRetryQuiz: onRetryQuiz,\n        onRestartWalk: onRestartWalk,\n        onBackToList: onBackToList,\n        onOpenReference: onOpenReference,\n      }),\n    );\n  }\n  persistUiState();\n}"
+    },
+    {
+      "title": "Step 22: Markdown rendering — take only the tokens, never the HTML",
+      "file": "ui/markdown.ts",
+      "startLine": 29,
+      "endLine": 77,
+      "narration": "Fields like `narration` need markdown support, but the entire `ui/render/` directory has an explicit rule: **always use `textContent`, never `innerHTML`**. A typical markdown package's renderer spits out an HTML string directly — which either violates the rule or means you have to sanitize the string yourself, and sanitizing a string is exactly what this rule exists to avoid.\n\nThe fix is `marked`'s lesser-used `Lexer` API: it returns only a **structured array of tokens**, producing no HTML at all. The tokens are then used to build the DOM by hand with `createElement` + `textContent`.\n\nEvery token carries a `raw` field (the original characters that produced it), and this one field solves two problems at once: unsupported syntax (tables, blockquotes) can simply output `raw` for \"shown as-is\"; and since output always goes through `textContent`, there's naturally no injection surface at all.\n\nBoth public functions return `DocumentFragment` **rather than a string** — which makes \"this module can never produce an HTML string\" a fact enforced by the type system, not something that has to be caught in code review.\n\nThe tiering of long vs. short fields mentioned in step 3 finds its answer here: `renderMarkdownBlock()` uses `lex()` with all six forms enabled; `renderMarkdownInline()` uses `lexInline()` with only the three inline forms. **The tiering isn't implemented with filtering code — picking the right entry point is the spec.** From `lexInline()`'s point of view, `- item` was never a list token to begin with, so it naturally falls through as plain text.",
+      "terms": [
+        {
+          "term": "Lexer",
+          "explanation": "A lexical analyzer, which cuts a string into a structured sequence of tokens. It's the first stage of a compiler frontend, but the use here is much simpler: only the tokens are needed, not the stages that come after them. `marked` happens to expose exactly this layer."
+        },
+        {
+          "term": "closed subset",
+          "explanation": "Supporting only a small, explicitly enumerated set of syntax, with everything else shown as-is. Compared to \"try to support everything,\" a closed subset's behavior can be written into the spec in full, tested item by item, and adding new syntax is purely additive — there's never a \"something that used to work suddenly got blocked\" regression."
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "Link token degradation: inside nested interactive elements, it always falls back to plain text",
+          "file": "ui/markdown.ts",
+          "startLine": 151,
+          "endLine": 163,
+          "anchor": "    case 'link': {\n      if (onOpenLink === null || !isHttpUrl(token.href)) {\n        parent.appendChild(document.createTextNode(token.raw));\n        return;\n      }\n      const button = document.createElement('button');\n      button.type = 'button';\n      button.className = 'codewalk-md-link';\n      appendInlineTokens(button, token.tokens as MarkedToken[], onOpenLink);\n      button.addEventListener('click', () => onOpenLink(token.href));\n      parent.appendChild(button);\n      return;\n    }"
+        },
+        {
+          "kind": "tip",
+          "text": "`gfm: false` is the first line of defense for the closed subset — turning off GitHub Flavored Markdown means tables, bare-URL autolinks, and strikethrough never get recognized as tokens at the lexer level in the first place, no filtering code required. **If a setting can turn it off, don't write code to block it.**"
+        }
+      ],
+      "anchor": "export function renderMarkdownBlock(source: string, onOpenLink: MaybeOpenLinkHandler): DocumentFragment {\n  const fragment = document.createDocumentFragment();\n  const tokens = new Lexer(LEXER_OPTIONS).lex(source) as MarkedToken[];\n  for (const token of tokens) {\n    appendBlockToken(fragment, token, onOpenLink);\n  }\n  return fragment;\n}\n\nexport function renderMarkdownInline(source: string, onOpenLink: MaybeOpenLinkHandler): DocumentFragment {\n  const fragment = document.createDocumentFragment();\n  const tokens = Lexer.lexInline(source, LEXER_OPTIONS) as MarkedToken[];\n  appendInlineTokens(fragment, tokens, onOpenLink);\n  return fragment;\n}\n\nfunction appendBlockToken(\n  parent: DocumentFragment | HTMLElement,\n  token: MarkedToken,\n  onOpenLink: MaybeOpenLinkHandler,\n): void {\n  switch (token.type) {\n    case 'space':\n      return;\n    case 'paragraph': {\n      const p = document.createElement('p');\n      p.className = 'codewalk-md-p';\n      appendInlineTokens(p, token.tokens as MarkedToken[], onOpenLink);\n      parent.appendChild(p);\n      return;\n    }\n    case 'heading': {\n      if (token.depth !== 2) {\n        appendBlockFallback(parent, token.raw);\n        return;\n      }\n      const heading = document.createElement('h3');\n      heading.className = 'codewalk-md-h';\n      appendInlineTokens(heading, token.tokens as MarkedToken[], onOpenLink);\n      parent.appendChild(heading);\n      return;\n    }\n    case 'list':\n      parent.appendChild(renderList(token, onOpenLink));\n      return;\n    default:\n      appendBlockFallback(parent, token.raw);\n  }\n}"
+    },
+    {
+      "title": "Step 23: Navigation logic is a set of pure functions that never touch the DOM",
+      "file": "ui/state.ts",
+      "startLine": 60,
+      "endLine": 118,
+      "narration": "`nextStep`, `prevStep`, `toggleTerm`, `enterQuiz`, `submitQuiz` — every one of them is a pure function that takes the old state in and returns new state out, never touching a single DOM node. That's why `ui/state.test.ts` has 26 tests running in a node environment, with no browser and no VS Code needed.\n\nNotice each function returns `{ ...state, the change }` rather than mutating in place. Paired with the whole-tree redraw, the mental model gets extremely simple: **the screen = f(current state)**, with no intermediate states.\n\nBoundaries are handled here too, not in the UI: `nextStep` clamps the upper bound with `Math.min`, `prevStep` clamps the lower bound with `Math.max`. The UI never needs to know \"can the next-step button be pressed right now\" — it just presses it, and the state machine won't go out of bounds on its own.\n\n`cancelQuiz()` has a nice little detail: backing out of the quiz to walking mode returns to **the last step, not the first**. The reader only entered the quiz after finishing the walk, so of course backing out should return to where they left off. This kind of detail can't be captured by the type system — someone just has to have thought about it.",
+      "terms": [
+        {
+          "term": "pure function",
+          "explanation": "Given the same input, it always produces the same output, and causes no side effects (doesn't touch external variables, the DOM, or the network). The biggest benefit of a pure function is that it's easy to test — no environment to set up, just call it and compare the return value."
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "applyPersistedUiState: after a panel rebuild, restoring the details the webview kept track of itself",
+          "file": "ui/state.ts",
+          "startLine": 155,
+          "endLine": 183,
+          "anchor": "export function applyPersistedUiState(\n  walk: CodewalkFile,\n  hostStepIndex: number,\n  refDrifted: boolean,\n  anchorReport: AnchorReport,\n  persisted: PersistedUiState | null,\n): WalkingState | QuizState | QuizResult {\n  const base = createWalkingState(walk, refDrifted, anchorReport);\n  if (!persisted || persisted.ref !== walk.ref) {\n    return { ...base, stepIndex: hostStepIndex };\n  }\n\n  const maxIndex = walk.steps.length - 1;\n  const walking: WalkingState = {\n    ...base,\n    stepIndex: Math.min(Math.max(persisted.stepIndex, 0), maxIndex),\n    expandedTerms: new Set(persisted.expandedTerms),\n  };\n  if (persisted.screen === 'walking') {\n    return walking;\n  }\n\n  const quiz = enterQuiz(walking);\n  const restoredQuiz: QuizState = {\n    ...quiz,\n    answers: walk.quiz.map((_, i) => persisted.answers[i] ?? null),\n  };\n  return persisted.screen === 'quiz' ? restoredQuiz : submitQuiz(restoredQuiz);\n}"
+        },
+        {
+          "kind": "tip",
+          "text": "The snippet above is the **second** of three layers of progress protection. The first is `retainContextWhenHidden` (step 7), guarding against the panel being hidden/shown. The second is the webview's own `setState`, guarding against the webview itself being rebuilt. The third is `ProgressStore` written to `workspaceState` on the host side, guarding against a full VS Code restart. Each layer independently protects against a different way things can be lost."
+        }
+      ],
+      "anchor": "export function createWalkingState(\n  walk: CodewalkFile,\n  refDrifted: boolean,\n  anchorReport: AnchorReport,\n): WalkingState {\n  return { screen: 'walking', walk, stepIndex: 0, refDrifted, anchorReport, expandedTerms: new Set() };\n}\n\nexport function isAtLastStep(state: WalkingState): boolean {\n  return state.stepIndex === state.walk.steps.length - 1;\n}\n\nexport function nextStep(state: WalkingState): WalkingState {\n  const maxIndex = state.walk.steps.length - 1;\n  return { ...state, stepIndex: Math.min(state.stepIndex + 1, maxIndex) };\n}\n\nexport function prevStep(state: WalkingState): WalkingState {\n  return { ...state, stepIndex: Math.max(state.stepIndex - 1, 0) };\n}\n\nexport function toggleTerm(state: WalkingState, term: string): WalkingState {\n  const expandedTerms = new Set(state.expandedTerms);\n  if (expandedTerms.has(term)) {\n    expandedTerms.delete(term);\n  } else {\n    expandedTerms.add(term);\n  }\n  return { ...state, expandedTerms };\n}\n\nexport function enterQuiz(state: WalkingState): QuizState {\n  return {\n    screen: 'quiz',\n    walk: state.walk,\n    refDrifted: state.refDrifted,\n    anchorReport: state.anchorReport,\n    answers: state.walk.quiz.map(() => null),\n  };\n}\n\nexport function cancelQuiz(state: QuizState): WalkingState {\n  const walking = createWalkingState(state.walk, state.refDrifted, state.anchorReport);\n  return { ...walking, stepIndex: state.walk.steps.length - 1 };\n}\n\nexport function selectQuizAnswer(state: QuizState, questionIndex: number, optionIndex: number): QuizState {\n  const answers = [...state.answers];\n  answers[questionIndex] = optionIndex;\n  return { ...state, answers };\n}\n\nexport function restartWalk(state: QuizResult): WalkingState {\n  return createWalkingState(state.walk, state.refDrifted, state.anchorReport);\n}\n\nexport function retryQuiz(state: QuizResult): QuizState {\n  return enterQuiz(createWalkingState(state.walk, state.refDrifted, state.anchorReport));\n}"
+    },
+    {
+      "title": "Step 24: How the six supporting content kinds get drawn, and the last two pieces of the puzzle",
+      "file": "ui/render/items.ts",
+      "startLine": 255,
+      "endLine": 293,
+      "narration": "`renderItems()` is a switch on `kind`, with each of the six components mapped to its own constructor function, appended one by one in original array order — so the order of `items` in the JSON is exactly the top-to-bottom order on screen, and authors can freely interleave them without anything being regrouped.\n\nThe entire `ui/render/` directory builds the DOM exclusively with `createElement` and `textContent`, **with no string-template concatenation anywhere** (this rule is written at the top of `ui/render/dom.ts`). This isn't just a style preference: walk JSON might come from someone else, and treating its strings directly as HTML would be a ready-made injection vulnerability. Step 22's markdown rendering is an extension of this same rule — even Shiki's syntax highlighting is no exception.\n\nTwo last pieces of the puzzle:\n\n- **`ProgressStore`** (`src/progressStore.ts`) — reading progress is written into VS Code's `workspaceState`, persisting across restarts. This is the outermost of the three layers of protection\n- **`AttemptStore`** (`src/attemptStore.ts`) — quiz records, with a structure nearly identical to ProgressStore\n\nBoth use `ref` as their validity check: **if the recorded ref doesn't match the current walk's ref, the record is treated as if it doesn't exist**. Once a walk is regenerated, old progress and old scores automatically go stale — no cleanup logic, no migration code, just an equality check.\n\nThey're nearly identical yet share no common base class — that's deliberate. This project's abstraction threshold is **rule of three**: only abstract on the third repetition. Two similar 50-line files are easier to maintain than a base class that's grown parameters to accommodate two different use cases.\n\nThat's the whole walk. Hit the button below to check yourself with the quiz.",
+      "terms": [
+        {
+          "term": "workspaceState",
+          "explanation": "Key-value storage VS Code provides to extensions, scoped to \"this workspace\" — switch to a different project and it's a different set of data. The counterpart is `globalState` (shared across workspaces). Reading progress clearly belongs to the former: how far you got in project A has nothing to do with project B."
+        },
+        {
+          "term": "rule of three",
+          "explanation": "The rule of thumb that you only abstract something out on its third occurrence. On the second repetition, you still can't tell which parts are genuinely shared and which just happen to look alike; an abstraction pulled out too early often gets forced to grow extra parameters when a third use case shows up, ending up harder to follow than the duplication it replaced."
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "ProgressStore: a mismatched ref is treated as no progress at all",
+          "file": "src/progressStore.ts",
+          "startLine": 36,
+          "endLine": 43,
+          "anchor": "  /** ref 不符(導讀已重新產生)時視同沒有進度。 */\n  get(workspaceRoot: string, absolutePath: string, ref: string): WalkProgressSummary | undefined {\n    const record = this.readAll()[this.toRelativePath(workspaceRoot, absolutePath)];\n    if (!record || record.ref !== ref) {\n      return undefined;\n    }\n    return { stepIndex: record.stepIndex };\n  }"
+        },
+        {
+          "kind": "tip",
+          "text": "When a quiz is completed, the host **clears reading progress** (`handleQuizSubmitted` in `viewProvider.ts`) — this walk is done, and the list shouldn't keep showing \"resume.\" A clearing failure is swallowed by try/catch and doesn't interrupt the flow: progress is a convenience feature, and it shouldn't have the power to break the main path."
+        }
+      ],
+      "anchor": "export function renderItems(\n  items: CodewalkItem[],\n  snippetPreviews: SnippetPreviewResult[],\n  itemAnchorStatuses: AnchorStepReport['items'],\n  handlers: ItemHandlers,\n): HTMLElement {\n  const container = el('div', 'codewalk-items');\n  items.forEach((item, itemIndex) => {\n    switch (item.kind) {\n      case 'tip':\n        container.appendChild(renderAnnotation('tip', 'lightbulb', item.text, handlers.onOpenReference));\n        break;\n      case 'todo':\n        container.appendChild(\n          renderAnnotation('todo', 'circle-large-outline', item.text, handlers.onOpenReference),\n        );\n        break;\n      case 'pitfall':\n        container.appendChild(renderPitfall(item.misconception, item.reality, handlers.onOpenReference));\n        break;\n      case 'reference':\n        container.appendChild(renderReference(item.label, item.url, handlers.onOpenReference));\n        break;\n      case 'snippet': {\n        const status = itemAnchorStatuses.find((s) => s.itemIndex === itemIndex)?.status ?? {\n          kind: 'unanchored',\n        };\n        container.appendChild(\n          renderSnippet(item, itemIndex, snippetPreviews, status, handlers.onJumpToSnippet),\n        );\n        break;\n      }\n      case 'diff':\n        container.appendChild(renderDiff(item, itemIndex, handlers.onJumpToSnippet));\n        break;\n    }\n  });\n  return container;\n}"
+    }
+  ],
+  "quiz": [
+    {
+      "question": "The webview sends `{ type: 'jumpToStep', stepIndex: 3 }`. What is its actual type when it reaches `handleMessage` on the host side? Why is `parseWebviewToHostMessage()` needed?",
+      "options": [
+        "Already `WebviewToHostMessage` — both sides share the type definitions in `shared/protocol.ts`, so parsing is just for convenience",
+        "`unknown` — TypeScript's types disappear after compilation, and once a message crosses the serialization channel, only runtime data is left; the fields have to be actually checked before it's safe to use",
+        "`string` — `postMessage` can only send strings, and parsing is really just `JSON.parse`",
+        "`any` — VS Code automatically converts messages to the type matching the view id; parsing is just extra insurance"
+      ],
+      "correctIndex": 1,
+      "optionExplanations": [
+        "Wrong: the shared type only exists at compile time. After postMessage's structured clone, what's seen at runtime is just `unknown` — it doesn't automatically turn back into that type.",
+        "Right: TypeScript's type annotations disappear after compilation, so `onDidReceiveMessage` receives `unknown` — only `parseWebviewToHostMessage()` actually checking every field makes it safe to use.",
+        "Wrong: postMessage sends serializable objects (structured clone), not strings only; the webview side sends the object directly, so there's no `JSON.parse` step involved.",
+        "Wrong: VS Code doesn't do any type conversion on messages — the view id only decides what the webview displays, and has nothing to do with a message's runtime type."
+      ]
+    },
+    {
+      "question": "A step's anchor content is found at **two** verbatim-matching positions in the current file. What does `checkAnchorAgainstLines()` return? Why is it designed this way?",
+      "options": [
+        "`shifted`, taking the first position's line number — since it was found, it makes sense to follow it, and taking the first one is a reasonable default",
+        "`stale` with `reason: 'ambiguous'` — picking the wrong one would lead the reader to something that looks similar but means something entirely different, which is worse than honestly saying it's uncertain",
+        "`matched` — as long as the content still exists somewhere in the file, that means the code hasn't been changed",
+        "`unanchored` — when it can't be uniquely determined, it's treated as having no anchor at all, falling back to the old ref-drift check"
+      ],
+      "correctIndex": 1,
+      "optionExplanations": [
+        "Wrong: `shifted` explicitly requires the match to occur \"exactly once.\" Taking the first of multiple matches is a guess, and the cost of guessing wrong is leading the reader to the wrong code.",
+        "Right: `offsets.length > 1` returns `stale` / `ambiguous` directly. This product's stance when uncertain is always to be honest about it, rather than offering an answer that merely looks reasonable.",
+        "Wrong: `matched`'s condition is that the content at the original line range is character-for-character identical. Content appearing somewhere else doesn't mean the original position is unchanged.",
+        "Wrong: `unanchored` is only returned when no anchor was provided at all (or it's blank) — that's \"nothing to judge,\" not \"can't determine a unique answer.\""
+      ]
+    },
+    {
+      "question": "Why does `ui/markdown.ts` use `marked`'s `Lexer` instead of calling `marked()` directly?",
+      "options": [
+        "`Lexer` performs better, skipping the overhead of generating an HTML string, which matters noticeably under frequent whole-tree redraws",
+        "`marked()` doesn't support turning off GFM — only `Lexer` can restrict it to a closed subset",
+        "`marked()` outputs an HTML string, and the entire `render.ts` bans `innerHTML`; `Lexer` returns only tokens, which can be assembled into the DOM by hand with `createElement` + `textContent`, with no injection surface at all",
+        "`Lexer`'s tokens carry line-number info, which can be aligned with a snippet's line numbers"
+      ],
+      "correctIndex": 2,
+      "optionExplanations": [
+        "Wrong: performance isn't the reason. At the length walk narration typically runs, the difference between the two approaches is negligible — the real reason is a security discipline.",
+        "Wrong: `gfm: false` is an option passed to the lexer, and `marked()` accepts the same setting. Toggling GFM and choosing Lexer are two independent things.",
+        "Right: walk JSON can come from any generator, so narration strings can't be trusted. Using `Lexer` to get tokens and assembling the DOM one `textContent` at a time never touches an HTML string anywhere on the path, so nothing needs sanitizing. Returning `DocumentFragment` rather than a string turns this into a type-level guarantee too.",
+        "Wrong: a markdown token's `raw` field holds the original characters, not a line number from the source file; a snippet's line numbers come from the JSON's `startLine`, and the two are unrelated."
+      ]
+    },
+    {
+      "question": "When a reader switches the CodeWalk panel away to look at the Explorer and back, why isn't their current step lost? What about a full VS Code restart?",
+      "options": [
+        "Both cases rely on `ProgressStore` written to workspaceState — it's the single source of progress, and both situations go through the same path",
+        "Switching away and back is held together by `retainContextWhenHidden`, which keeps the whole webview alive; a VS Code restart relies on the host-side `ProgressStore` written to workspaceState, triggered by the reader pressing \"resume\" from the list",
+        "Both rely on the webview's `vscode.setState()` — VS Code hands this state back to the webview after a restart",
+        "Switching away and back is restored via a `walkRestored` message; after a VS Code restart, the host still holds `currentWalk`, so the same thing happens again"
+      ],
+      "correctIndex": 1,
+      "optionExplanations": [
+        "Wrong: switching the panel away and back doesn't touch `ProgressStore` at all — `retainContextWhenHidden` keeps the entire webview alive in memory, down to the scroll position, with no restoration logic needed.",
+        "Right: three layers of protection each guard a different scenario. The first, `retainContextWhenHidden`, guards panel hide/show. The second, the webview's `setState` + `applyPersistedUiState`, guards the webview being rebuilt. The third, `ProgressStore`, guards a full host restart.",
+        "Wrong: `setState`'s content is only valid within the same host lifecycle, and isn't handed back after a VS Code restart. Progress that survives a restart is written to workspaceState on the host side.",
+        "Wrong: `walkRestored` only fires when \"the host still holds `currentWalk`.\" After a host restart, this in-memory value is necessarily `undefined` — that's precisely what prevents a restart from mistakenly triggering this restoration."
+      ]
+    },
+    {
+      "question": "If `shared/language.ts`'s extension mapping table gets out of sync with `ui/highlight.ts`'s `LANGS` registration list by one language, what happens? How does the project guard against it?",
+      "options": [
+        "Loading the walk fails validation — `validateCodewalk()` reports \"unsupported language,\" and the reader sees it immediately",
+        "The snippet quietly falls back to plain text with no error — and precisely because this kind of failure is so hard to notice, a test ties the mapping table to the registration list together, turning red if either side falls out of sync",
+        "Shiki throws an exception, the webview's render is interrupted, and the panel shows an error screen",
+        "`detectLanguage()` returns `undefined`, and a later property access throws a TypeError"
+      ],
+      "correctIndex": 1,
+      "optionExplanations": [
+        "Wrong: `validateCodewalk()` only checks the shape of the JSON's fields, and never touches language support — it doesn't even know `ui/highlight.ts` exists.",
+        "Right: `highlightSnippetLines()` finds the language unregistered and returns plain-text tokens without erroring. This kind of silent failure looks exactly like \"this one just happens not to be colored,\" so only a test can guard against it.",
+        "Wrong: Shiki never gets called at all — `isLanguageSupported()` blocks it before `codeToTokens()` is ever invoked.",
+        "Wrong: `detectLanguage()` returns `'text'` (an explicit default) when nothing matches, not `undefined`. That's part of the same degradation posture: never hand upstream a value that would blow it up."
+      ]
+    }
+  ]
+}
