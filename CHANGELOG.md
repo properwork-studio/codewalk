@@ -2,7 +2,7 @@
 
 本檔案格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版本號遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
-## [0.1.0] - 尚未發布
+## [0.1.0] - 2026-08-09
 
 首個版本。純播放器，不含產生功能——`.codewalk.json` 需另外準備（人工撰寫或由其他工具產生）。
 
