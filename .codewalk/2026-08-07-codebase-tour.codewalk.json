@@ -1,6 +1,6 @@
 {
   "title": "CodeWalk 全專案導讀:從 JSON 合約到側邊面板的一條龍",
-  "ref": "16280d78d5ac8770f5ced672c3fc7300f19fccb5",
+  "ref": "927ed3b0f2963278db9a475b3b3f1bd6b7b15d39",
   "regenerateHint": "請重新走過 CodeWalk 的 src/、shared/、ui/ 三層,產生一份對齊目前 HEAD 的全專案導讀,輸出到 .codewalk/ 並為每個 step 與 snippet 填入 anchor 欄位。",
   "passThreshold": 4,
   "steps": [
@@ -27,8 +27,8 @@
     {
       "title": "第 2 步:extension 怎麼在活動列佔一個位置(答案不是程式碼)",
       "file": "package.json",
-      "startLine": 28,
-      "endLine": 46,
+      "startLine": 34,
+      "endLine": 52,
       "narration": "左側活動列上的 CodeWalk 圖示、點開後的那個面板,**沒有任何一行程式碼負責建立它們**——全部由 `package.json` 的 `contributes` 宣告。VS Code 讀這份 manifest 就知道要畫什麼。\n\n這裡宣告了兩件事:\n\n- `viewsContainers.activitybar`:在活動列開一個叫 `codewalk` 的容器,用 `resources/icon.svg` 當圖示\n- `views.codewalk`:容器裡放一個 id 為 `codewalk.playerView`、`type: \"webview\"` 的 view\n\n那個 id 待會會再出現一次——`viewProvider.ts` 裡的 `WalkPlayerViewProvider.viewId` 必須跟這裡的字串**逐字相同**,否則 VS Code 找不到對應的 provider,面板會是空白的。這是一個沒有型別保護的字串契約,只能靠人記住。\n\nmanifest 上方的 `activationEvents` 是空陣列,這是刻意的:VS Code 1.74 起會從 `contributes` 自動推斷啟動時機,宣告了 view 就等於宣告了「這個 view 被開啟時啟動我」,不必再手寫 `onView:` 事件。",
       "terms": [
         {
@@ -45,8 +45,8 @@
           "kind": "snippet",
           "label": "四個指令也在這裡宣告——指令面板搜得到,也能被綁快捷鍵",
           "file": "package.json",
-          "startLine": 46,
-          "endLine": 69,
+          "startLine": 52,
+          "endLine": 75,
           "anchor": "    \"views\": {\n      \"codewalk\": [\n        {\n          \"id\": \"codewalk.playerView\",\n          \"name\": \"Walk\",\n          \"type\": \"webview\"\n        }\n      ]\n    },\n    \"commands\": [\n      {\n        \"command\": \"codewalk.openWalk\",\n        \"title\": \"%command.openWalk.title%\",\n        \"category\": \"CodeWalk\"\n      },\n      {\n        \"command\": \"codewalk.nextStep\",\n        \"title\": \"%command.nextStep.title%\",\n        \"category\": \"CodeWalk\"\n      },\n      {\n        \"command\": \"codewalk.prevStep\",\n        \"title\": \"%command.prevStep.title%\",\n        \"category\": \"CodeWalk\""
         },
         {
@@ -100,8 +100,8 @@
     {
       "title": "第 4 步:六種元件怎麼各驗各的——validateItem",
       "file": "shared/schema.ts",
-      "startLine": 356,
-      "endLine": 417,
+      "startLine": 382,
+      "endLine": 443,
       "narration": "`validateItem()` 是一個對 `kind` 的 switch,每個分支只檢查該種元件真正需要的欄位:`tip`/`todo` 只要 `text`,`reference` 要 `label` 加一個**合法的 http/https 網址**,`snippet` 要檔案與行號範圍,`diff` 還額外要 `oldStartLine` 與 `diffText`。\n\n兩個細節值得看:\n\n1. **`default` 分支會報錯**,不是安靜略過。未知的 `kind` 代表這份 JSON 來自比播放器更新的產生器,與其半吊子渲染,不如明確告訴讀者這份檔案讀不了。\n2. **`diffText` 有語意檢查**(`hasAtLeastOneChangedLine`)——至少要有一行以 `+` 或 `-` 開頭。沒有任何改動的內容語意上該用 `snippet` 表達,不算 diff。這是型別系統管不到、只能靠 validator 表達的規則。\n\n注意 `errors` 陣列是一路傳下去的(`errors.push(...)`),不是拋例外中斷。一次驗完全部,讀者一次看到所有問題,而不是修一個冒一個。",
       "terms": [
         {
@@ -128,13 +128,13 @@
           "diffText": "     } else if (!hasAtLeastOneChangedLine(it.diffText)) {\n-      errors.push(`${path}.diffText 內容有問題`);\n+      errors.push(`${path}.diffText 至少要有一行新增(+)或刪除(-)`);\n     }\n     break;"
         }
       ],
-      "anchor": "function validateItem(item: unknown, path: string, errors: string[]): void {\n  if (typeof item !== 'object' || item === null) {\n    errors.push(`${path} must be an object`);\n    return;\n  }\n  const it = item as Record<string, unknown>;\n  switch (it.kind) {\n    case 'tip':\n    case 'todo':\n      if (!isNonEmptyString(it.text)) {\n        errors.push(`${path}.text must be a non-empty string`);\n      }\n      break;\n    case 'pitfall':\n      if (!isNonEmptyString(it.misconception)) {\n        errors.push(`${path}.misconception must be a non-empty string`);\n      }\n      if (!isNonEmptyString(it.reality)) {\n        errors.push(`${path}.reality must be a non-empty string`);\n      }\n      break;\n    case 'reference':\n      if (!isNonEmptyString(it.label)) {\n        errors.push(`${path}.label must be a non-empty string`);\n      }\n      if (!isHttpUrl(it.url)) {\n        errors.push(`${path}.url must be a valid http/https URL`);\n      }\n      break;\n    case 'snippet':\n      if (!isNonEmptyString(it.label)) {\n        errors.push(`${path}.label must be a non-empty string`);\n      }\n      if (!isNonEmptyString(it.file)) {\n        errors.push(`${path}.file must be a non-empty string`);\n      }\n      validateLineRange(it, path, errors);\n      if (!isOptionalString(it.anchor)) {\n        errors.push(`${path}.anchor must be a string`);\n      }\n      break;\n    case 'diff':\n      if (!isNonEmptyString(it.label)) {\n        errors.push(`${path}.label must be a non-empty string`);\n      }\n      if (!isNonEmptyString(it.file)) {\n        errors.push(`${path}.file must be a non-empty string`);\n      }\n      validateLineRange(it, path, errors);\n      if (!isPositiveInteger(it.oldStartLine)) {\n        errors.push(`${path}.oldStartLine must be a positive integer`);\n      }\n      if (!isNonEmptyString(it.diffText)) {\n        errors.push(`${path}.diffText must be a non-empty string`);\n      } else if (!hasAtLeastOneChangedLine(it.diffText)) {\n        errors.push(`${path}.diffText must contain at least one added (+) or removed (-) line`);\n      }\n      break;\n    default:\n      errors.push(`${path}.kind must be one of tip/pitfall/todo/reference/snippet/diff`);\n  }\n}"
+      "anchor": "function validateItem(item: unknown, path: string, errors: string[]): void {\n  if (typeof item !== 'object' || item === null) {\n    errors.push(`${path} must be an object`);\n    return;\n  }\n  const it = item as Record<string, unknown>;\n  switch (it.kind) {\n    case 'tip':\n    case 'todo':\n      if (!isNonEmptyString(it.text)) {\n        errors.push(`${path}.text must be a non-empty string`);\n      }\n      break;\n    case 'pitfall':\n      if (!isNonEmptyString(it.misconception)) {\n        errors.push(`${path}.misconception must be a non-empty string`);\n      }\n      if (!isNonEmptyString(it.reality)) {\n        errors.push(`${path}.reality must be a non-empty string`);\n      }\n      break;\n    case 'reference':\n      if (!isNonEmptyString(it.label)) {\n        errors.push(`${path}.label must be a non-empty string`);\n      }\n      if (!isHttpUrl(it.url)) {\n        errors.push(`${path}.url must be a valid http/https URL`);\n      }\n      break;\n    case 'snippet':\n      if (!isNonEmptyString(it.label)) {\n        errors.push(`${path}.label must be a non-empty string`);\n      }\n      if (!isWorkspaceRelativePath(it.file)) {\n        errors.push(`${path}.file must be a workspace-relative path (no leading \"/\" and no \"..\" segment)`);\n      }\n      validateLineRange(it, path, errors);\n      if (!isOptionalString(it.anchor)) {\n        errors.push(`${path}.anchor must be a string`);\n      }\n      break;\n    case 'diff':\n      if (!isNonEmptyString(it.label)) {\n        errors.push(`${path}.label must be a non-empty string`);\n      }\n      if (!isWorkspaceRelativePath(it.file)) {\n        errors.push(`${path}.file must be a workspace-relative path (no leading \"/\" and no \"..\" segment)`);\n      }\n      validateLineRange(it, path, errors);\n      if (!isPositiveInteger(it.oldStartLine)) {\n        errors.push(`${path}.oldStartLine must be a positive integer`);\n      }\n      if (!isNonEmptyString(it.diffText)) {\n        errors.push(`${path}.diffText must be a non-empty string`);\n      } else if (!hasAtLeastOneChangedLine(it.diffText)) {\n        errors.push(`${path}.diffText must contain at least one added (+) or removed (-) line`);\n      }\n      break;\n    default:\n      errors.push(`${path}.kind must be one of tip/pitfall/todo/reference/snippet/diff`);\n  }\n}"
     },
     {
       "title": "第 5 步:為什麼要手寫一個 200 多行的 validator",
       "file": "shared/schema.ts",
-      "startLine": 466,
-      "endLine": 511,
+      "startLine": 492,
+      "endLine": 537,
       "narration": "`validateCodewalk()` 收 `unknown`,回傳一個 discriminated union:`{ valid: true, value }` 或 `{ valid: false, errors }`。呼叫端沒辦法忘記檢查——TypeScript 不讓你在確認 `valid` 之前碰 `value`。\n\n可能會想:為什麼不用 Zod 或 JSON Schema?幾個理由:\n\n- **零執行期相依**。這個檔案同時被 extension host 與 webview 兩邊 import,加一個 runtime 相依就是兩份 bundle 都變大\n- **錯誤訊息可以寫成人話**——雖然 `add-interface-localization` change(2026-08-08)之後這裡的訊息一律固定英文(它們是格式合約的診斷輸出,常被貼進 issue、CI log 等跨語言情境,見 `shared/i18n.ts` 檔頭的說明),但仍比函式庫產生的泛用訊息好懂得多,例如 `steps[3].endLine must not be less than startLine`\n- **可以塞進型別系統表達不了的規則**,像上一步的 `diffText` 語意檢查、`passThreshold` 必須落在 1 到題數之間、`optionExplanations` 長度必須等於 `options`\n\n代價是這 200 多行要自己維護。這是 rule of three 的另一面:**在確定會長期存在的核心合約上,手寫比引入抽象更划算**。",
       "items": [
         {
@@ -431,7 +431,7 @@
           "reality": "那樣會讓方向鍵快捷鍵在第一次跳轉後就失效。這個產品的核心體驗是「一路按方向鍵走完」,焦點必須留在面板。讀者想編輯程式碼時自己點過去就好——主動權該在讀者手上。"
         }
       ],
-      "anchor": "export async function jumpToStep(\n  workspaceRoot: string,\n  target: JumpTarget,\n  mode: JumpMode = 'select',\n): Promise<JumpResult> {\n  const absPath = join(workspaceRoot, target.file);\n  if (!existsSync(absPath)) {\n    return { ok: false, reason: 'fileNotFound', message: t('host.fileNotFound', { file: target.file }) };\n  }\n\n  const vscode = await import('vscode');\n  const doc = await vscode.workspace.openTextDocument(absPath);\n  // preserveFocus:true — 不搶走 CodeWalk 面板的焦點,讓方向鍵快捷鍵在連續切換\n  // 好幾個 step 時持續有效(否則第一次跳轉後焦點就會留在編輯器,快捷鍵失效)。\n  const editor = await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: true });\n  if (mode === 'openOnly') {\n    return { ok: true };\n  }\n  const startLine = target.startLine - 1;\n  const endLine = Math.min(target.endLine - 1, doc.lineCount - 1);\n  const range = new vscode.Range(startLine, 0, endLine, doc.lineAt(endLine).text.length);\n  editor.selection = new vscode.Selection(range.start, range.end);\n  editor.revealRange(range, vscode.TextEditorRevealType.InCenter);\n  return { ok: true };\n}"
+      "anchor": "export async function jumpToStep(\n  workspaceRoot: string,\n  target: JumpTarget,\n  mode: JumpMode = 'select',\n): Promise<JumpResult> {\n  const absPath = resolveInWorkspace(workspaceRoot, target.file);\n  if (absPath === null || !existsSync(absPath)) {\n    return { ok: false, reason: 'fileNotFound', message: t('host.fileNotFound', { file: target.file }) };\n  }\n\n  const vscode = await import('vscode');\n  const doc = await vscode.workspace.openTextDocument(absPath);\n  // preserveFocus:true — 不搶走 CodeWalk 面板的焦點,讓方向鍵快捷鍵在連續切換\n  // 好幾個 step 時持續有效(否則第一次跳轉後焦點就會留在編輯器,快捷鍵失效)。\n  const editor = await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: true });\n  if (mode === 'openOnly') {\n    return { ok: true };\n  }\n  const startLine = target.startLine - 1;\n  const endLine = Math.min(target.endLine - 1, doc.lineCount - 1);\n  const range = new vscode.Range(startLine, 0, endLine, doc.lineAt(endLine).text.length);\n  editor.selection = new vscode.Selection(range.start, range.end);\n  editor.revealRange(range, vscode.TextEditorRevealType.InCenter);\n  return { ok: true };\n}"
     },
     {
       "title": "第 17 步:snippet 預覽——只讀「現在這一步」需要的內容",
@@ -451,7 +451,7 @@
           "text": "`itemStatuses` 有預設值 `[]`,省略時等同全部視為未錨定——行為與加入失準偵測之前**完全一致**。這是替既有函式加參數時的好習慣:新參數的預設值要讓舊行為原封不動。"
         }
       ],
-      "anchor": "export async function readSnippetPreviews(\n  workspaceRoot: string,\n  items: CodewalkItem[],\n  itemStatuses: AnchorItemStatus[] = [],\n): Promise<SnippetPreviewResult[]> {\n  const results: SnippetPreviewResult[] = [];\n  items.forEach((item, itemIndex) => {\n    if (item.kind !== 'snippet') return;\n    const snippet = item as SnippetItem;\n    const status = itemStatuses.find((s) => s.itemIndex === itemIndex)?.status ?? {\n      kind: 'unanchored' as const,\n    };\n    const language = detectLanguage(snippet.file);\n\n    if (status.kind === 'stale') {\n      if (status.reason === 'fileMissing') {\n        results.push({\n          itemIndex,\n          ok: false,\n          message: t('host.fileNotFound', { file: snippet.file }),\n          anchorContent: snippet.anchor,\n          language,\n        });\n      } else {\n        results.push({ itemIndex, ok: true, content: snippet.anchor ?? '', language, source: 'anchor' });\n      }\n      return;\n    }\n\n    const absPath = join(workspaceRoot, snippet.file);\n    if (!existsSync(absPath)) {\n      results.push({ itemIndex, ok: false, message: t('host.fileNotFound', { file: snippet.file }) });\n      return;\n    }\n    const lines = readFileSync(absPath, 'utf8').split('\\n');\n    const { startLine, endLine } = effectiveLineRange(snippet, status);\n    const content = lines.slice(startLine - 1, endLine).join('\\n');\n    results.push({ itemIndex, ok: true, content, language, source: 'current' });\n  });\n  return results;\n}"
+      "anchor": "export async function readSnippetPreviews(\n  workspaceRoot: string,\n  items: CodewalkItem[],\n  itemStatuses: AnchorItemStatus[] = [],\n): Promise<SnippetPreviewResult[]> {\n  const results: SnippetPreviewResult[] = [];\n  items.forEach((item, itemIndex) => {\n    if (item.kind !== 'snippet') return;\n    const snippet = item as SnippetItem;\n    const status = itemStatuses.find((s) => s.itemIndex === itemIndex)?.status ?? {\n      kind: 'unanchored' as const,\n    };\n    const language = detectLanguage(snippet.file);\n\n    if (status.kind === 'stale') {\n      if (status.reason === 'fileMissing') {\n        results.push({\n          itemIndex,\n          ok: false,\n          message: t('host.fileNotFound', { file: snippet.file }),\n          anchorContent: snippet.anchor,\n          language,\n        });\n      } else {\n        results.push({ itemIndex, ok: true, content: snippet.anchor ?? '', language, source: 'anchor' });\n      }\n      return;\n    }\n\n    const absPath = resolveInWorkspace(workspaceRoot, snippet.file);\n    if (absPath === null || !existsSync(absPath)) {\n      results.push({ itemIndex, ok: false, message: t('host.fileNotFound', { file: snippet.file }) });\n      return;\n    }\n    const lines = readFileSync(absPath, 'utf8').split('\\n');\n    const { startLine, endLine } = effectiveLineRange(snippet, status);\n    const content = lines.slice(startLine - 1, endLine).join('\\n');\n    results.push({ itemIndex, ok: true, content, language, source: 'current' });\n  });\n  return results;\n}"
     },
     {
       "title": "第 18 步:副檔名怎麼變成語言——兩個檔案的隱形契約",
