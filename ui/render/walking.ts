@@ -1,3 +1,4 @@
+import { t } from '../../shared/i18n';
 import { detectLanguage } from '../../shared/language';
 import { effectiveLineRange, type AnchorStatus, type SnippetPreviewResult } from '../../shared/protocol';
 import type { CodewalkStep } from '../../shared/schema';
@@ -30,12 +31,12 @@ function renderRegeneratePrompt(
   const warning = el('div', 'codewalk-warning codewalk-regenerate-prompt');
   warning.appendChild(icon('warning'));
   const text = el('div', 'codewalk-regenerate-prompt-text');
-  text.appendChild(el('span', undefined, '這份導讀有步驟已與現行程式碼不符,建議重新產生'));
+  text.appendChild(el('span', undefined, t('walking.regeneratePrompt')));
   warning.appendChild(text);
   if (regenerateHint) {
     const copyButton = el('button', 'codewalk-regenerate-copy');
     copyButton.appendChild(icon('copy'));
-    copyButton.appendChild(el('span', undefined, '複製重生指令'));
+    copyButton.appendChild(el('span', undefined, t('walking.copyRegenerateHint')));
     copyButton.addEventListener('click', onCopyRegenerateHint);
     warning.appendChild(copyButton);
   }
@@ -53,7 +54,9 @@ function renderStepStaleBlock(
   const header = el(canOpen ? 'button' : 'div', 'codewalk-snippet-header');
   header.appendChild(icon('warning'));
   const headerText = el('span', 'codewalk-snippet-header-text');
-  headerText.appendChild(el('span', 'codewalk-snippet-label', canOpen ? '開啟現行檔案' : '找不到檔案'));
+  headerText.appendChild(
+    el('span', 'codewalk-snippet-label', canOpen ? t('stale.openCurrentFile') : t('stale.fileNotFound')),
+  );
   headerText.appendChild(el('span', 'codewalk-snippet-file-ref', step.file));
   header.appendChild(headerText);
   if (canOpen && header instanceof HTMLButtonElement) {
@@ -70,13 +73,13 @@ function renderStepStaleBlock(
 function createStepDots(current: number, total: number): HTMLElement {
   const dots = el('div', 'codewalk-step-dots');
   dots.setAttribute('role', 'img');
-  dots.setAttribute('aria-label', `第 ${current + 1} / ${total} 步`);
+  dots.setAttribute('aria-label', t('walking.stepProgress', { current: current + 1, total }));
   for (let i = 0; i < total; i++) {
     const classes = ['codewalk-step-dot'];
     if (i === current) classes.push('is-current');
     else if (i < current) classes.push('is-done');
     const dot = el('span', classes.join(' '));
-    dot.title = `第 ${i + 1} 步`;
+    dot.title = t('walking.stepDotTitle', { n: i + 1 });
     dots.appendChild(dot);
   }
   return dots;
@@ -98,7 +101,7 @@ export function renderWalking(
 
   const backButton = el('button', 'codewalk-back-to-list');
   backButton.appendChild(icon('list-unordered'));
-  backButton.appendChild(el('span', undefined, '返回列表'));
+  backButton.appendChild(el('span', undefined, t('walking.backToList')));
   backButton.addEventListener('click', handlers.onBackToList);
   container.appendChild(backButton);
 
@@ -107,7 +110,7 @@ export function renderWalking(
   if (state.refDrifted && !state.anchorReport.anyAnchored) {
     const warning = el('div', 'codewalk-warning');
     warning.appendChild(icon('warning'));
-    warning.appendChild(el('span', undefined, '目前 commit 與導讀釘住的版本不同,行號可能漂移'));
+    warning.appendChild(el('span', undefined, t('walking.refDriftWarning')));
     container.appendChild(warning);
   }
 
@@ -126,7 +129,11 @@ export function renderWalking(
   walkTitle.appendChild(renderMarkdownInline(state.walk.title, handlers.onOpenReference));
   container.appendChild(walkTitle);
   container.appendChild(
-    el('p', 'codewalk-progress', `第 ${state.stepIndex + 1} / ${state.walk.steps.length} 步`),
+    el(
+      'p',
+      'codewalk-progress',
+      t('walking.stepProgress', { current: state.stepIndex + 1, total: state.walk.steps.length }),
+    ),
   );
   container.appendChild(createStepDots(state.stepIndex, state.walk.steps.length));
   const stepTitle = document.createElement('h3');
@@ -140,10 +147,10 @@ export function renderWalking(
   // (walk-player capability「回到本步專案位置」,design.md 決策 8)。
   const revealButton = el('button', 'codewalk-reveal-step');
   revealButton.appendChild(icon('go-to-file'));
-  revealButton.appendChild(el('span', undefined, '回到本步專案位置'));
+  revealButton.appendChild(el('span', undefined, t('walking.revealStep')));
   // 快捷鍵主鍵是 Home,不是字母鍵——中文輸入法作用中時字母鍵的 keydown 可能
   // 被攔截去組字(實測結果),Home 不受影響;英文鍵盤環境另外保留 R 當備用鍵。
-  revealButton.title = '回到本步專案位置(Home)';
+  revealButton.title = t('walking.revealStepTitle');
   revealButton.addEventListener('click', handlers.onRevealCurrentStep);
   container.appendChild(revealButton);
 
@@ -197,11 +204,11 @@ export function renderWalking(
   const nav = el('div', 'codewalk-nav');
   const prevButton = el('button', 'codewalk-nav-prev');
   prevButton.appendChild(icon('chevron-left'));
-  prevButton.appendChild(el('span', undefined, '上一步'));
+  prevButton.appendChild(el('span', undefined, t('walking.prev')));
   prevButton.disabled = state.stepIndex === 0;
   prevButton.addEventListener('click', handlers.onPrev);
   const nextButton = el('button', 'codewalk-nav-next');
-  nextButton.appendChild(el('span', undefined, '下一步'));
+  nextButton.appendChild(el('span', undefined, t('walking.next')));
   nextButton.appendChild(icon('chevron-right'));
   nextButton.disabled = isAtLastStep(state);
   nextButton.addEventListener('click', handlers.onNext);
@@ -212,8 +219,8 @@ export function renderWalking(
   if (isAtLastStep(state)) {
     const completeBanner = el('div', 'codewalk-walk-complete');
     completeBanner.appendChild(icon('rocket'));
-    completeBanner.appendChild(el('p', 'codewalk-hint', '已到達最後一步,可以開始自測'));
-    const quizButton = el('button', 'codewalk-enter-quiz', '開始 Quiz 自測');
+    completeBanner.appendChild(el('p', 'codewalk-hint', t('walking.completeHint')));
+    const quizButton = el('button', 'codewalk-enter-quiz', t('walking.startQuiz'));
     quizButton.addEventListener('click', handlers.onEnterQuiz);
     completeBanner.appendChild(quizButton);
     container.appendChild(completeBanner);

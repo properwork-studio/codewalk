@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { getLocale, t } from '../shared/i18n';
 import { parseWebviewToHostMessage, type AnchorReport, type HostToWebviewMessage } from '../shared/protocol';
 import { scoreQuiz, type CodewalkFile } from '../shared/schema';
 import { buildAnchorReport, effectiveLineRange, emptyAnchorReport, jumpModeFor } from './anchorCheck';
@@ -172,7 +173,7 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
   private async sendFileList(): Promise<void> {
     const root = getWorkspaceRoot();
     if (!root) {
-      this.post({ type: 'loadError', message: '未開啟任何 workspace' });
+      this.post({ type: 'loadError', message: t('host.noWorkspace') });
       return;
     }
     const files = await listWalkFiles(
@@ -311,9 +312,12 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
       vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'codicon.css'),
     );
     const nonce = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+    // getLocale() 讀的是 activate() 首行已設定好的 host locale——webview 開機時
+    // 從這個標籤讀回判定結果,兩邊共用同一個 resolveLocale()(design.md 決策 4、5)。
+    const htmlLang = getLocale() === 'zh-tw' ? 'zh-Hant' : 'en';
 
     return `<!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="${htmlLang}">
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; font-src ${webview.cspSource}; script-src 'nonce-${nonce}';" />

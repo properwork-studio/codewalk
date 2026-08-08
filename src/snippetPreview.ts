@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { t } from '../shared/i18n';
 import { detectLanguage } from '../shared/language';
 import type { AnchorItemStatus, SnippetPreviewResult } from '../shared/protocol';
 import type { CodewalkItem } from '../shared/schema';
@@ -35,7 +36,7 @@ export async function readSnippetPreviews(
         results.push({
           itemIndex,
           ok: false,
-          message: `找不到檔案:${snippet.file}`,
+          message: t('host.fileNotFound', { file: snippet.file }),
           anchorContent: snippet.anchor,
           language,
         });
@@ -47,7 +48,7 @@ export async function readSnippetPreviews(
 
     const absPath = join(workspaceRoot, snippet.file);
     if (!existsSync(absPath)) {
-      results.push({ itemIndex, ok: false, message: `找不到檔案:${snippet.file}` });
+      results.push({ itemIndex, ok: false, message: t('host.fileNotFound', { file: snippet.file }) });
       return;
     }
     const lines = readFileSync(absPath, 'utf8').split('\n');

@@ -446,7 +446,7 @@ describe('validateCodewalk — quiz.optionExplanations', () => {
     const result = validateCodewalk(sampleWithOptionExplanations('not an array'));
     expect(result.valid).toBe(false);
     if (!result.valid) {
-      expect(result.errors.some((e) => e.includes('optionExplanations') && e.includes('陣列'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('optionExplanations') && e.includes('array'))).toBe(true);
     }
   });
 
@@ -470,7 +470,7 @@ describe('validateCodewalk — quiz.optionExplanations', () => {
     const result = validateCodewalk(sampleWithOptionExplanations(['只有一個解釋']));
     expect(result.valid).toBe(false);
     if (!result.valid) {
-      expect(result.errors.some((e) => e.includes('optionExplanations') && e.includes('長度'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('optionExplanations') && e.includes('length'))).toBe(true);
     }
   });
 
@@ -478,7 +478,7 @@ describe('validateCodewalk — quiz.optionExplanations', () => {
     const result = validateCodewalk(sampleWithOptionExplanations(['解釋一', '解釋二', '多出來的解釋']));
     expect(result.valid).toBe(false);
     if (!result.valid) {
-      expect(result.errors.some((e) => e.includes('optionExplanations') && e.includes('長度'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('optionExplanations') && e.includes('length'))).toBe(true);
     }
   });
 });

@@ -13,7 +13,7 @@
   - **MIT 授權**:VS Code extension 生態的預設(含 VS Code 本身);Apache 2.0 的主要優勢是明文專利授權與報復條款,本專案沒有專利也不打算申請,用不上那份長度
   - **repo public**:`.codewalk.json` 定位為開放格式,要讓別人寫產生器就得有參考實作;附帶條件是 marketplace 頁面的圖片由 vsce 轉成 GitHub raw URL,**repo 沒推上去或不是 public,README 的圖就會破**
   - **Cursor 走 Open VSX**(open-vsx.org):Cursor 不能用微軟 Marketplace(ToS 只授權自家產品),需另外註冊 Eclipse 帳號並簽 Publisher Agreement,同一份 VSIX 可雙推
-  - **介面語言:繁中優先,英文版後補**——UI 目前有 117 個面向使用者的中文字串常數,英文化是把它們抽進 `vscode.l10n` + `package.nls.json` 的機械工作(一次抽比邊做邊抽一致性好),但那是**驗證產品有人要之後**才值得花的一天。README 開頭以英文標示介面語言:英文使用者裝完看到滿版中文是差評的典型來源,而**評分會累積,補了英文介面也不會消失**
+  - **介面語言:雙語 l10n,隨 VS Code 顯示語言切換**(2026-08-08,`add-interface-localization` change 定案,取代原本「繁中優先、英文版後補」)——理由不變:評分會累積,補了英文介面也不會消失;現在使用者數是 0、repo 還沒推,改的成本是現在最低的時候,不留到「有人要之後」。機制:`shared/i18n.ts` 的 `t()`/`setLocale()`/`resolveLocale()` 供 host 與 webview 共用(兩份獨立 bundle,各自呼叫 `setLocale()`),manifest 文案另走 VS Code 強制的 `package.nls.json`(英文預設)+ `package.nls.zh-tw.json`(繁中覆蓋)。判定規則:`vscode.env.language` 前綴為 `zh` 一律繁中,其餘英文。`.codewalk.json` 的導讀內容(`narration`/`title`/quiz 等)不受影響,語言由作者決定——見 `docs/glossary.md`「介面語言」與「導讀內容語言」的區分
 
 ## 技術
 
@@ -40,4 +40,5 @@
   - **未定**:要不要縮減支援語言清單。真正的分水嶺在 13 個常見語言,而 `dart`/`groovy`/`scala`/`kotlin`/`swift` 值不值得留是**產品決策**。且動 `shared/language.ts` 的副檔名對應會命中 syntax-highlighting spec 的「依檔案副檔名判定語言」requirement,是可觀察行為變更,**必須走 change,不是小改**
 
 - **導讀檔視為含程式碼片段的文件**(2026-08-04,stale-step-detection change 定案):`anchor`(step/snippet 引用範圍的逐字原文)與既有的 `diffText` 都是原始碼的逐字複製,`.codewalk.json` 自此不再只是「敘述+行號」,而是連同一份程式碼快照。同一 repo 內零額外暴露(git 本來就無檔案層級權限,能 clone 就能讀到同樣內容);風險只在**人為單獨分享**這份檔案時成立(workshop、貼進 issue/Slack、獨立 docs repo 等),分享前應比照原始碼的敏感度判斷,**MVP 不為此設計脫敏或遮蔽機制**
+- **spec 書寫慣例:scenario 引號內的文案指涉繁中介面的對應元素**(2026-08-08,`add-interface-localization` change 定案)——`openspec/specs/` 既有大量 scenario 以中文引號指涉 UI 元素(如「返回列表」「找不到檔案」),雙語化後這些引號**不代表該處只能顯示這個字串**,而是指「繁體中文介面下顯示這段文字的那個元素」,英文介面為其譯文。spec 本身不因此重寫——spec 是行為合約,不規範自己的書寫方式;只有規範**顯示字串本身**的 requirement(如 `walk-player` 的「作答時間的相對顯示」)才需要在正文明確拆出語言中立的判定與各語言的對應輸出
 - **格式化紀律**(2026-08-04):專案已裝 Prettier(`.prettierrc.json`、singleQuote/printWidth 110/trailingComma all)並設定 VS Code format-on-save 使用同一套規則;AI 或人手改完 `.ts` 檔收工前務必跑 `pnpm format`,讓「已提交的排版」與「讀者存檔時觸發的排版」保持冪等——否則讀者一存檔,`git diff` 會混進大量無意義的排版變動,連帶讓 `anchor` 逐字比對誤判成內容改動(見 stale-step-detection capability)

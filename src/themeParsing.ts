@@ -37,7 +37,10 @@ export function mergeIncludedTheme(base: RawThemeFile, override: RawThemeFile): 
  */
 export async function loadRawTheme(filePath: string, depth = 0): Promise<RawThemeFile> {
   if (depth > MAX_INCLUDE_DEPTH) {
-    throw new Error(`主題 include 繼承超過 ${MAX_INCLUDE_DEPTH} 層,疑似循環或過深:${filePath}`);
+    // 這個錯誤在 themeSource.ts 被 catch 後靜默降級,永遠不會顯示給讀者
+    // (syntax-highlighting capability「主題定義檔無法解析」)——不是介面文案,
+    // 固定英文純粹是內部診斷的一致性,不經 t()。
+    throw new Error(`Theme include depth exceeded ${MAX_INCLUDE_DEPTH} levels (possible cycle): ${filePath}`);
   }
   const text = await readFile(filePath, 'utf8');
   const raw = parseJsonc(text) as RawThemeFile;

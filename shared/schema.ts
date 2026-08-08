@@ -1,3 +1,13 @@
+/**
+ * 本檔 validateCodewalk() 的所有驗證錯誤訊息刻意固定為英文,不經
+ * `shared/i18n.ts` 的 t()——它們是 `.codewalk.json` 格式合約的診斷輸出,
+ * 受眾是撰寫導讀或開發產生器的人,經常被複製到 issue、CI log 等跨語言情境,
+ * 固定語言比隨介面語言浮動更有用(interface-localization capability
+ * 「格式驗證錯誤固定英文」,design.md 決策 7)。
+ *
+ * 若要改動這裡的任何訊息,請維持這個例外,不要「順手」接進 t()。
+ */
+
 export interface CodewalkTerm {
   /** 短欄位,markdown 子集僅行內三種——見 CodewalkStep.narration 的說明。 */
   term: string;
@@ -143,58 +153,58 @@ function hasAtLeastOneChangedLine(diffText: string): boolean {
 
 function validateLineRange(obj: Record<string, unknown>, path: string, errors: string[]): void {
   if (!isPositiveInteger(obj.startLine)) {
-    errors.push(`${path}.startLine 必須是正整數`);
+    errors.push(`${path}.startLine must be a positive integer`);
   }
   if (!isPositiveInteger(obj.endLine)) {
-    errors.push(`${path}.endLine 必須是正整數`);
+    errors.push(`${path}.endLine must be a positive integer`);
   } else if (isPositiveInteger(obj.startLine) && (obj.endLine as number) < (obj.startLine as number)) {
-    errors.push(`${path}.endLine 不可小於 startLine`);
+    errors.push(`${path}.endLine must not be less than startLine`);
   }
 }
 
 function validateTerm(term: unknown, path: string, errors: string[]): void {
   if (typeof term !== 'object' || term === null) {
-    errors.push(`${path} 必須是物件`);
+    errors.push(`${path} must be an object`);
     return;
   }
   const t = term as Record<string, unknown>;
   if (!isNonEmptyString(t.term)) {
-    errors.push(`${path}.term 必須是非空字串`);
+    errors.push(`${path}.term must be a non-empty string`);
   }
   if (!isNonEmptyString(t.explanation)) {
-    errors.push(`${path}.explanation 必須是非空字串`);
+    errors.push(`${path}.explanation must be a non-empty string`);
   }
 }
 
 function validateStep(step: unknown, path: string, errors: string[]): void {
   if (typeof step !== 'object' || step === null) {
-    errors.push(`${path} 必須是物件`);
+    errors.push(`${path} must be an object`);
     return;
   }
   const s = step as Record<string, unknown>;
   if (!isNonEmptyString(s.title)) {
-    errors.push(`${path}.title 必須是非空字串`);
+    errors.push(`${path}.title must be a non-empty string`);
   }
   if (!isNonEmptyString(s.file)) {
-    errors.push(`${path}.file 必須是非空字串`);
+    errors.push(`${path}.file must be a non-empty string`);
   }
   validateLineRange(s, path, errors);
   if (!isNonEmptyString(s.narration)) {
-    errors.push(`${path}.narration 必須是非空字串`);
+    errors.push(`${path}.narration must be a non-empty string`);
   }
   if (!isOptionalString(s.anchor)) {
-    errors.push(`${path}.anchor 必須是字串`);
+    errors.push(`${path}.anchor must be a string`);
   }
   if (s.terms !== undefined) {
     if (!Array.isArray(s.terms)) {
-      errors.push(`${path}.terms 必須是陣列`);
+      errors.push(`${path}.terms must be an array`);
     } else {
       s.terms.forEach((term, i) => validateTerm(term, `${path}.terms[${i}]`, errors));
     }
   }
   if (s.items !== undefined) {
     if (!Array.isArray(s.items)) {
-      errors.push(`${path}.items 必須是陣列`);
+      errors.push(`${path}.items must be an array`);
     } else {
       s.items.forEach((item, i) => validateItem(item, `${path}.items[${i}]`, errors));
     }
@@ -203,7 +213,7 @@ function validateStep(step: unknown, path: string, errors: string[]): void {
 
 function validateItem(item: unknown, path: string, errors: string[]): void {
   if (typeof item !== 'object' || item === null) {
-    errors.push(`${path} 必須是物件`);
+    errors.push(`${path} must be an object`);
     return;
   }
   const it = item as Record<string, unknown>;
@@ -211,70 +221,70 @@ function validateItem(item: unknown, path: string, errors: string[]): void {
     case 'tip':
     case 'todo':
       if (!isNonEmptyString(it.text)) {
-        errors.push(`${path}.text 必須是非空字串`);
+        errors.push(`${path}.text must be a non-empty string`);
       }
       break;
     case 'pitfall':
       if (!isNonEmptyString(it.misconception)) {
-        errors.push(`${path}.misconception 必須是非空字串`);
+        errors.push(`${path}.misconception must be a non-empty string`);
       }
       if (!isNonEmptyString(it.reality)) {
-        errors.push(`${path}.reality 必須是非空字串`);
+        errors.push(`${path}.reality must be a non-empty string`);
       }
       break;
     case 'reference':
       if (!isNonEmptyString(it.label)) {
-        errors.push(`${path}.label 必須是非空字串`);
+        errors.push(`${path}.label must be a non-empty string`);
       }
       if (!isHttpUrl(it.url)) {
-        errors.push(`${path}.url 必須是合法的 http/https 網址`);
+        errors.push(`${path}.url must be a valid http/https URL`);
       }
       break;
     case 'snippet':
       if (!isNonEmptyString(it.label)) {
-        errors.push(`${path}.label 必須是非空字串`);
+        errors.push(`${path}.label must be a non-empty string`);
       }
       if (!isNonEmptyString(it.file)) {
-        errors.push(`${path}.file 必須是非空字串`);
+        errors.push(`${path}.file must be a non-empty string`);
       }
       validateLineRange(it, path, errors);
       if (!isOptionalString(it.anchor)) {
-        errors.push(`${path}.anchor 必須是字串`);
+        errors.push(`${path}.anchor must be a string`);
       }
       break;
     case 'diff':
       if (!isNonEmptyString(it.label)) {
-        errors.push(`${path}.label 必須是非空字串`);
+        errors.push(`${path}.label must be a non-empty string`);
       }
       if (!isNonEmptyString(it.file)) {
-        errors.push(`${path}.file 必須是非空字串`);
+        errors.push(`${path}.file must be a non-empty string`);
       }
       validateLineRange(it, path, errors);
       if (!isPositiveInteger(it.oldStartLine)) {
-        errors.push(`${path}.oldStartLine 必須是正整數`);
+        errors.push(`${path}.oldStartLine must be a positive integer`);
       }
       if (!isNonEmptyString(it.diffText)) {
-        errors.push(`${path}.diffText 必須是非空字串`);
+        errors.push(`${path}.diffText must be a non-empty string`);
       } else if (!hasAtLeastOneChangedLine(it.diffText)) {
-        errors.push(`${path}.diffText 至少要有一行新增(+)或刪除(-)`);
+        errors.push(`${path}.diffText must contain at least one added (+) or removed (-) line`);
       }
       break;
     default:
-      errors.push(`${path}.kind 必須是 tip/pitfall/todo/reference/snippet/diff 其中之一`);
+      errors.push(`${path}.kind must be one of tip/pitfall/todo/reference/snippet/diff`);
   }
 }
 
 function validateQuizQuestion(question: unknown, path: string, errors: string[]): void {
   if (typeof question !== 'object' || question === null) {
-    errors.push(`${path} 必須是物件`);
+    errors.push(`${path} must be an object`);
     return;
   }
   const q = question as Record<string, unknown>;
   if (!isNonEmptyString(q.question)) {
-    errors.push(`${path}.question 必須是非空字串`);
+    errors.push(`${path}.question must be a non-empty string`);
   }
   if (!Array.isArray(q.options) || q.options.length < 2 || !q.options.every(isNonEmptyString)) {
-    errors.push(`${path}.options 必須是至少 2 個非空字串的陣列`);
+    errors.push(`${path}.options must be an array of at least 2 non-empty strings`);
   }
   if (
     typeof q.correctIndex !== 'number' ||
@@ -282,19 +292,19 @@ function validateQuizQuestion(question: unknown, path: string, errors: string[])
     q.correctIndex < 0 ||
     (Array.isArray(q.options) && q.correctIndex >= q.options.length)
   ) {
-    errors.push(`${path}.correctIndex 必須是 options 範圍內的整數`);
+    errors.push(`${path}.correctIndex must be an integer within the range of options`);
   }
   if (q.optionExplanations !== undefined) {
     if (!Array.isArray(q.optionExplanations)) {
-      errors.push(`${path}.optionExplanations 必須是陣列`);
+      errors.push(`${path}.optionExplanations must be an array`);
     } else {
       q.optionExplanations.forEach((explanation, i) => {
         if (!isNonEmptyString(explanation)) {
-          errors.push(`${path}.optionExplanations[${i}] 必須是非空字串`);
+          errors.push(`${path}.optionExplanations[${i}] must be a non-empty string`);
         }
       });
       if (Array.isArray(q.options) && q.optionExplanations.length !== q.options.length) {
-        errors.push(`${path}.optionExplanations 的長度必須與 options 相同`);
+        errors.push(`${path}.optionExplanations must have the same length as options`);
       }
     }
   }
@@ -304,23 +314,23 @@ export function validateCodewalk(data: unknown): ValidationResult {
   const errors: string[] = [];
 
   if (typeof data !== 'object' || data === null) {
-    return { valid: false, errors: ['導讀檔案必須是 JSON 物件'] };
+    return { valid: false, errors: ['The walk file must be a JSON object'] };
   }
   const d = data as Record<string, unknown>;
 
   if (!isNonEmptyString(d.title)) {
-    errors.push('title 必須是非空字串');
+    errors.push('title must be a non-empty string');
   }
   if (!isNonEmptyString(d.ref)) {
-    errors.push('ref 必須是非空字串');
+    errors.push('ref must be a non-empty string');
   }
   if (!Array.isArray(d.steps) || d.steps.length === 0) {
-    errors.push('steps 必須是至少含 1 個元素的陣列');
+    errors.push('steps must be an array with at least 1 element');
   } else {
     d.steps.forEach((step, i) => validateStep(step, `steps[${i}]`, errors));
   }
   if (!Array.isArray(d.quiz) || d.quiz.length === 0) {
-    errors.push('quiz 必須是至少含 1 題的陣列');
+    errors.push('quiz must be an array with at least 1 question');
   } else {
     d.quiz.forEach((q, i) => validateQuizQuestion(q, `quiz[${i}]`, errors));
   }
@@ -333,12 +343,12 @@ export function validateCodewalk(data: unknown): ValidationResult {
       d.passThreshold < 1 ||
       (quizLength !== undefined && d.passThreshold > quizLength)
     ) {
-      errors.push('passThreshold 必須是 1 到 quiz 題數之間的整數');
+      errors.push('passThreshold must be an integer between 1 and the number of quiz questions');
     }
   }
 
   if (d.regenerateHint !== undefined && !isNonEmptyString(d.regenerateHint)) {
-    errors.push('regenerateHint 必須是非空字串');
+    errors.push('regenerateHint must be a non-empty string');
   }
 
   if (errors.length > 0) {

@@ -1,3 +1,4 @@
+import { t } from '../../shared/i18n';
 import type { AttemptSummary, WalkFileSummary } from '../../shared/protocol';
 import { renderMarkdownInline } from '../markdown';
 import { formatAbsoluteDateTime, formatRelativeTime } from '../relativeTime';
@@ -23,7 +24,7 @@ function renderContinueButton(
   stepIndex: number,
   onResume: (path: string) => void,
 ): HTMLElement {
-  const label = `接續上次(第 ${stepIndex + 1} 步)`;
+  const label = t('fileList.continueLabel', { step: stepIndex + 1 });
   const button = el('button', 'codewalk-continue-button');
   button.appendChild(icon('debug-continue'));
   button.appendChild(el('span', undefined, String(stepIndex + 1)));
@@ -72,7 +73,7 @@ function renderAttemptMenu(
 
   const trigger = el('button', 'codewalk-attempt-menu-trigger');
   trigger.appendChild(icon('kebab-vertical'));
-  trigger.title = '更多動作';
+  trigger.title = t('fileList.moreActions');
   trigger.setAttribute('aria-haspopup', 'true');
   trigger.setAttribute('aria-expanded', String(isOpen));
   trigger.addEventListener('click', () => handlers.onToggleMenu(path));
@@ -83,7 +84,7 @@ function renderAttemptMenu(
     const clearItem = el(
       'button',
       `codewalk-attempt-menu-item${isPending ? ' is-pending' : ''}`,
-      isPending ? '確定清除?' : '清除 Quiz 紀錄',
+      isPending ? t('fileList.clearAttemptConfirm') : t('fileList.clearAttempt'),
     );
     clearItem.addEventListener('click', () => handlers.onTriggerClear(path));
     popover.appendChild(clearItem);
@@ -99,11 +100,9 @@ export function renderFileList(
   handlers: FileListHandlers,
 ): HTMLElement {
   const container = el('div', 'codewalk-file-list');
-  container.appendChild(el('h2', undefined, '選擇導讀'));
+  container.appendChild(el('h2', undefined, t('fileList.title')));
   if (files.length === 0) {
-    container.appendChild(
-      el('p', 'codewalk-empty', '找不到導讀檔案(workspace 內沒有 .codewalk/*.codewalk.json)'),
-    );
+    container.appendChild(el('p', 'codewalk-empty', t('fileList.empty')));
     return container;
   }
   const list = el('ul');
@@ -151,9 +150,16 @@ export function renderFileList(
   return container;
 }
 
-export function renderError(message: string): HTMLElement {
+export function renderError(message: string, onBackToList: () => void): HTMLElement {
   const container = el('div', 'codewalk-error');
-  container.appendChild(icon('error'));
-  container.appendChild(el('p', undefined, message));
+  const backButton = el('button', 'codewalk-back-to-list');
+  backButton.appendChild(icon('list-unordered'));
+  backButton.appendChild(el('span', undefined, t('walking.backToList')));
+  backButton.addEventListener('click', onBackToList);
+  container.appendChild(backButton);
+  const errorContainer = el('div', 'codewalk-error-container');
+  errorContainer.appendChild(icon('error'));
+  errorContainer.appendChild(el('p', undefined, message));
+  container.appendChild(errorContainer);
   return container;
 }

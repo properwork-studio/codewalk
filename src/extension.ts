@@ -1,7 +1,11 @@
 import * as vscode from 'vscode';
+import { resolveLocale, setLocale } from '../shared/i18n';
 import { WalkPlayerViewProvider } from './viewProvider';
 
 export function activate(context: vscode.ExtensionContext): void {
+  // 必須早於 WalkPlayerViewProvider 的建構——getHtml() 會用到判定結果
+  // (design.md 決策 5)。
+  setLocale(resolveLocale(vscode.env.language));
   const provider = new WalkPlayerViewProvider(context);
 
   context.subscriptions.push(

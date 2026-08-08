@@ -1,0 +1,7 @@
+{
+  "extension.description": "An interactive codebase walkthrough player — reads JSON from .codewalk/ and guides readers through the code step by step in the side panel",
+  "command.openWalk.title": "CodeWalk: Open Walk",
+  "command.nextStep.title": "CodeWalk: Next Step",
+  "command.prevStep.title": "CodeWalk: Previous Step",
+  "command.revealCurrentStep.title": "CodeWalk: Reveal Current Step"
+}

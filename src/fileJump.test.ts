@@ -1,10 +1,15 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { setLocale } from '../shared/i18n';
 import { jumpToStep } from './fileJump';
 
 const dirsToClean: string[] = [];
+
+beforeEach(() => {
+  setLocale('zh-tw');
+});
 
 afterEach(async () => {
   await Promise.all(dirsToClean.splice(0).map((d) => rm(d, { recursive: true, force: true })));

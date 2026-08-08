@@ -1,3 +1,4 @@
+import { resolveLocale, setLocale } from '../shared/i18n';
 import type { HostToWebviewMessage, SnippetPreviewResult, WebviewToHostMessage } from '../shared/protocol';
 import { applyEditorTheme, onHighlightReady } from './highlight';
 import {
@@ -30,6 +31,13 @@ declare function acquireVsCodeApi(): {
   getState: () => unknown;
 };
 const vscode = acquireVsCodeApi();
+
+// src/ 與 ui/ 是兩份獨立 bundle,各自持有 shared/i18n.ts 的模組狀態——這裡
+// 的 setLocale() 只影響 webview 這一份,host 側在 extension.ts 的 activate()
+// 已各自設定過(design.md 決策 2、5)。document.documentElement.lang 由
+// viewProvider.ts 的 getHtml() 依 host locale 寫入,所以兩邊算出的 locale
+// 相同。
+setLocale(resolveLocale(document.documentElement.lang));
 
 type Screen = FileListState | { screen: 'error'; message: string } | WalkingState | QuizState | QuizResult;
 
@@ -134,7 +142,7 @@ function render(): void {
     restoreFileListFocus(root, current);
   } else if (current.screen === 'error') {
     lastWalkingStepIndex = null;
-    root.appendChild(renderError(current.message));
+    root.appendChild(renderError(current.message, onBackToList));
   } else if (current.screen === 'walking') {
     const isStepTransition = lastWalkingStepIndex !== current.stepIndex;
     lastWalkingStepIndex = current.stepIndex;
@@ -303,7 +311,7 @@ function onRestartWalk(): void {
 }
 
 function onBackToList(): void {
-  if (current.screen === 'quizResult' || current.screen === 'walking') {
+  if (current.screen === 'quizResult' || current.screen === 'walking' || current.screen === 'error') {
     current = createFileListState([]);
     render();
     // 不能重用 webviewReady——host 用 currentWalk 是否存在判斷「該不該回灌

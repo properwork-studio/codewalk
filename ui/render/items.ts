@@ -1,3 +1,4 @@
+import { t } from '../../shared/i18n';
 import { detectLanguage } from '../../shared/language';
 import {
   effectiveLineRange,
@@ -64,12 +65,12 @@ function renderPitfall(misconception: string, reality: string, onOpenLink: OpenL
   const box = el('div', 'codewalk-annotation codewalk-annotation-pitfall');
   const header = el('div', 'codewalk-annotation-header');
   header.appendChild(icon('alert', 'codewalk-annotation-icon'));
-  header.appendChild(el('span', undefined, '容易誤解的地方'));
+  header.appendChild(el('span', undefined, t('items.pitfallHeader')));
   box.appendChild(header);
   const misconceptionRow = el('div', 'codewalk-pitfall-line');
-  appendLabeledMarkdown(misconceptionRow, '誤解:', misconception, onOpenLink);
+  appendLabeledMarkdown(misconceptionRow, t('items.misconceptionLabel'), misconception, onOpenLink);
   const realityRow = el('div', 'codewalk-pitfall-line');
-  appendLabeledMarkdown(realityRow, '其實:', reality, onOpenLink);
+  appendLabeledMarkdown(realityRow, t('items.realityLabel'), reality, onOpenLink);
   box.appendChild(misconceptionRow);
   box.appendChild(realityRow);
   return box;
@@ -109,7 +110,7 @@ export function renderSnippetCode(content: string, language: string, startLine: 
 export function renderStaleLabel(): HTMLElement {
   const label = el('div', 'codewalk-stale-label');
   label.appendChild(icon('history'));
-  label.appendChild(el('span', undefined, '以下為產出當時的內容,現行版本已不同'));
+  label.appendChild(el('span', undefined, t('stale.contentLabel')));
   return label;
 }
 
@@ -133,7 +134,7 @@ function renderSnippet(
   const headerText = el('span', 'codewalk-snippet-header-text');
   const labelSpan = el('span', 'codewalk-snippet-label');
   if (isStale && canOpen) {
-    labelSpan.textContent = '開啟現行檔案';
+    labelSpan.textContent = t('stale.openCurrentFile');
   } else {
     // label 顯示在 <button> 內部,onOpenLink 傳 null 避免巢狀 <button>(見 renderReference 的說明)。
     labelSpan.appendChild(renderMarkdownInline(item.label, null));

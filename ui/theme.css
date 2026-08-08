@@ -1264,7 +1264,14 @@ button.codewalk-continue-button:hover:not(:disabled) {
 
 .codewalk-error {
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
   color: var(--vscode-errorForeground);
+}
+
+.codewalk-error-container {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 }

@@ -1,11 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { setLocale } from '../shared/i18n';
 import { formatAbsoluteDateTime, formatRelativeTime } from './relativeTime';
 
 function localTime(y: number, m: number, d: number, h = 0, min = 0): number {
   return new Date(y, m - 1, d, h, min).getTime();
 }
 
-describe('formatRelativeTime', () => {
+describe('formatRelativeTime (zh-tw)', () => {
+  beforeEach(() => {
+    setLocale('zh-tw');
+  });
+
   it('shows 剛剛 within the first minute', () => {
     const now = localTime(2026, 8, 1, 12, 0);
     expect(formatRelativeTime(now - 30_000, now)).toBe('剛剛');
@@ -52,8 +57,62 @@ describe('formatRelativeTime', () => {
   });
 });
 
+describe('formatRelativeTime (en)', () => {
+  beforeEach(() => {
+    setLocale('en');
+  });
+
+  it('shows just now within the first minute', () => {
+    const now = localTime(2026, 8, 1, 12, 0);
+    expect(formatRelativeTime(now - 30_000, now)).toBe('just now');
+  });
+
+  it('uses the singular form for exactly 1 minute', () => {
+    const now = localTime(2026, 8, 1, 12, 1);
+    const at = localTime(2026, 8, 1, 12, 0);
+    expect(formatRelativeTime(at, now)).toBe('1 minute ago');
+  });
+
+  it('uses the plural form for multiple minutes', () => {
+    const now = localTime(2026, 8, 1, 12, 0);
+    expect(formatRelativeTime(now - 5 * 60_000, now)).toBe('5 minutes ago');
+  });
+
+  it('uses the singular form for exactly 1 hour', () => {
+    const now = localTime(2026, 8, 1, 13, 0);
+    const at = localTime(2026, 8, 1, 12, 0);
+    expect(formatRelativeTime(at, now)).toBe('1 hour ago');
+  });
+
+  it('uses the plural form for multiple hours', () => {
+    const now = localTime(2026, 8, 1, 12, 0);
+    expect(formatRelativeTime(now - 3 * 60 * 60_000, now)).toBe('3 hours ago');
+  });
+
+  it('shows yesterday once elapsed passes 24 hours and calendar day diff is 1', () => {
+    const now = localTime(2026, 8, 1, 12, 0);
+    const at = localTime(2026, 7, 31, 10, 0);
+    expect(formatRelativeTime(at, now)).toBe('yesterday');
+  });
+
+  it('shows N days ago for a 2-30 day calendar diff', () => {
+    const now = localTime(2026, 8, 10, 12, 0);
+    const at = localTime(2026, 8, 5, 12, 0);
+    expect(formatRelativeTime(at, now)).toBe('5 days ago');
+  });
+
+  it('falls back to the same absolute date format beyond 30 days', () => {
+    const now = localTime(2026, 9, 20, 12, 0);
+    const at = localTime(2026, 8, 1, 9, 30);
+    expect(formatRelativeTime(at, now)).toBe('2026-08-01');
+  });
+});
+
 describe('formatAbsoluteDateTime', () => {
-  it('formats a full timestamp for hover display', () => {
+  it('formats a full timestamp for hover display regardless of locale', () => {
+    setLocale('zh-tw');
+    expect(formatAbsoluteDateTime(localTime(2026, 8, 1, 9, 5))).toBe('2026-08-01 09:05');
+    setLocale('en');
     expect(formatAbsoluteDateTime(localTime(2026, 8, 1, 9, 5))).toBe('2026-08-01 09:05');
   });
 });

@@ -1,7 +1,7 @@
 {
   "name": "codewalk",
   "displayName": "CodeWalk",
-  "description": "互動式 codebase 導讀播放器——讀取 .codewalk/ 的 JSON,在側邊面板帶讀者逐步走 code",
+  "description": "%extension.description%",
   "version": "0.1.0",
   "publisher": "properworkstudio",
   "license": "MIT",
@@ -52,22 +52,22 @@
     "commands": [
       {
         "command": "codewalk.openWalk",
-        "title": "CodeWalk: 開啟導讀",
+        "title": "%command.openWalk.title%",
         "category": "CodeWalk"
       },
       {
         "command": "codewalk.nextStep",
-        "title": "CodeWalk: 下一步",
+        "title": "%command.nextStep.title%",
         "category": "CodeWalk"
       },
       {
         "command": "codewalk.prevStep",
-        "title": "CodeWalk: 上一步",
+        "title": "%command.prevStep.title%",
         "category": "CodeWalk"
       },
       {
         "command": "codewalk.revealCurrentStep",
-        "title": "CodeWalk: 回到本步專案位置",
+        "title": "%command.revealCurrentStep.title%",
         "category": "CodeWalk"
       }
     ]

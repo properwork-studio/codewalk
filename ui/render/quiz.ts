@@ -1,3 +1,4 @@
+import { t } from '../../shared/i18n';
 import type { CodewalkQuizQuestion } from '../../shared/schema';
 import { renderMarkdownBlock, renderMarkdownInline, type OpenLinkHandler } from '../markdown';
 import type { QuizResult, QuizState } from '../state';
@@ -14,18 +15,20 @@ export interface QuizHandlers {
 
 export function renderQuiz(state: QuizState, handlers: QuizHandlers): HTMLElement {
   const container = el('div', 'codewalk-quiz');
-  container.appendChild(el('h2', undefined, 'Quiz 自測'));
+  container.appendChild(el('h2', undefined, t('quiz.title')));
 
   const answeredCount = state.answers.filter((a) => a !== null).length;
-  container.appendChild(
-    el('p', 'codewalk-quiz-progress', `已作答 ${answeredCount} / ${state.walk.quiz.length} 題`),
-  );
+  const answeredProgress = t('quiz.answeredProgress', {
+    answered: answeredCount,
+    total: state.walk.quiz.length,
+  });
+  container.appendChild(el('p', 'codewalk-quiz-progress', answeredProgress));
   const progressDots = el('div', 'codewalk-step-dots');
   progressDots.setAttribute('role', 'img');
-  progressDots.setAttribute('aria-label', `已作答 ${answeredCount} / ${state.walk.quiz.length} 題`);
+  progressDots.setAttribute('aria-label', answeredProgress);
   state.answers.forEach((answer, i) => {
     const dot = el('span', `codewalk-step-dot${answer !== null ? ' is-done' : ''}`);
-    dot.title = `第 ${i + 1} 題${answer !== null ? '(已作答)' : ''}`;
+    dot.title = t(answer !== null ? 'quiz.questionDotTitleAnswered' : 'quiz.questionDotTitle', { n: i + 1 });
     progressDots.appendChild(dot);
   });
   container.appendChild(progressDots);
@@ -67,13 +70,13 @@ export function renderQuiz(state: QuizState, handlers: QuizHandlers): HTMLElemen
   const actions = el('div', 'codewalk-quiz-actions');
   const cancelButton = el('button', 'codewalk-quiz-cancel');
   cancelButton.appendChild(icon('chevron-left'));
-  cancelButton.appendChild(el('span', undefined, '取消,回到最後一步'));
+  cancelButton.appendChild(el('span', undefined, t('quiz.cancel')));
   cancelButton.addEventListener('click', handlers.onCancelQuiz);
 
   const allAnswered = state.answers.every((a) => a !== null);
   const submitButton = el('button', 'codewalk-quiz-submit');
   submitButton.appendChild(icon('check'));
-  submitButton.appendChild(el('span', undefined, '送出答案'));
+  submitButton.appendChild(el('span', undefined, t('quiz.submit')));
   submitButton.disabled = !allAnswered;
   submitButton.addEventListener('click', handlers.onSubmitQuiz);
 
@@ -96,7 +99,10 @@ function createScoreRing(score: number, total: number, passed: boolean): HTMLEle
 
   const wrapper = el('div', 'codewalk-score-ring');
   wrapper.setAttribute('role', 'img');
-  wrapper.setAttribute('aria-label', `得分 ${score} / ${total} 題,${passed ? '通過' : '未通過'}`);
+  wrapper.setAttribute(
+    'aria-label',
+    t('quiz.scoreLabel', { score, total, status: t(passed ? 'quiz.passed' : 'quiz.failed') }),
+  );
 
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
@@ -168,16 +174,16 @@ function createQuizBreakdown(state: QuizResult, onOpenLink: OpenLinkHandler): HT
     questionRow.appendChild(renderMarkdownInline(question.question, onOpenLink));
     item.appendChild(questionRow);
     const yourAnswerRow = el('p', 'codewalk-quiz-breakdown-your-answer');
-    yourAnswerRow.appendChild(document.createTextNode('你的答案:'));
+    yourAnswerRow.appendChild(document.createTextNode(t('quiz.yourAnswer')));
     if (userAnswer !== null) {
       yourAnswerRow.appendChild(renderMarkdownInline(question.options[userAnswer], onOpenLink));
     } else {
-      yourAnswerRow.appendChild(document.createTextNode('(未作答)'));
+      yourAnswerRow.appendChild(document.createTextNode(t('quiz.notAnswered')));
     }
     item.appendChild(yourAnswerRow);
     if (!isCorrect) {
       const correctAnswerRow = el('p', 'codewalk-quiz-breakdown-correct-answer');
-      correctAnswerRow.appendChild(document.createTextNode('正確答案:'));
+      correctAnswerRow.appendChild(document.createTextNode(t('quiz.correctAnswer')));
       correctAnswerRow.appendChild(renderMarkdownInline(question.options[question.correctIndex], onOpenLink));
       item.appendChild(correctAnswerRow);
     }
@@ -199,29 +205,29 @@ export interface QuizResultHandlers {
 
 export function renderQuizResult(state: QuizResult, handlers: QuizResultHandlers): HTMLElement {
   const container = el('div', 'codewalk-quiz-result');
-  container.appendChild(el('h2', undefined, 'Quiz 結果'));
+  container.appendChild(el('h2', undefined, t('quiz.resultTitle')));
   container.appendChild(createScoreRing(state.score, state.walk.quiz.length, state.passed));
   const status = el('p', `codewalk-score-status ${state.passed ? 'is-passed' : 'is-failed'}`);
   status.appendChild(icon(state.passed ? 'pass' : 'error'));
-  status.appendChild(document.createTextNode(state.passed ? '通過' : '未通過'));
+  status.appendChild(document.createTextNode(t(state.passed ? 'quiz.passed' : 'quiz.failed')));
   container.appendChild(status);
   if (!state.passed) {
-    container.appendChild(el('p', 'codewalk-suggestion', '建議重走本導讀,或選擇更詳細版本的導讀再試一次'));
+    container.appendChild(el('p', 'codewalk-suggestion', t('quiz.suggestion')));
   }
   container.appendChild(createQuizBreakdown(state, handlers.onOpenReference));
 
   const actions = el('div', 'codewalk-quiz-result-actions');
   const retryButton = el('button');
   retryButton.appendChild(icon('refresh'));
-  retryButton.appendChild(el('span', undefined, '重新挑戰 Quiz'));
+  retryButton.appendChild(el('span', undefined, t('quiz.retry')));
   retryButton.addEventListener('click', handlers.onRetryQuiz);
   const restartButton = el('button');
   restartButton.appendChild(icon('history'));
-  restartButton.appendChild(el('span', undefined, '重新走一次導讀'));
+  restartButton.appendChild(el('span', undefined, t('quiz.restartWalk')));
   restartButton.addEventListener('click', handlers.onRestartWalk);
   const backButton = el('button');
   backButton.appendChild(icon('list-unordered'));
-  backButton.appendChild(el('span', undefined, '回到導讀列表'));
+  backButton.appendChild(el('span', undefined, t('quiz.backToList')));
   backButton.addEventListener('click', handlers.onBackToList);
   actions.appendChild(retryButton);
   actions.appendChild(restartButton);

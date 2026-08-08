@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { t } from '../shared/i18n';
 
 export interface JumpTarget {
   file: string;
@@ -25,7 +26,7 @@ export async function jumpToStep(
 ): Promise<JumpResult> {
   const absPath = join(workspaceRoot, target.file);
   if (!existsSync(absPath)) {
-    return { ok: false, reason: 'fileNotFound', message: `找不到檔案:${target.file}` };
+    return { ok: false, reason: 'fileNotFound', message: t('host.fileNotFound', { file: target.file }) };
   }
 
   const vscode = await import('vscode');

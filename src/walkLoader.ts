@@ -24,7 +24,10 @@ export async function loadCodewalkFile(filePath: string): Promise<ValidationResu
   try {
     data = JSON.parse(content);
   } catch (err) {
-    return { valid: false, errors: [`JSON 解析失敗:${(err as Error).message}`] };
+    // .codewalk.json 的解析錯誤與 shared/schema.ts 的驗證錯誤同屬格式合約的
+    // 診斷輸出,一併固定英文、不經 t()(interface-localization capability
+    // 「格式驗證錯誤固定英文」)。
+    return { valid: false, errors: [`Failed to parse JSON: ${(err as Error).message}`] };
   }
   return validateCodewalk(data);
 }

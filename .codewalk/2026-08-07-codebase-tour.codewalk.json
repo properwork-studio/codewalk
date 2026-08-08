@@ -1,6 +1,6 @@
 {
   "title": "CodeWalk 全專案導讀:從 JSON 合約到側邊面板的一條龍",
-  "ref": "ca1106a5fde6608e891616da292f7bcf4baaf0ca",
+  "ref": "363320c8ee164652a0a859b68e1a14427207803c",
   "regenerateHint": "請重新走過 CodeWalk 的 src/、shared/、ui/ 三層,產生一份對齊目前 HEAD 的全專案導讀,輸出到 .codewalk/ 並為每個 step 與 snippet 填入 anchor 欄位。",
   "passThreshold": 4,
   "steps": [
@@ -8,7 +8,7 @@
       "title": "第 1 步:先看全貌——這個專案到底在做什麼",
       "file": "README.md",
       "startLine": 1,
-      "endLine": 7,
+      "endLine": 9,
       "narration": "CodeWalk 是一個 VS Code extension:讀取 repo 裡 `.codewalk/` 目錄下的 JSON 檔,在側邊面板帶讀者一步一步走過程式碼。每一步會自動跳轉到對應的檔案行號並高亮,附上敘述、可收合的術語卡、程式碼片段,走完還有 quiz 自測。\n\n**你現在正在用它讀它自己**——這份導讀就是一個 `.codewalk.json`,住在這個 repo 的 `.codewalk/` 底下。\n\n有兩件事值得先記住,它們解釋了後面很多設計:\n\n1. **MVP 階段只做播放器,不做產生器**。JSON 從哪來不是這個 extension 的事——AI 產、手寫、別的工具產都可以。「產生」按鈕是二期。\n2. **`.codewalk.json` 是開放格式**。它不綁任何特定工具,所以格式本身就是這個產品的對外合約——這條在下一步之後會反覆出現。",
       "terms": [
         {
@@ -22,7 +22,7 @@
           "text": "導覽方式:`→` / `↓` 下一步,`←` / `↑` 上一步,`Esc` 回列表,`Home` 回到本步的程式碼位置(面板要先有焦點——點一下面板任意處即可)。"
         }
       ],
-      "anchor": "# CodeWalk\n\n> **Note:** The extension UI is currently in Traditional Chinese only. An English UI is planned for a future release.\n\n要讓別人讀懂一份程式碼,通常得有人坐在旁邊邊指邊講。CodeWalk 把那個過程搬進 VS Code 側邊欄。\n\n它讀 repo 裡的導讀檔,一步一步帶著走:自動跳到對應的行號並高亮、附上敘述和術語解釋,走完還能用 quiz 檢查自己有沒有真的看懂。"
+      "anchor": "# CodeWalk\n\n[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)\n\nEnglish | [繁體中文](README.zh-TW.md)\n\n> **Note:** The extension UI follows your VS Code display language (Traditional Chinese or English). Walk content (narration, quiz questions, etc.) is written by each walk's author and is shown as-is, unaffected by this setting.\n\nThe fastest way to actually understand someone else's code is to have a mentor sit next to you and walk you through it. CodeWalk brings that experience into the VS Code side panel.\n"
     },
     {
       "title": "第 2 步:extension 怎麼在活動列佔一個位置(答案不是程式碼)",
@@ -45,9 +45,9 @@
           "kind": "snippet",
           "label": "四個指令也在這裡宣告——指令面板搜得到,也能被綁快捷鍵",
           "file": "package.json",
-          "startLine": 36,
-          "endLine": 58,
-          "anchor": "      \"codewalk\": [\n        {\n          \"id\": \"codewalk.playerView\",\n          \"name\": \"Walk\",\n          \"type\": \"webview\"\n        }\n      ]\n    },\n    \"commands\": [\n      {\n        \"command\": \"codewalk.openWalk\",\n        \"title\": \"CodeWalk: 開啟導讀\",\n        \"category\": \"CodeWalk\"\n      },\n      {\n        \"command\": \"codewalk.nextStep\",\n        \"title\": \"CodeWalk: 下一步\",\n        \"category\": \"CodeWalk\"\n      },\n      {\n        \"command\": \"codewalk.prevStep\",\n        \"title\": \"CodeWalk: 上一步\",\n        \"category\": \"CodeWalk\""
+          "startLine": 43,
+          "endLine": 66,
+          "anchor": "    \"views\": {\n      \"codewalk\": [\n        {\n          \"id\": \"codewalk.playerView\",\n          \"name\": \"Walk\",\n          \"type\": \"webview\"\n        }\n      ]\n    },\n    \"commands\": [\n      {\n        \"command\": \"codewalk.openWalk\",\n        \"title\": \"%command.openWalk.title%\",\n        \"category\": \"CodeWalk\"\n      },\n      {\n        \"command\": \"codewalk.nextStep\",\n        \"title\": \"%command.nextStep.title%\",\n        \"category\": \"CodeWalk\"\n      },\n      {\n        \"command\": \"codewalk.prevStep\",\n        \"title\": \"%command.prevStep.title%\",\n        \"category\": \"CodeWalk\""
         },
         {
           "kind": "pitfall",
@@ -100,8 +100,8 @@
     {
       "title": "第 4 步:六種元件怎麼各驗各的——validateItem",
       "file": "shared/schema.ts",
-      "startLine": 204,
-      "endLine": 265,
+      "startLine": 214,
+      "endLine": 275,
       "narration": "`validateItem()` 是一個對 `kind` 的 switch,每個分支只檢查該種元件真正需要的欄位:`tip`/`todo` 只要 `text`,`reference` 要 `label` 加一個**合法的 http/https 網址**,`snippet` 要檔案與行號範圍,`diff` 還額外要 `oldStartLine` 與 `diffText`。\n\n兩個細節值得看:\n\n1. **`default` 分支會報錯**,不是安靜略過。未知的 `kind` 代表這份 JSON 來自比播放器更新的產生器,與其半吊子渲染,不如明確告訴讀者這份檔案讀不了。\n2. **`diffText` 有語意檢查**(`hasAtLeastOneChangedLine`)——至少要有一行以 `+` 或 `-` 開頭。沒有任何改動的內容語意上該用 `snippet` 表達,不算 diff。這是型別系統管不到、只能靠 validator 表達的規則。\n\n注意 `errors` 陣列是一路傳下去的(`errors.push(...)`),不是拋例外中斷。一次驗完全部,讀者一次看到所有問題,而不是修一個冒一個。",
       "terms": [
         {
@@ -128,14 +128,14 @@
           "diffText": "     } else if (!hasAtLeastOneChangedLine(it.diffText)) {\n-      errors.push(`${path}.diffText 內容有問題`);\n+      errors.push(`${path}.diffText 至少要有一行新增(+)或刪除(-)`);\n     }\n     break;"
         }
       ],
-      "anchor": "function validateItem(item: unknown, path: string, errors: string[]): void {\n  if (typeof item !== 'object' || item === null) {\n    errors.push(`${path} 必須是物件`);\n    return;\n  }\n  const it = item as Record<string, unknown>;\n  switch (it.kind) {\n    case 'tip':\n    case 'todo':\n      if (!isNonEmptyString(it.text)) {\n        errors.push(`${path}.text 必須是非空字串`);\n      }\n      break;\n    case 'pitfall':\n      if (!isNonEmptyString(it.misconception)) {\n        errors.push(`${path}.misconception 必須是非空字串`);\n      }\n      if (!isNonEmptyString(it.reality)) {\n        errors.push(`${path}.reality 必須是非空字串`);\n      }\n      break;\n    case 'reference':\n      if (!isNonEmptyString(it.label)) {\n        errors.push(`${path}.label 必須是非空字串`);\n      }\n      if (!isHttpUrl(it.url)) {\n        errors.push(`${path}.url 必須是合法的 http/https 網址`);\n      }\n      break;\n    case 'snippet':\n      if (!isNonEmptyString(it.label)) {\n        errors.push(`${path}.label 必須是非空字串`);\n      }\n      if (!isNonEmptyString(it.file)) {\n        errors.push(`${path}.file 必須是非空字串`);\n      }\n      validateLineRange(it, path, errors);\n      if (!isOptionalString(it.anchor)) {\n        errors.push(`${path}.anchor 必須是字串`);\n      }\n      break;\n    case 'diff':\n      if (!isNonEmptyString(it.label)) {\n        errors.push(`${path}.label 必須是非空字串`);\n      }\n      if (!isNonEmptyString(it.file)) {\n        errors.push(`${path}.file 必須是非空字串`);\n      }\n      validateLineRange(it, path, errors);\n      if (!isPositiveInteger(it.oldStartLine)) {\n        errors.push(`${path}.oldStartLine 必須是正整數`);\n      }\n      if (!isNonEmptyString(it.diffText)) {\n        errors.push(`${path}.diffText 必須是非空字串`);\n      } else if (!hasAtLeastOneChangedLine(it.diffText)) {\n        errors.push(`${path}.diffText 至少要有一行新增(+)或刪除(-)`);\n      }\n      break;\n    default:\n      errors.push(`${path}.kind 必須是 tip/pitfall/todo/reference/snippet/diff 其中之一`);\n  }\n}"
+      "anchor": "function validateItem(item: unknown, path: string, errors: string[]): void {\n  if (typeof item !== 'object' || item === null) {\n    errors.push(`${path} must be an object`);\n    return;\n  }\n  const it = item as Record<string, unknown>;\n  switch (it.kind) {\n    case 'tip':\n    case 'todo':\n      if (!isNonEmptyString(it.text)) {\n        errors.push(`${path}.text must be a non-empty string`);\n      }\n      break;\n    case 'pitfall':\n      if (!isNonEmptyString(it.misconception)) {\n        errors.push(`${path}.misconception must be a non-empty string`);\n      }\n      if (!isNonEmptyString(it.reality)) {\n        errors.push(`${path}.reality must be a non-empty string`);\n      }\n      break;\n    case 'reference':\n      if (!isNonEmptyString(it.label)) {\n        errors.push(`${path}.label must be a non-empty string`);\n      }\n      if (!isHttpUrl(it.url)) {\n        errors.push(`${path}.url must be a valid http/https URL`);\n      }\n      break;\n    case 'snippet':\n      if (!isNonEmptyString(it.label)) {\n        errors.push(`${path}.label must be a non-empty string`);\n      }\n      if (!isNonEmptyString(it.file)) {\n        errors.push(`${path}.file must be a non-empty string`);\n      }\n      validateLineRange(it, path, errors);\n      if (!isOptionalString(it.anchor)) {\n        errors.push(`${path}.anchor must be a string`);\n      }\n      break;\n    case 'diff':\n      if (!isNonEmptyString(it.label)) {\n        errors.push(`${path}.label must be a non-empty string`);\n      }\n      if (!isNonEmptyString(it.file)) {\n        errors.push(`${path}.file must be a non-empty string`);\n      }\n      validateLineRange(it, path, errors);\n      if (!isPositiveInteger(it.oldStartLine)) {\n        errors.push(`${path}.oldStartLine must be a positive integer`);\n      }\n      if (!isNonEmptyString(it.diffText)) {\n        errors.push(`${path}.diffText must be a non-empty string`);\n      } else if (!hasAtLeastOneChangedLine(it.diffText)) {\n        errors.push(`${path}.diffText must contain at least one added (+) or removed (-) line`);\n      }\n      break;\n    default:\n      errors.push(`${path}.kind must be one of tip/pitfall/todo/reference/snippet/diff`);\n  }\n}"
     },
     {
       "title": "第 5 步:為什麼要手寫一個 200 多行的 validator",
       "file": "shared/schema.ts",
-      "startLine": 303,
-      "endLine": 348,
-      "narration": "`validateCodewalk()` 收 `unknown`,回傳一個 discriminated union:`{ valid: true, value }` 或 `{ valid: false, errors }`。呼叫端沒辦法忘記檢查——TypeScript 不讓你在確認 `valid` 之前碰 `value`。\n\n可能會想:為什麼不用 Zod 或 JSON Schema?幾個理由:\n\n- **零執行期相依**。這個檔案同時被 extension host 與 webview 兩邊 import,加一個 runtime 相依就是兩份 bundle 都變大\n- **錯誤訊息可以寫成人話**,而且是中文。`steps[3].endLine 不可小於 startLine` 比函式庫產生的泛用訊息好懂得多\n- **可以塞進型別系統表達不了的規則**,像上一步的 `diffText` 語意檢查、`passThreshold` 必須落在 1 到題數之間、`optionExplanations` 長度必須等於 `options`\n\n代價是這 200 多行要自己維護。這是 rule of three 的另一面:**在確定會長期存在的核心合約上,手寫比引入抽象更划算**。",
+      "startLine": 313,
+      "endLine": 358,
+      "narration": "`validateCodewalk()` 收 `unknown`,回傳一個 discriminated union:`{ valid: true, value }` 或 `{ valid: false, errors }`。呼叫端沒辦法忘記檢查——TypeScript 不讓你在確認 `valid` 之前碰 `value`。\n\n可能會想:為什麼不用 Zod 或 JSON Schema?幾個理由:\n\n- **零執行期相依**。這個檔案同時被 extension host 與 webview 兩邊 import,加一個 runtime 相依就是兩份 bundle 都變大\n- **錯誤訊息可以寫成人話**——雖然 `add-interface-localization` change(2026-08-08)之後這裡的訊息一律固定英文(它們是格式合約的診斷輸出,常被貼進 issue、CI log 等跨語言情境,見 `shared/i18n.ts` 檔頭的說明),但仍比函式庫產生的泛用訊息好懂得多,例如 `steps[3].endLine must not be less than startLine`\n- **可以塞進型別系統表達不了的規則**,像上一步的 `diffText` 語意檢查、`passThreshold` 必須落在 1 到題數之間、`optionExplanations` 長度必須等於 `options`\n\n代價是這 200 多行要自己維護。這是 rule of three 的另一面:**在確定會長期存在的核心合約上,手寫比引入抽象更划算**。",
       "items": [
         {
           "kind": "reference",
@@ -147,7 +147,7 @@
           "text": "`shared/schema.test.ts` 有 64 個測試全押在這個檔案上——這是整個 repo 測試最密集的地方,因為它是對外合約,退化的代價最高。"
         }
       ],
-      "anchor": "export function validateCodewalk(data: unknown): ValidationResult {\n  const errors: string[] = [];\n\n  if (typeof data !== 'object' || data === null) {\n    return { valid: false, errors: ['導讀檔案必須是 JSON 物件'] };\n  }\n  const d = data as Record<string, unknown>;\n\n  if (!isNonEmptyString(d.title)) {\n    errors.push('title 必須是非空字串');\n  }\n  if (!isNonEmptyString(d.ref)) {\n    errors.push('ref 必須是非空字串');\n  }\n  if (!Array.isArray(d.steps) || d.steps.length === 0) {\n    errors.push('steps 必須是至少含 1 個元素的陣列');\n  } else {\n    d.steps.forEach((step, i) => validateStep(step, `steps[${i}]`, errors));\n  }\n  if (!Array.isArray(d.quiz) || d.quiz.length === 0) {\n    errors.push('quiz 必須是至少含 1 題的陣列');\n  } else {\n    d.quiz.forEach((q, i) => validateQuizQuestion(q, `quiz[${i}]`, errors));\n  }\n\n  if (d.passThreshold !== undefined) {\n    const quizLength = Array.isArray(d.quiz) ? d.quiz.length : undefined;\n    if (\n      typeof d.passThreshold !== 'number' ||\n      !Number.isInteger(d.passThreshold) ||\n      d.passThreshold < 1 ||\n      (quizLength !== undefined && d.passThreshold > quizLength)\n    ) {\n      errors.push('passThreshold 必須是 1 到 quiz 題數之間的整數');\n    }\n  }\n\n  if (d.regenerateHint !== undefined && !isNonEmptyString(d.regenerateHint)) {\n    errors.push('regenerateHint 必須是非空字串');\n  }\n\n  if (errors.length > 0) {\n    return { valid: false, errors };\n  }\n  return { valid: true, value: data as CodewalkFile };\n}"
+      "anchor": "export function validateCodewalk(data: unknown): ValidationResult {\n  const errors: string[] = [];\n\n  if (typeof data !== 'object' || data === null) {\n    return { valid: false, errors: ['The walk file must be a JSON object'] };\n  }\n  const d = data as Record<string, unknown>;\n\n  if (!isNonEmptyString(d.title)) {\n    errors.push('title must be a non-empty string');\n  }\n  if (!isNonEmptyString(d.ref)) {\n    errors.push('ref must be a non-empty string');\n  }\n  if (!Array.isArray(d.steps) || d.steps.length === 0) {\n    errors.push('steps must be an array with at least 1 element');\n  } else {\n    d.steps.forEach((step, i) => validateStep(step, `steps[${i}]`, errors));\n  }\n  if (!Array.isArray(d.quiz) || d.quiz.length === 0) {\n    errors.push('quiz must be an array with at least 1 question');\n  } else {\n    d.quiz.forEach((q, i) => validateQuizQuestion(q, `quiz[${i}]`, errors));\n  }\n\n  if (d.passThreshold !== undefined) {\n    const quizLength = Array.isArray(d.quiz) ? d.quiz.length : undefined;\n    if (\n      typeof d.passThreshold !== 'number' ||\n      !Number.isInteger(d.passThreshold) ||\n      d.passThreshold < 1 ||\n      (quizLength !== undefined && d.passThreshold > quizLength)\n    ) {\n      errors.push('passThreshold must be an integer between 1 and the number of quiz questions');\n    }\n  }\n\n  if (d.regenerateHint !== undefined && !isNonEmptyString(d.regenerateHint)) {\n    errors.push('regenerateHint must be a non-empty string');\n  }\n\n  if (errors.length > 0) {\n    return { valid: false, errors };\n  }\n  return { valid: true, value: data as CodewalkFile };\n}"
     },
     {
       "title": "第 6 步:誰去讀那些 JSON——walkLoader",
@@ -176,9 +176,9 @@
     {
       "title": "第 7 步:extension 的入口 activate()",
       "file": "src/extension.ts",
-      "startLine": 4,
-      "endLine": 21,
-      "narration": "整個 extension 的進入點只有 17 行,做兩件事:註冊 webview provider、註冊四個指令。全部推進 `context.subscriptions`,VS Code 會在 extension 停用時統一清理。\n\n真正的重點藏在那個選項物件裡:**`retainContextWhenHidden: true`**。\n\n預設情況下,讀者把側邊面板切走(去看檔案總管、再切回來),VS Code 會把 webview 整個銷毀重建——讀到第幾步、捲到哪、展開了哪些術語,全部歸零。這對一個「導讀播放器」是致命的。這個選項讓 webview 在隱藏時保留在記憶體裡,切回來原封不動。\n\n代價是佔記憶體。這是官方文件明講「盡量避免」的選項,但這裡的取捨很清楚:一個閱讀工具,讀者切走再切回來就失憶是不能接受的。\n\n它也不是萬靈丹——webview 仍可能因為別的原因被重建(view 被拖到別的容器、系統資源壓力)。第 23 步會看到剩下那層防線。",
+      "startLine": 5,
+      "endLine": 25,
+      "narration": "整個 extension 的進入點約 20 行,做三件事:設定介面語言、註冊 webview provider、註冊四個指令。後兩者全部推進 `context.subscriptions`,VS Code 會在 extension 停用時統一清理。\n\n**`setLocale(resolveLocale(vscode.env.language))` 必須是第一行**——它比 `WalkPlayerViewProvider` 的建構還早,因為面板的 HTML(下一步)在建構時就要用到判定好的語言。`shared/i18n.ts` 是 host(這裡)與 webview 共用的同一份翻譯表,但兩邊是各自獨立的 bundle,各自持有一份模組狀態——所以 webview 那邊(第 21 步)也會看到一次幾乎一樣的 `setLocale()` 呼叫,不是遺漏或重複。\n\n真正的重點藏在那個選項物件裡:**`retainContextWhenHidden: true`**。\n\n預設情況下,讀者把側邊面板切走(去看檔案總管、再切回來),VS Code 會把 webview 整個銷毀重建——讀到第幾步、捲到哪、展開了哪些術語,全部歸零。這對一個「導讀播放器」是致命的。這個選項讓 webview 在隱藏時保留在記憶體裡,切回來原封不動。\n\n代價是佔記憶體。這是官方文件明講「盡量避免」的選項,但這裡的取捨很清楚:一個閱讀工具,讀者切走再切回來就失憶是不能接受的。\n\n它也不是萬靈丹——webview 仍可能因為別的原因被重建(view 被拖到別的容器、系統資源壓力)。第 23 步會看到剩下那層防線。",
       "terms": [
         {
           "term": "subscriptions",
@@ -197,14 +197,14 @@
           "url": "https://code.visualstudio.com/api/extension-guides/webview#persistence"
         }
       ],
-      "anchor": "export function activate(context: vscode.ExtensionContext): void {\n  const provider = new WalkPlayerViewProvider(context);\n\n  context.subscriptions.push(\n    // retainContextWhenHidden:面板隱藏(切到其他側邊面板)時不重建 webview,\n    // 讀者切走再切回來能維持原本讀到哪、捲動位置與展開中的術語(reading-progress\n    // capability「面板重建後還原閱讀位置」,design.md 決策 1 第 1 層)。\n    vscode.window.registerWebviewViewProvider(WalkPlayerViewProvider.viewId, provider, {\n      webviewOptions: { retainContextWhenHidden: true },\n    }),\n    vscode.commands.registerCommand('codewalk.openWalk', () => {\n      void vscode.commands.executeCommand(`${WalkPlayerViewProvider.viewId}.focus`);\n    }),\n    vscode.commands.registerCommand('codewalk.nextStep', () => provider.handleNextStep()),\n    vscode.commands.registerCommand('codewalk.prevStep', () => provider.handlePrevStep()),\n    vscode.commands.registerCommand('codewalk.revealCurrentStep', () => provider.handleRevealCurrentStep()),\n  );\n}"
+      "anchor": "export function activate(context: vscode.ExtensionContext): void {\n  // 必須早於 WalkPlayerViewProvider 的建構——getHtml() 會用到判定結果\n  // (design.md 決策 5)。\n  setLocale(resolveLocale(vscode.env.language));\n  const provider = new WalkPlayerViewProvider(context);\n\n  context.subscriptions.push(\n    // retainContextWhenHidden:面板隱藏(切到其他側邊面板)時不重建 webview,\n    // 讀者切走再切回來能維持原本讀到哪、捲動位置與展開中的術語(reading-progress\n    // capability「面板重建後還原閱讀位置」,design.md 決策 1 第 1 層)。\n    vscode.window.registerWebviewViewProvider(WalkPlayerViewProvider.viewId, provider, {\n      webviewOptions: { retainContextWhenHidden: true },\n    }),\n    vscode.commands.registerCommand('codewalk.openWalk', () => {\n      void vscode.commands.executeCommand(`${WalkPlayerViewProvider.viewId}.focus`);\n    }),\n    vscode.commands.registerCommand('codewalk.nextStep', () => provider.handleNextStep()),\n    vscode.commands.registerCommand('codewalk.prevStep', () => provider.handlePrevStep()),\n    vscode.commands.registerCommand('codewalk.revealCurrentStep', () => provider.handleRevealCurrentStep()),\n  );\n}"
     },
     {
       "title": "第 8 步:webview 的 HTML 是 host 手工組出來的(CSP 與 nonce)",
       "file": "src/viewProvider.ts",
-      "startLine": 303,
-      "endLine": 331,
-      "narration": "面板裡的 HTML 沒有對應的 `.html` 檔,是這個字串樣板組出來的。三個非做不可的動作:\n\n1. **`asWebviewUri()`**:webview 在自己的沙箱裡,不能直接用檔案路徑。所有資源(js/css/字型)都得轉成特殊的 `vscode-webview://` URI,而且來源限定在 `localResourceRoots` 允許的目錄內(這裡只開放 `dist/`)。\n2. **CSP + nonce**:`default-src 'none'` 預設封死一切,再逐項開放。`script-src 'nonce-...'` 表示只有帶正確 nonce 屬性的 `<script>` 才准執行——nonce 每次載入重新亂數產生,注入進來的腳本猜不到,自然執行不了。\n3. **`<link>` 的順序是有意義的**。中間那段註解說明:codicon.css 用 `font` 這個 shorthand 設定 `.codicon` 的字級,跟 theme.css 的覆寫 selector specificity 打平——specificity 相同時 cascade 後者勝,所以 theme.css 必須排在後面,覆寫才生效。\n\n第 3 點是那種讀原始碼看不出來、只能靠註解留住的知識。這個 repo 到處都是這種註解,它們比程式碼本身更難重建。",
+      "startLine": 304,
+      "endLine": 335,
+      "narration": "面板裡的 HTML 沒有對應的 `.html` 檔,是這個字串樣板組出來的。三個非做不可的動作:\n\n1. **`asWebviewUri()`**:webview 在自己的沙箱裡,不能直接用檔案路徑。所有資源(js/css/字型)都得轉成特殊的 `vscode-webview://` URI,而且來源限定在 `localResourceRoots` 允許的目錄內(這裡只開放 `dist/`)。\n2. **CSP + nonce**:`default-src 'none'` 預設封死一切,再逐項開放。`script-src 'nonce-...'` 表示只有帶正確 nonce 屬性的 `<script>` 才准執行——nonce 每次載入重新亂數產生,注入進來的腳本猜不到,自然執行不了。\n3. **`<link>` 的順序是有意義的**。中間那段註解說明:codicon.css 用 `font` 這個 shorthand 設定 `.codicon` 的字級,跟 theme.css 的覆寫 selector specificity 打平——specificity 相同時 cascade 後者勝,所以 theme.css 必須排在後面,覆寫才生效。\n\n第 3 點是那種讀原始碼看不出來、只能靠註解留住的知識。這個 repo 到處都是這種註解,它們比程式碼本身更難重建。\n\n**第四個小動作**:`<html lang=\"${htmlLang}\">` 也在這裡決定。`getLocale()` 讀的是 `activate()` 第一行已經算好的語言,轉成語意正確的 HTML 語言標籤(`zh-Hant` 或 `en`)寫進標籤——webview 開機時再從 `document.documentElement.lang` 讀回同一個值,兩邊靠這一個字串同步,不需要額外的 postMessage 欄位。",
       "terms": [
         {
           "term": "CSP",
@@ -226,7 +226,7 @@
           "url": "https://code.visualstudio.com/api/extension-guides/webview#content-security-policy"
         }
       ],
-      "anchor": "  private getHtml(webview: vscode.Webview): string {\n    const scriptUri = webview.asWebviewUri(\n      vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview.js'),\n    );\n    const styleUri = webview.asWebviewUri(\n      vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview.css'),\n    );\n    const codiconUri = webview.asWebviewUri(\n      vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'codicon.css'),\n    );\n    const nonce = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');\n\n    return `<!DOCTYPE html>\n<html lang=\"zh-Hant\">\n<head>\n  <meta charset=\"UTF-8\" />\n  <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src ${webview.cspSource}; font-src ${webview.cspSource}; script-src 'nonce-${nonce}';\" />\n  <!-- codicon.css 要先載入:它對 .codicon 的 font-size 用 font 這個 shorthand 屬性設定,\n       跟 theme.css 裡對應覆寫的 selector specificity 打平時,cascade 順序在後的會贏,\n       所以 theme.css 必須排在 codicon.css 之後,尺寸覆寫才會生效。 -->\n  <link href=\"${codiconUri}\" rel=\"stylesheet\" />\n  <link href=\"${styleUri}\" rel=\"stylesheet\" />\n</head>\n<body>\n  <div id=\"app\" tabindex=\"0\"></div>\n  <script nonce=\"${nonce}\" src=\"${scriptUri}\"></script>\n</body>\n</html>`;\n  }"
+      "anchor": "  private getHtml(webview: vscode.Webview): string {\n    const scriptUri = webview.asWebviewUri(\n      vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview.js'),\n    );\n    const styleUri = webview.asWebviewUri(\n      vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview.css'),\n    );\n    const codiconUri = webview.asWebviewUri(\n      vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'codicon.css'),\n    );\n    const nonce = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');\n    // getLocale() 讀的是 activate() 首行已設定好的 host locale——webview 開機時\n    // 從這個標籤讀回判定結果,兩邊共用同一個 resolveLocale()(design.md 決策 4、5)。\n    const htmlLang = getLocale() === 'zh-tw' ? 'zh-Hant' : 'en';\n\n    return `<!DOCTYPE html>\n<html lang=\"${htmlLang}\">\n<head>\n  <meta charset=\"UTF-8\" />\n  <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src ${webview.cspSource}; font-src ${webview.cspSource}; script-src 'nonce-${nonce}';\" />\n  <!-- codicon.css 要先載入:它對 .codicon 的 font-size 用 font 這個 shorthand 屬性設定,\n       跟 theme.css 裡對應覆寫的 selector specificity 打平時,cascade 順序在後的會贏,\n       所以 theme.css 必須排在 codicon.css 之後,尺寸覆寫才會生效。 -->\n  <link href=\"${codiconUri}\" rel=\"stylesheet\" />\n  <link href=\"${styleUri}\" rel=\"stylesheet\" />\n</head>\n<body>\n  <div id=\"app\" tabindex=\"0\"></div>\n  <script nonce=\"${nonce}\" src=\"${scriptUri}\"></script>\n</body>\n</html>`;\n  }"
     },
     {
       "title": "第 9 步:兩層之間唯一的管道——postMessage 協定",
@@ -385,8 +385,8 @@
     {
       "title": "第 15 步:失準之後怎麼辦——重生引導",
       "file": "ui/render/walking.ts",
-      "startLine": 26,
-      "endLine": 43,
+      "startLine": 27,
+      "endLine": 44,
       "narration": "偵測到失準只解決一半問題。讀者接下來會問:那我該怎麼辦?\n\n這就是 `regenerateHint` 的用途。它是 `.codewalk.json` 的一個選填欄位,由**產生器自述**「要怎麼重新產生這份導讀」——可能是一行 CLI 指令、一段 prompt、或一個內部工具的連結。\n\n關鍵在於:**播放器只顯示與複製,完全不解讀內容**。它不知道那串字是什麼意思,也不會去執行。這守住了 MVP 的分界線——播放器不碰產生邏輯,但可以幫讀者把產生的方法遞過去。\n\n這是一個小而重要的架構姿態:當你不想讓 A 依賴 B,又希望使用者能從 A 走到 B,「讓資料自己攜帶說明、由人接手執行」往往比「A 直接呼叫 B」更好——後者會把兩者永久綁死。\n\n下方 snippet 裡的 `renderStepStaleBlock()` 是另一半:失準的那一步會插入一個區塊,顯示 anchor 存的**舊內容**,並提供一個「開啟現行檔案」按鈕讓讀者自己比對。舊內容仍然顯示,是因為它至少說明了作者當初在講什麼。",
       "terms": [
         {
@@ -399,22 +399,22 @@
           "kind": "snippet",
           "label": "renderStepStaleBlock:失準時顯示 anchor 舊內容 + 開啟現行檔案",
           "file": "ui/render/walking.ts",
-          "startLine": 46,
-          "endLine": 68,
-          "anchor": "function renderStepStaleBlock(\n  step: CodewalkStep,\n  status: Extract<AnchorStatus, { kind: 'stale' }>,\n  onOpenStaleFile: () => void,\n): HTMLElement {\n  const container = el('div', 'codewalk-snippet codewalk-snippet--stale');\n  const canOpen = status.reason !== 'fileMissing';\n  const header = el(canOpen ? 'button' : 'div', 'codewalk-snippet-header');\n  header.appendChild(icon('warning'));\n  const headerText = el('span', 'codewalk-snippet-header-text');\n  headerText.appendChild(el('span', 'codewalk-snippet-label', canOpen ? '開啟現行檔案' : '找不到檔案'));\n  headerText.appendChild(el('span', 'codewalk-snippet-file-ref', step.file));\n  header.appendChild(headerText);\n  if (canOpen && header instanceof HTMLButtonElement) {\n    header.addEventListener('click', onOpenStaleFile);\n  }\n  container.appendChild(header);\n  container.appendChild(renderStaleLabel());\n  if (step.anchor && step.anchor.trim().length > 0) {\n    container.appendChild(renderSnippetCode(step.anchor, detectLanguage(step.file), step.startLine));\n  }\n  return container;\n}"
+          "startLine": 47,
+          "endLine": 71,
+          "anchor": "function renderStepStaleBlock(\n  step: CodewalkStep,\n  status: Extract<AnchorStatus, { kind: 'stale' }>,\n  onOpenStaleFile: () => void,\n): HTMLElement {\n  const container = el('div', 'codewalk-snippet codewalk-snippet--stale');\n  const canOpen = status.reason !== 'fileMissing';\n  const header = el(canOpen ? 'button' : 'div', 'codewalk-snippet-header');\n  header.appendChild(icon('warning'));\n  const headerText = el('span', 'codewalk-snippet-header-text');\n  headerText.appendChild(\n    el('span', 'codewalk-snippet-label', canOpen ? t('stale.openCurrentFile') : t('stale.fileNotFound')),\n  );\n  headerText.appendChild(el('span', 'codewalk-snippet-file-ref', step.file));\n  header.appendChild(headerText);\n  if (canOpen && header instanceof HTMLButtonElement) {\n    header.addEventListener('click', onOpenStaleFile);\n  }\n  container.appendChild(header);\n  container.appendChild(renderStaleLabel());\n  if (step.anchor && step.anchor.trim().length > 0) {\n    container.appendChild(renderSnippetCode(step.anchor, detectLanguage(step.file), step.startLine));\n  }\n  return container;\n}"
         },
         {
           "kind": "todo",
           "text": "`regenerateHint` 目前只支援複製到剪貼簿。二期加入「產生」功能後,這裡可以變成一顆真正的重生按鈕——但那會讓播放器開始依賴產生器,是需要走 change 流程重新權衡的決定,不是順手加上去的功能。"
         }
       ],
-      "anchor": "function renderRegeneratePrompt(\n  regenerateHint: string | undefined,\n  onCopyRegenerateHint: () => void,\n): HTMLElement {\n  const warning = el('div', 'codewalk-warning codewalk-regenerate-prompt');\n  warning.appendChild(icon('warning'));\n  const text = el('div', 'codewalk-regenerate-prompt-text');\n  text.appendChild(el('span', undefined, '這份導讀有步驟已與現行程式碼不符,建議重新產生'));\n  warning.appendChild(text);\n  if (regenerateHint) {\n    const copyButton = el('button', 'codewalk-regenerate-copy');\n    copyButton.appendChild(icon('copy'));\n    copyButton.appendChild(el('span', undefined, '複製重生指令'));\n    copyButton.addEventListener('click', onCopyRegenerateHint);\n    warning.appendChild(copyButton);\n  }\n  return warning;\n}"
+      "anchor": "function renderRegeneratePrompt(\n  regenerateHint: string | undefined,\n  onCopyRegenerateHint: () => void,\n): HTMLElement {\n  const warning = el('div', 'codewalk-warning codewalk-regenerate-prompt');\n  warning.appendChild(icon('warning'));\n  const text = el('div', 'codewalk-regenerate-prompt-text');\n  text.appendChild(el('span', undefined, t('walking.regeneratePrompt')));\n  warning.appendChild(text);\n  if (regenerateHint) {\n    const copyButton = el('button', 'codewalk-regenerate-copy');\n    copyButton.appendChild(icon('copy'));\n    copyButton.appendChild(el('span', undefined, t('walking.copyRegenerateHint')));\n    copyButton.addEventListener('click', onCopyRegenerateHint);\n    warning.appendChild(copyButton);\n  }\n  return warning;\n}"
     },
     {
       "title": "第 16 步:跳轉到程式碼——那個 preserveFocus 是關鍵",
       "file": "src/fileJump.ts",
-      "startLine": 21,
-      "endLine": 45,
+      "startLine": 22,
+      "endLine": 46,
       "narration": "跳轉本身只有幾行:開檔、算範圍、設 selection、`revealRange`。但有兩個參數決定了整個播放體驗:\n\n**`preserveFocus: true`** — 不搶走 CodeWalk 面板的焦點。少了它,第一次跳轉後焦點就跑到編輯器,方向鍵快捷鍵立刻失效,讀者得手動點回面板才能按下一步。「讀者的手不離方向鍵」是這個產品寫在 CLAUDE.md 裡的設計原則,而它幾乎完全由這一個布林值撐著。\n\n**`preview: false`** — 不要用預覽分頁(標題斜體、下一次開檔就被取代)。導讀會反覆跳同幾個檔案,用預覽分頁會讓它們互相覆蓋。\n\n`mode` 參數則接上了失準偵測:`openOnly` 時只開檔、不設 selection、不 reveal。**失準時不假裝知道游標該落在哪**——highlight 一段可能完全無關的程式碼,比什麼都不做更誤導。\n\n上方那段註解坦白說明了測試策略:成功路徑需要真實的 vscode API,Vitest(node 環境)測不了,所以只把「檔案不存在」這個可獨立驗證的分支抽出來做 TDD,其餘走手動驗證 checklist。**誠實標示測不到的地方,比假裝覆蓋率完整好。**",
       "items": [
         {
@@ -431,13 +431,13 @@
           "reality": "那樣會讓方向鍵快捷鍵在第一次跳轉後就失效。這個產品的核心體驗是「一路按方向鍵走完」,焦點必須留在面板。讀者想編輯程式碼時自己點過去就好——主動權該在讀者手上。"
         }
       ],
-      "anchor": "export async function jumpToStep(\n  workspaceRoot: string,\n  target: JumpTarget,\n  mode: JumpMode = 'select',\n): Promise<JumpResult> {\n  const absPath = join(workspaceRoot, target.file);\n  if (!existsSync(absPath)) {\n    return { ok: false, reason: 'fileNotFound', message: `找不到檔案:${target.file}` };\n  }\n\n  const vscode = await import('vscode');\n  const doc = await vscode.workspace.openTextDocument(absPath);\n  // preserveFocus:true — 不搶走 CodeWalk 面板的焦點,讓方向鍵快捷鍵在連續切換\n  // 好幾個 step 時持續有效(否則第一次跳轉後焦點就會留在編輯器,快捷鍵失效)。\n  const editor = await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: true });\n  if (mode === 'openOnly') {\n    return { ok: true };\n  }\n  const startLine = target.startLine - 1;\n  const endLine = Math.min(target.endLine - 1, doc.lineCount - 1);\n  const range = new vscode.Range(startLine, 0, endLine, doc.lineAt(endLine).text.length);\n  editor.selection = new vscode.Selection(range.start, range.end);\n  editor.revealRange(range, vscode.TextEditorRevealType.InCenter);\n  return { ok: true };\n}"
+      "anchor": "export async function jumpToStep(\n  workspaceRoot: string,\n  target: JumpTarget,\n  mode: JumpMode = 'select',\n): Promise<JumpResult> {\n  const absPath = join(workspaceRoot, target.file);\n  if (!existsSync(absPath)) {\n    return { ok: false, reason: 'fileNotFound', message: t('host.fileNotFound', { file: target.file }) };\n  }\n\n  const vscode = await import('vscode');\n  const doc = await vscode.workspace.openTextDocument(absPath);\n  // preserveFocus:true — 不搶走 CodeWalk 面板的焦點,讓方向鍵快捷鍵在連續切換\n  // 好幾個 step 時持續有效(否則第一次跳轉後焦點就會留在編輯器,快捷鍵失效)。\n  const editor = await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: true });\n  if (mode === 'openOnly') {\n    return { ok: true };\n  }\n  const startLine = target.startLine - 1;\n  const endLine = Math.min(target.endLine - 1, doc.lineCount - 1);\n  const range = new vscode.Range(startLine, 0, endLine, doc.lineAt(endLine).text.length);\n  editor.selection = new vscode.Selection(range.start, range.end);\n  editor.revealRange(range, vscode.TextEditorRevealType.InCenter);\n  return { ok: true };\n}"
     },
     {
       "title": "第 17 步:snippet 預覽——只讀「現在這一步」需要的內容",
       "file": "src/snippetPreview.ts",
-      "startLine": 19,
-      "endLine": 58,
+      "startLine": 20,
+      "endLine": 60,
       "narration": "`snippet` 元件顯示的程式碼**不存在 JSON 裡**——JSON 只記檔案與行號,實際內容由 host 現讀現送。好處是內容永遠是現況;代價是要處理讀不到的情況。\n\n只讀目前這一步的 items,不預讀整份導讀。一份 20 幾步的導讀可能有數十個 snippet,全部預讀是不必要的磁碟 I/O。\n\n跟錨點驗證接起來之後,這裡有三條路:\n\n1. **正常**(`matched` / `unanchored` / `shifted`)——讀現行檔案,`shifted` 時用 `effectiveLineRange()` 換算後的新行號,`source` 標為 `'current'`\n2. **失準但檔案還在**——改顯示 anchor 存的舊內容,`source` 標為 `'anchor'`。畫面上會有明確標示,讀者知道自己看的是歷史內容\n3. **檔案不存在**——回 `ok: false` 加訊息,anchor 內容仍一併附上\n\n第 2 條是這個功能最細膩的地方:**失準時寧可顯示過期內容並標示清楚,也不要顯示一段行號恰好對上、內容完全無關的程式碼**。前者讀者知道要打折扣,後者會讓人徹底困惑。",
       "terms": [
         {
@@ -451,7 +451,7 @@
           "text": "`itemStatuses` 有預設值 `[]`,省略時等同全部視為未錨定——行為與加入失準偵測之前**完全一致**。這是替既有函式加參數時的好習慣:新參數的預設值要讓舊行為原封不動。"
         }
       ],
-      "anchor": "export async function readSnippetPreviews(\n  workspaceRoot: string,\n  items: CodewalkItem[],\n  itemStatuses: AnchorItemStatus[] = [],\n): Promise<SnippetPreviewResult[]> {\n  const results: SnippetPreviewResult[] = [];\n  items.forEach((item, itemIndex) => {\n    if (item.kind !== 'snippet') return;\n    const snippet = item as SnippetItem;\n    const status = itemStatuses.find((s) => s.itemIndex === itemIndex)?.status ?? {\n      kind: 'unanchored' as const,\n    };\n    const language = detectLanguage(snippet.file);\n\n    if (status.kind === 'stale') {\n      if (status.reason === 'fileMissing') {\n        results.push({\n          itemIndex,\n          ok: false,\n          message: `找不到檔案:${snippet.file}`,\n          anchorContent: snippet.anchor,\n          language,\n        });\n      } else {\n        results.push({ itemIndex, ok: true, content: snippet.anchor ?? '', language, source: 'anchor' });\n      }\n      return;\n    }\n\n    const absPath = join(workspaceRoot, snippet.file);\n    if (!existsSync(absPath)) {\n      results.push({ itemIndex, ok: false, message: `找不到檔案:${snippet.file}` });\n      return;\n    }\n    const lines = readFileSync(absPath, 'utf8').split('\\n');\n    const { startLine, endLine } = effectiveLineRange(snippet, status);\n    const content = lines.slice(startLine - 1, endLine).join('\\n');\n    results.push({ itemIndex, ok: true, content, language, source: 'current' });\n  });\n  return results;"
+      "anchor": "export async function readSnippetPreviews(\n  workspaceRoot: string,\n  items: CodewalkItem[],\n  itemStatuses: AnchorItemStatus[] = [],\n): Promise<SnippetPreviewResult[]> {\n  const results: SnippetPreviewResult[] = [];\n  items.forEach((item, itemIndex) => {\n    if (item.kind !== 'snippet') return;\n    const snippet = item as SnippetItem;\n    const status = itemStatuses.find((s) => s.itemIndex === itemIndex)?.status ?? {\n      kind: 'unanchored' as const,\n    };\n    const language = detectLanguage(snippet.file);\n\n    if (status.kind === 'stale') {\n      if (status.reason === 'fileMissing') {\n        results.push({\n          itemIndex,\n          ok: false,\n          message: t('host.fileNotFound', { file: snippet.file }),\n          anchorContent: snippet.anchor,\n          language,\n        });\n      } else {\n        results.push({ itemIndex, ok: true, content: snippet.anchor ?? '', language, source: 'anchor' });\n      }\n      return;\n    }\n\n    const absPath = join(workspaceRoot, snippet.file);\n    if (!existsSync(absPath)) {\n      results.push({ itemIndex, ok: false, message: t('host.fileNotFound', { file: snippet.file }) });\n      return;\n    }\n    const lines = readFileSync(absPath, 'utf8').split('\\n');\n    const { startLine, endLine } = effectiveLineRange(snippet, status);\n    const content = lines.slice(startLine - 1, endLine).join('\\n');\n    results.push({ itemIndex, ok: true, content, language, source: 'current' });\n  });\n  return results;\n}"
     },
     {
       "title": "第 18 步:副檔名怎麼變成語言——兩個檔案的隱形契約",
@@ -527,8 +527,8 @@
     {
       "title": "第 21 步:跨進 webview——一個沒有框架的渲染迴圈",
       "file": "ui/main.ts",
-      "startLine": 115,
-      "endLine": 176,
+      "startLine": 123,
+      "endLine": 184,
       "narration": "從這裡開始是 webview,**不能碰任何 vscode API**,只有 DOM 與 `postMessage`。整個 UI 沒有 React、沒有 Vue,渲染邏輯就是這個 `render()`:清空 `#app`,依 `current.screen` 呼叫對應的 render 函式,把回傳的 DOM 樹掛上去。\n\n`root.innerHTML = ''` 這種全樹重繪,在真正的應用裡通常是效能災難。這裡可行是因為面板同時只顯示一步,DOM 節點少。**用最笨的方法直到它真的變慢**,是 MVP 階段正確的取捨。\n\n但全樹重繪也帶來三個必須自己補的問題,程式碼裡對應三個模組層級的變數:\n\n- **`lastWalkingStepIndex`**——若進場動畫直接掛在容器上,連「展開一個術語」這種重繪都會整頁重播動畫。記住上次畫的步數,只有真的換步才播\n- **`menuFocusPath`**——重繪會銷毀舊 DOM 連同焦點,鍵盤操作者會被彈回文件最前面。記住剛互動過的那一列,重繪後把焦點還回去\n- **`pendingScrollRestore`**——還原捲動位置得等新畫面畫出來才能設定,用這個變數把意圖從訊息處理帶到 render 之後\n\n這三個變數就是「不用框架」的實際代價:框架幫你處理的 DOM 保存與焦點管理,現在得自己記帳。",
       "terms": [
         {
@@ -551,7 +551,7 @@
           "reality": "不行。host 用「`currentWalk` 是否還在」判斷該不該回灌 `walkRestored`。若回列表時送 `webviewReady`,host 會以為 webview 只是重建了、仍在同一份導讀,立刻把讀者拉回去。所以 `backToList` 必須是獨立的一種訊息——它同時是「請給我列表」和「我離開這份導讀了」。"
         }
       ],
-      "anchor": "function render(): void {\n  const root = document.getElementById('app');\n  if (!root) return;\n  root.innerHTML = '';\n\n  if (current.screen === 'fileList') {\n    lastWalkingStepIndex = null;\n    root.appendChild(\n      renderFileList(\n        current.files,\n        { openMenuPath: current.openMenuPath, pendingClearPath: current.pendingClearPath },\n        {\n          onSelect: onSelectFile,\n          onToggleMenu: onToggleAttemptMenu,\n          onTriggerClear: onTriggerClearAttempt,\n          onResume: onResumeWalk,\n        },\n      ),\n    );\n    restoreFileListFocus(root, current);\n  } else if (current.screen === 'error') {\n    lastWalkingStepIndex = null;\n    root.appendChild(renderError(current.message));\n  } else if (current.screen === 'walking') {\n    const isStepTransition = lastWalkingStepIndex !== current.stepIndex;\n    lastWalkingStepIndex = current.stepIndex;\n    root.appendChild(\n      renderWalking(\n        current,\n        {\n          onNext: onNextStep,\n          onPrev: onPrevStep,\n          onToggleTerm: onToggleTerm,\n          onEnterQuiz: onEnterQuiz,\n          onOpenReference: onOpenReference,\n          onJumpToSnippet: onJumpToSnippet,\n          onBackToList: onBackToList,\n          onOpenStaleFile: onOpenStaleFile,\n          onCopyRegenerateHint: onCopyRegenerateHint,\n          onRevealCurrentStep: onRevealCurrentStep,\n        },\n        stepJumpError,\n        isStepTransition,\n        snippetPreviews,\n      ),\n    );\n  } else if (current.screen === 'quiz') {\n    lastWalkingStepIndex = null;\n    root.appendChild(renderQuiz(current, { onSelectAnswer, onSubmitQuiz, onCancelQuiz, onOpenReference }));\n  } else if (current.screen === 'quizResult') {\n    lastWalkingStepIndex = null;\n    root.appendChild(\n      renderQuizResult(current, {\n        onRetryQuiz: onRetryQuiz,\n        onRestartWalk: onRestartWalk,\n        onBackToList: onBackToList,\n        onOpenReference: onOpenReference,\n      }),\n    );\n  }\n  persistUiState();\n}"
+      "anchor": "function render(): void {\n  const root = document.getElementById('app');\n  if (!root) return;\n  root.innerHTML = '';\n\n  if (current.screen === 'fileList') {\n    lastWalkingStepIndex = null;\n    root.appendChild(\n      renderFileList(\n        current.files,\n        { openMenuPath: current.openMenuPath, pendingClearPath: current.pendingClearPath },\n        {\n          onSelect: onSelectFile,\n          onToggleMenu: onToggleAttemptMenu,\n          onTriggerClear: onTriggerClearAttempt,\n          onResume: onResumeWalk,\n        },\n      ),\n    );\n    restoreFileListFocus(root, current);\n  } else if (current.screen === 'error') {\n    lastWalkingStepIndex = null;\n    root.appendChild(renderError(current.message, onBackToList));\n  } else if (current.screen === 'walking') {\n    const isStepTransition = lastWalkingStepIndex !== current.stepIndex;\n    lastWalkingStepIndex = current.stepIndex;\n    root.appendChild(\n      renderWalking(\n        current,\n        {\n          onNext: onNextStep,\n          onPrev: onPrevStep,\n          onToggleTerm: onToggleTerm,\n          onEnterQuiz: onEnterQuiz,\n          onOpenReference: onOpenReference,\n          onJumpToSnippet: onJumpToSnippet,\n          onBackToList: onBackToList,\n          onOpenStaleFile: onOpenStaleFile,\n          onCopyRegenerateHint: onCopyRegenerateHint,\n          onRevealCurrentStep: onRevealCurrentStep,\n        },\n        stepJumpError,\n        isStepTransition,\n        snippetPreviews,\n      ),\n    );\n  } else if (current.screen === 'quiz') {\n    lastWalkingStepIndex = null;\n    root.appendChild(renderQuiz(current, { onSelectAnswer, onSubmitQuiz, onCancelQuiz, onOpenReference }));\n  } else if (current.screen === 'quizResult') {\n    lastWalkingStepIndex = null;\n    root.appendChild(\n      renderQuizResult(current, {\n        onRetryQuiz: onRetryQuiz,\n        onRestartWalk: onRestartWalk,\n        onBackToList: onBackToList,\n        onOpenReference: onOpenReference,\n      }),\n    );\n  }\n  persistUiState();\n}"
     },
     {
       "title": "第 22 步:markdown 渲染——只取 token,不取 HTML",

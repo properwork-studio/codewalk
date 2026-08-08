@@ -2,6 +2,13 @@
 
 > 紀律:同一概念全專案只用同一個詞;新名詞在 grill-me / clarify 訪談中定案後寫入這裡。
 
+## 介面在地化(interface-localization)
+
+- **介面語言(UI locale)**:播放器自身產生的文案所用的語言——畫面標題、按鈕、步驟計數、狀態提示、警告。隨 `vscode.env.language` 判定,繁體中文或英文二選一,讀者不能在 CodeWalk 內另外設定。翻譯表住 `shared/i18n.ts`(`t()`/`setLocale()`/`resolveLocale()`),manifest 文案另走 VS Code 強制的 `package.nls.json`。
+- **導讀內容語言**:`.codewalk.json` 裡由導讀作者撰寫的一切文字——`title`、`step.title`、`narration`、`term`、`items` 各項目、quiz 的題目/選項/選項解釋、`regenerateHint`。由作者決定,播放器原樣顯示,**不隨介面語言變動、不被翻譯**。
+- **兩者互不影響**:英文介面完全可以播放一份繁體中文導讀(反之亦然)——播放器自身的操作名稱以介面語言呈現,導讀內容維持原文,兩種語言可能同時出現在同一個畫面上,這是預期行為而非未完成的翻譯。
+- **例外:格式驗證錯誤固定英文**——`shared/schema.ts` 的 `.codewalk.json` 格式驗證錯誤訊息不算「播放器文案」也不算「導讀內容」,是格式合約本身的診斷輸出,固定英文、不隨介面語言變動(受眾常是非華語的產生器作者,訊息會被貼進 issue、CI log)。
+
 ## `.codewalk.json` / `CodewalkStep`
 
 - **item(`CodewalkItem`)**:`CodewalkStep.items` 陣列的元素,統一容器類型,承載 tip / pitfall / todo / reference / snippet 五種說明元件。以 `kind` 欄位區分 discriminated union,陣列順序即畫面顯示順序(作者可自由交錯排列)。與既有 `terms?: CodewalkTerm[]`(可收合術語卡)是分開的獨立欄位,不混用。
