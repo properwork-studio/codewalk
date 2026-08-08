@@ -2,7 +2,7 @@
 
 ## 背景
 
-目前 snippet/diff 的語法高亮用 highlight.js。剛完成的語言擴充(commit `e2a040a`)在實機驗證時發現:highlight.js 是輕量 regex grammar,同一段程式碼在 webview 裡的顏色明顯比 VS Code 編輯器本身樸素——方法呼叫、參數、多數型別都不上色。Shiki 直接吃 TextMate grammar,是唯一能貼近編輯器的選項。
+目前 snippet/diff 的語法高亮用 highlight.js。剛完成的語言擴充(commit `145e3f7`)在實機驗證時發現:highlight.js 是輕量 regex grammar,同一段程式碼在 webview 裡的顏色明顯比 VS Code 編輯器本身樸素——方法呼叫、參數、多數型別都不上色。Shiki 直接吃 TextMate grammar,是唯一能貼近編輯器的選項。
 
 ## Q1 —— 「與編輯器一致」要做到什麼程度?
 

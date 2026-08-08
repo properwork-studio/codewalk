@@ -70,7 +70,7 @@
 // key: "codewalk.quizAttempts"
 {
   ".codewalk/2026-08-01-codebase-tour.codewalk.json": {
-    "ref": "d463be3",       // 寫入當下該導讀檔的 ref,讀取時比對
+    "ref": "94a37ca",       // 寫入當下該導讀檔的 ref,讀取時比對
     "at": 1754050080000,    // host 端 Date.now(),epoch 毫秒
     "score": 4,
     "total": 5,

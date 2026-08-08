@@ -12,8 +12,8 @@
 - `vsce package` 零 warning、279 個測試通過
 - 新增英文版自我指涉導讀 `.codewalk/2026-08-08-codebase-tour-en.codewalk.json`(`2026-08-07-codebase-tour.codewalk.json` 的完整翻譯,`file`/`startLine`/`endLine`/`anchor` 逐一對齊、`ref` 相同),供英文顯示語言下截圖用——此後兩份導讀需並行維護,`src`/`shared`/`ui` 有結構性改動時兩邊的錨點都要重新產生
 - README 加 MIT License badge(靜態,讀 `LICENSE`,不依賴外部即時數據,不必等發布)。Marketplace 版本/安裝數/評分 badge 仍照下方「發布後可補」延後
-- 英文版截圖 `docs/images/panel-walking-en.png` 已補上(commit `0a0b77f`),`README.md` 的引用不再是死連結
-- 全專案 JSDoc 盤點補齊(commit `7b29970`),並新增 `pnpm relocate-anchors` 供日後維護時對齊自帶導讀的 anchor
+- 英文版截圖 `docs/images/panel-walking-en.png` 已補上(commit `24bf00b`),`README.md` 的引用不再是死連結
+- 全專案 JSDoc 盤點補齊(commit `53af8de`),並新增 `pnpm relocate-anchors` 供日後維護時對齊自帶導讀的 anchor
 - 贊助管道接上 Ko-fi:`package.json` 新增 `sponsor.url`(marketplace 與擴充套件面板會長出 Sponsor 按鈕)、`.github/FUNDING.yml`、兩份 README 的 Support 段落;`.vscodeignore` 補 `.github/**` 避免 FUNDING.yml 被打包進 VSIX
 
 ## 待執行

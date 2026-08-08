@@ -2,7 +2,7 @@
 
 讀者在 CodeWalk 面板看程式碼時,顏色比旁邊的編輯器樸素很多——方法呼叫、參數、多數型別都沒有顏色;若讀者用的不是 VS Code 預設主題,面板與編輯器連整個色系都不同。視線在面板與編輯器之間來回時,等於要適應兩套配色,這與「讓讀者的注意力留在程式碼上」的產品目標相衝突。
 
-根因是 highlight.js 用的是輕量 regex grammar,能表達的 token 種類遠少於 VS Code 編輯器所用的 TextMate grammar。這在剛完成的語言擴充(commit `e2a040a`)實機驗證時被確認:同一段 Java,編輯器裡有顏色的 token 在面板裡多半是素色。
+根因是 highlight.js 用的是輕量 regex grammar,能表達的 token 種類遠少於 VS Code 編輯器所用的 TextMate grammar。這在剛完成的語言擴充(commit `145e3f7`)實機驗證時被確認:同一段 Java,編輯器裡有顏色的 token 在面板裡多半是素色。
 
 ## What Changes
 

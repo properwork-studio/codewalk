@@ -1,6 +1,6 @@
 {
   "title": "CodeWalk end-to-end walk: from the JSON contract to the side panel",
-  "ref": "927ed3b0f2963278db9a475b3b3f1bd6b7b15d39",
+  "ref": "c74b845f3c9d4a3c500c52922b38076a03a4161b",
   "regenerateHint": "Walk through CodeWalk's src/, shared/, and ui/ layers again, produce an English walk aligned to the current HEAD, output it to .codewalk/, and fill in the anchor field for every step and snippet.",
   "passThreshold": 4,
   "steps": [

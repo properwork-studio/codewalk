@@ -1,6 +1,6 @@
 {
   "title": "CodeWalk 全專案導讀:從 JSON 合約到側邊面板的一條龍",
-  "ref": "927ed3b0f2963278db9a475b3b3f1bd6b7b15d39",
+  "ref": "c74b845f3c9d4a3c500c52922b38076a03a4161b",
   "regenerateHint": "請重新走過 CodeWalk 的 src/、shared/、ui/ 三層,產生一份對齊目前 HEAD 的全專案導讀,輸出到 .codewalk/ 並為每個 step 與 snippet 填入 anchor 欄位。",
   "passThreshold": 4,
   "steps": [
