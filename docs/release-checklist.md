@@ -61,7 +61,7 @@ npx vsce login properworkstudio
 npx vsce publish
 ```
 
-發布後 extension 識別碼為 `properworkstudio.codewalk`,**永久不可改**。
+發布後 extension 識別碼為 `properworkstudio.codewalk-reader`,**永久不可改**。
 
 ### 3. (可選)發布到 Open VSX,供 Cursor 使用
 
@@ -81,8 +81,8 @@ npx ovsx publish codewalk.vsix -p <token>
   破圖或 0,所以留到有數據再說
 
   ```markdown
-  ![Version](https://img.shields.io/visual-studio-marketplace/v/properworkstudio.codewalk)
-  ![Installs](https://img.shields.io/visual-studio-marketplace/i/properworkstudio.codewalk)
+  ![Version](https://img.shields.io/visual-studio-marketplace/v/properworkstudio.codewalk-reader)
+  ![Installs](https://img.shields.io/visual-studio-marketplace/i/properworkstudio.codewalk-reader)
   ```
 
 - 操作 GIF(README 目前只有靜態截圖)。錄製需要 `brew install gifski`;
