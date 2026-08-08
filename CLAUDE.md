@@ -62,7 +62,7 @@ pnpm package      # vsce 打包 VSIX({起手後補})
 | 為什麼當初這樣決定? | `openspec/changes/archive/` |
 | 已定案的產品/技術規則(不再重問的前提)? | `openspec/decisions.md` |
 | 格式與領域名詞的定義? | `docs/glossary.md` |
-| 重複性操作怎麼做? | `.claude/skills/` |
+| 重複性操作怎麼做? | `.claude/skills/`(本機,未隨 repo 公開) |
 
 ## 設計原則
 

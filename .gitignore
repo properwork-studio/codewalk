@@ -5,3 +5,8 @@ dist/
 *.vsce-cache
 .gradle/
 build/
+
+# AI 工具的個人工作流設定(含 Notion/Todoist 等私人流程),不隨專案公開
+.claude/
+.codex/
+.agents/
