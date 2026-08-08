@@ -13,6 +13,9 @@
     "url": "https://github.com/properworkstudio/codewalk/issues"
   },
   "homepage": "https://github.com/properworkstudio/codewalk#readme",
+  "sponsor": {
+    "url": "https://ko-fi.com/properworkstudio"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
