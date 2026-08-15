@@ -95,9 +95,13 @@ button.codewalk-back-to-list:hover:not(:disabled) {
   background-color: var(--codewalk-hover-overlay, rgba(128, 128, 128, 0.2));
 }
 
+/* gap 是必要的,理由同 .codewalk-quiz-actions——justify-content: space-between
+   在英文文案(比中文長)快填滿整行時沒有剩餘空間可分配,兩顆按鈕會貼在一起。 */
 .codewalk-nav {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
+  gap: 0.5rem;
   margin-top: 0.75rem;
 }
 
@@ -138,10 +142,16 @@ button.codewalk-back-to-list:hover:not(:disabled) {
   margin-top: 0.75rem;
 }
 
+/* gap 是必要的——justify-content: space-between 只在兩個按鈕的內容寬度
+   之外還有剩餘空間時才會加開距離;英文文案(比中文長很多)讓兩顆按鈕的
+   內容本身就快填滿整行,space-between 沒有空間可分配,按鈕會直接貼在一起。
+   加 gap 保證最小間距一定存在,flex-wrap 則是窄面板下的最後防線。 */
 .codewalk-quiz-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 0.5rem;
   margin-top: 0.75rem;
 }
 
@@ -1154,9 +1164,11 @@ button.codewalk-continue-button:hover:not(:disabled) {
   padding: 0 0.6rem 0.4rem;
 }
 
+/* flex-wrap: wrap 讓按鈕在空間不夠時換到文字下方,不與文字擠同一行。 */
 .codewalk-regenerate-prompt {
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 0.75rem;
 }
 
@@ -1164,11 +1176,17 @@ button.codewalk-continue-button:hover:not(:disabled) {
   flex: 1;
 }
 
+/* 按鈕即使換到自己的一行,仍可能比容器窄——flex-shrink: 0 曾經是為了不讓
+   按鈕文字被硬壓縮,但代價是按鈕寬度鎖死在「英文文案一行不換行」的寬度,
+   窄面板下直接撐出容器。改成允許整顆按鈕縮小(min-width: 0 蓋掉 flex item
+   預設以內容決定最小寬度的行為),讓按鈕內的文字改以換行因應,而不是讓
+   按鈕本身溢出。 */
 .codewalk-regenerate-copy {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  flex-shrink: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* 背景與預設前景色直接用 VS Code CSS 變數——Shiki 只替「有對應到 scope」
