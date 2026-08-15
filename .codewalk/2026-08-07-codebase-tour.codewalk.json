@@ -1,6 +1,6 @@
 {
   "title": "CodeWalk 全專案導讀:從 JSON 合約到側邊面板的一條龍",
-  "ref": "c74b845f3c9d4a3c500c52922b38076a03a4161b",
+  "ref": "e8ed6c3b9adebc6102a2633cae0b383c85d8a61e",
   "regenerateHint": "請重新走過 CodeWalk 的 src/、shared/、ui/ 三層,產生一份對齊目前 HEAD 的全專案導讀,輸出到 .codewalk/ 並為每個 step 與 snippet 填入 anchor 欄位。",
   "passThreshold": 4,
   "steps": [
@@ -202,8 +202,8 @@
     {
       "title": "第 8 步:webview 的 HTML 是 host 手工組出來的(CSP 與 nonce)",
       "file": "src/viewProvider.ts",
-      "startLine": 328,
-      "endLine": 359,
+      "startLine": 389,
+      "endLine": 420,
       "narration": "面板裡的 HTML 沒有對應的 `.html` 檔,是這個字串樣板組出來的。三個非做不可的動作:\n\n1. **`asWebviewUri()`**:webview 在自己的沙箱裡,不能直接用檔案路徑。所有資源(js/css/字型)都得轉成特殊的 `vscode-webview://` URI,而且來源限定在 `localResourceRoots` 允許的目錄內(這裡只開放 `dist/`)。\n2. **CSP + nonce**:`default-src 'none'` 預設封死一切,再逐項開放。`script-src 'nonce-...'` 表示只有帶正確 nonce 屬性的 `<script>` 才准執行——nonce 每次載入重新亂數產生,注入進來的腳本猜不到,自然執行不了。\n3. **`<link>` 的順序是有意義的**。中間那段註解說明:codicon.css 用 `font` 這個 shorthand 設定 `.codicon` 的字級,跟 theme.css 的覆寫 selector specificity 打平——specificity 相同時 cascade 後者勝,所以 theme.css 必須排在後面,覆寫才生效。\n\n第 3 點是那種讀原始碼看不出來、只能靠註解留住的知識。這個 repo 到處都是這種註解,它們比程式碼本身更難重建。\n\n**第四個小動作**:`<html lang=\"${htmlLang}\">` 也在這裡決定。`getLocale()` 讀的是 `activate()` 第一行已經算好的語言,轉成語意正確的 HTML 語言標籤(`zh-Hant` 或 `en`)寫進標籤——webview 開機時再從 `document.documentElement.lang` 讀回同一個值,兩邊靠這一個字串同步,不需要額外的 postMessage 欄位。",
       "terms": [
         {
@@ -231,8 +231,8 @@
     {
       "title": "第 9 步:兩層之間唯一的管道——postMessage 協定",
       "file": "shared/protocol.ts",
-      "startLine": 123,
-      "endLine": 162,
+      "startLine": 136,
+      "endLine": 175,
       "narration": "extension host 與 webview 是兩個不同的執行環境:host 是 Node.js,能碰檔案系統與 VS Code API;webview 是沙箱裡的瀏覽器環境,只能做 DOM。**它們之間唯一的溝通方式是 `postMessage`**,而這個檔案就是那份協定的單一定義處。\n\n`HostToWebviewMessage` 這個聯集列出 host 能送的每一種訊息。值得注意的是它們攜帶的東西:\n\n- `walkLoaded` 一次帶齊 `walk` + `stepIndex` + `refDrifted` + `anchorReport` + `snippetPreviews`——**webview 拿到就能畫完整個畫面,不需要再往回問**\n- `walkRestored` 欄位跟 `walkLoaded` 完全一樣,卻是獨立的一種訊息。因為語意不同:一個是「讀者選了新導讀」(該跳轉編輯器),一個是「面板被重建了,把畫面還給你」(**不該**動編輯器)。同樣的資料、不同的意圖,分成兩種訊息比多加一個布林旗標清楚\n\n這種「一次送齊」的設計讓 webview 不需要任何非同步查詢,狀態更新是原子的:收到訊息 → 換掉狀態 → 重繪。",
       "terms": [
         {
@@ -249,22 +249,22 @@
           "kind": "snippet",
           "label": "webview → host 的訊息種類,以及 backToList 為何不能重用 webviewReady",
           "file": "shared/protocol.ts",
-          "startLine": 170,
-          "endLine": 198,
-          "anchor": "export type WebviewToHostMessage =\n  /** webview 腳本啟動完成。host 回以主題、導讀列表,必要時回灌目前導讀。 */\n  | { type: 'webviewReady' }\n  /** 從列表選定一份導讀,從第一步開始。 */\n  | { type: 'selectWalkFile'; path: string }\n  | { type: 'nextStep' }\n  | { type: 'prevStep' }\n  /** 直接跳到指定步驟。也用於重播當前步驟的跳轉(取消 quiz、重走導讀、開啟失準檔案)。 */\n  | { type: 'jumpToStep'; stepIndex: number }\n  /** 送出 quiz 答案。未作答的題目以 -1 表示(見 shared/schema.ts 的 scoreQuiz)。 */\n  | { type: 'quizSubmitted'; answers: number[] }\n  /** 開啟外部連結。host 交給 VS Code 處理,webview 本身無法開啟瀏覽器。 */\n  | { type: 'openReference'; url: string }\n  /** 點擊 snippet 或 diff 的標題列,跳到它指向的位置。 */\n  | { type: 'jumpToSnippet'; stepIndex: number; itemIndex: number }\n  /** 清除某份導讀的 Quiz 作答紀錄。 */\n  | { type: 'clearAttempt'; path: string }\n  /** 把導讀的 regenerateHint 複製到剪貼簿。 */\n  | { type: 'copyRegenerateHint' }\n  /** 從列表接續上次的閱讀進度;與 selectWalkFile 的差別是起始步驟與不跳轉編輯器。 */\n  | { type: 'resumeWalk'; path: string }\n  /** 把編輯器帶回目前步驟的位置(面板按鈕或 Home 鍵)。 */\n  | { type: 'revealCurrentStep' }\n  /**\n   * 從走讀/quiz 結果畫面返回列表——與 webviewReady 分開,因為 host 用\n   * currentWalk 是否存在判斷「該不該回灌 walkRestored」(design.md 決策 1);\n   * 若沿用 webviewReady 讓 host 誤以為仍在同一份導讀,回列表會被立刻拉回去。\n   */\n  | { type: 'backToList' };"
+          "startLine": 189,
+          "endLine": 222,
+          "anchor": "export type WebviewToHostMessage =\n  /** webview 腳本啟動完成。host 回以主題、導讀列表,必要時回灌目前導讀。 */\n  | { type: 'webviewReady' }\n  /** 從列表選定一份導讀,從第一步開始。 */\n  | { type: 'selectWalkFile'; path: string }\n  | { type: 'nextStep' }\n  | { type: 'prevStep' }\n  /** 直接跳到指定步驟。也用於重播當前步驟的跳轉(取消 quiz、重走導讀、開啟失準檔案)。 */\n  | { type: 'jumpToStep'; stepIndex: number }\n  /** 送出 quiz 答案。未作答的題目以 -1 表示(見 shared/schema.ts 的 scoreQuiz)。 */\n  | { type: 'quizSubmitted'; answers: number[] }\n  /** 開啟外部連結。host 交給 VS Code 處理,webview 本身無法開啟瀏覽器。 */\n  | { type: 'openReference'; url: string }\n  /** 點擊 snippet 或 diff 的標題列,跳到它指向的位置。 */\n  | { type: 'jumpToSnippet'; stepIndex: number; itemIndex: number }\n  /** 清除某份導讀的 Quiz 作答紀錄。 */\n  | { type: 'clearAttempt'; path: string }\n  /** 把導讀的 regenerateHint 複製到剪貼簿。 */\n  | { type: 'copyRegenerateHint' }\n  /**\n   * 把目前步驟(可選地帶框選文字)交給 AI 助手。`selection` 省略代表問整步,\n   * 不另立布林欄位——意圖本來就是同一個,差別只在送到哪(design.md 決策 7)。\n   */\n  | { type: 'askAgent'; destination: AskAgentDestination; selection?: string }\n  /** 從列表接續上次的閱讀進度;與 selectWalkFile 的差別是起始步驟與不跳轉編輯器。 */\n  | { type: 'resumeWalk'; path: string }\n  /** 把編輯器帶回目前步驟的位置(面板按鈕或 Home 鍵)。 */\n  | { type: 'revealCurrentStep' }\n  /**\n   * 從走讀/quiz 結果畫面返回列表——與 webviewReady 分開,因為 host 用\n   * currentWalk 是否存在判斷「該不該回灌 walkRestored」(design.md 決策 1);\n   * 若沿用 webviewReady 讓 host 誤以為仍在同一份導讀,回列表會被立刻拉回去。\n   */\n  | { type: 'backToList' };"
         },
         {
           "kind": "tip",
           "text": "`effectiveLineRange()` 也住在這個檔案。它是 host 與 webview **共用**的純函式:失準位移時該用新行號還是舊行號,兩邊必須算出同一個答案,否則面板顯示的行號會跟實際跳轉的位置對不上。放在 protocol.ts 是因為這裡是兩邊都 import 得到的唯一地方。"
         }
       ],
-      "anchor": "export type HostToWebviewMessage =\n  /** 可選的導讀清單。webview 收到即切到列表畫面(含首次開啟與返回列表)。 */\n  | { type: 'walkFileList'; files: WalkFileSummary[] }\n  /** 讀者選定的導讀已載入完成,webview 切到走讀畫面。 */\n  | {\n      type: 'walkLoaded';\n      walk: CodewalkFile;\n      /** 起始步驟——「接續上次」時為留存的進度,一般選取時為 0。 */\n      stepIndex: number;\n      refDrifted: boolean;\n      anchorReport: AnchorReport;\n      snippetPreviews: SnippetPreviewResult[];\n    }\n  /** 步驟已切換(可能來自面板按鈕、鍵盤,或 VS Code 指令),webview 據此更新畫面。 */\n  | { type: 'stepChanged'; stepIndex: number; snippetPreviews: SnippetPreviewResult[] }\n  /** 導讀載入或格式驗證失敗,webview 切到錯誤畫面。訊息內容固定英文(見 shared/schema.ts)。 */\n  | { type: 'loadError'; message: string }\n  /** 跳轉到目標檔案失敗(通常是檔案不存在)。屬於當前步驟的暫時性警告,不影響走讀狀態。 */\n  | { type: 'stepJumpError'; message: string }\n  | {\n      type: 'themeChanged';\n      /** host 無法解析讀者當前主題時為 null,webview 改依 kind 選用內建主題。 */\n      theme: ResolvedEditorTheme | null;\n      kind: 'light' | 'dark';\n    }\n  | {\n      /**\n       * webview 在同一個 session 內真的被重建(非常態的面板隱藏/顯示,例如\n       * view 被拖到別的容器)時,host 依然持有的導讀內容回灌——webview 收到\n       * 後只帶 walk 與 host 端的 stepIndex,細部畫面(walking/quiz/quizResult)\n       * 由 webview 自己保留的 setState 決定(reading-progress capability\n       * 「面板重建後還原閱讀位置」,design.md 決策 1、4)。\n       */\n      type: 'walkRestored';\n      walk: CodewalkFile;\n      stepIndex: number;\n      refDrifted: boolean;\n      anchorReport: AnchorReport;\n      snippetPreviews: SnippetPreviewResult[];\n    };"
+      "anchor": "export type HostToWebviewMessage =\n  /** 可選的導讀清單。webview 收到即切到列表畫面(含首次開啟與返回列表)。 */\n  | { type: 'walkFileList'; files: WalkFileSummary[] }\n  /** 讀者選定的導讀已載入完成,webview 切到走讀畫面。 */\n  | {\n      type: 'walkLoaded';\n      walk: CodewalkFile;\n      /** 起始步驟——「接續上次」時為留存的進度,一般選取時為 0。 */\n      stepIndex: number;\n      refDrifted: boolean;\n      anchorReport: AnchorReport;\n      snippetPreviews: SnippetPreviewResult[];\n    }\n  /** 步驟已切換(可能來自面板按鈕、鍵盤,或 VS Code 指令),webview 據此更新畫面。 */\n  | { type: 'stepChanged'; stepIndex: number; snippetPreviews: SnippetPreviewResult[] }\n  /** 導讀載入或格式驗證失敗,webview 切到錯誤畫面。訊息內容固定英文(見 shared/schema.ts)。 */\n  | { type: 'loadError'; message: string }\n  /** 跳轉到目標檔案失敗(通常是檔案不存在)。屬於當前步驟的暫時性警告,不影響走讀狀態。 */\n  | { type: 'stepJumpError'; message: string }\n  | {\n      type: 'themeChanged';\n      /** host 無法解析讀者當前主題時為 null,webview 改依 kind 選用內建主題。 */\n      theme: ResolvedEditorTheme | null;\n      kind: 'light' | 'dark';\n    }\n  | {\n      /**\n       * webview 在同一個 session 內真的被重建(非常態的面板隱藏/顯示,例如\n       * view 被拖到別的容器)時,host 依然持有的導讀內容回灌——webview 收到\n       * 後只帶 walk 與 host 端的 stepIndex,細部畫面(walking/quiz/quizResult)\n       * 由 webview 自己保留的 setState 決定(reading-progress capability\n       * 「面板重建後還原閱讀位置」,design.md 決策 1、4)。\n       */\n      type: 'walkRestored';\n      walk: CodewalkFile;\n      stepIndex: number;\n      refDrifted: boolean;\n      anchorReport: AnchorReport;\n      snippetPreviews: SnippetPreviewResult[];\n    }"
     },
     {
       "title": "第 10 步:host 不信任 webview 送來的任何東西",
       "file": "shared/protocol.ts",
-      "startLine": 214,
-      "endLine": 252,
+      "startLine": 238,
+      "endLine": 283,
       "narration": "上一步定義的 `WebviewToHostMessage` 是編譯期的型別。但 TypeScript 的型別編譯後就消失了——`onDidReceiveMessage` 實際收到的是 `unknown`。\n\n`parseWebviewToHostMessage()` 就是那道把 `unknown` 變回型別的關卡。它對 `d.type` 做 switch,每個分支**逐一檢查該訊息真正需要的欄位型別**,對不上就回傳 `null`,host 直接忽略。\n\n這不是形式主義。webview 裡跑的是任意 JavaScript,而導讀 JSON 可能來自別人的 repo——「host 一律不信任 webview」是這個架構的預設姿態,跟瀏覽器不信任前端送來的表單是同一個道理。\n\n注意每個分支的寫法:`typeof d.path === 'string' ? { type: 'selectWalkFile', path: d.path } : null`。它**重新建構**一個乾淨的物件,而不是把原始物件轉型後放行。這樣即使對方多送了欄位,也不會被夾帶進 host 的處理流程。",
       "items": [
         {
@@ -277,13 +277,13 @@
           "text": "目前 `openReference` 只檢查 `url` 是不是字串,實際的 http/https 判定發生在更上游(`schema.ts` 驗證 `reference.url`)與 `ui/markdown.ts` 的連結降級。若未來有其他管道能送出 `openReference`,這裡值得補一道 `isHttpUrl()`。"
         }
       ],
-      "anchor": "export function parseWebviewToHostMessage(data: unknown): WebviewToHostMessage | null {\n  if (typeof data !== 'object' || data === null) {\n    return null;\n  }\n  const d = data as Record<string, unknown>;\n\n  switch (d.type) {\n    case 'webviewReady':\n      return { type: 'webviewReady' };\n    case 'selectWalkFile':\n      return typeof d.path === 'string' ? { type: 'selectWalkFile', path: d.path } : null;\n    case 'nextStep':\n      return { type: 'nextStep' };\n    case 'prevStep':\n      return { type: 'prevStep' };\n    case 'jumpToStep':\n      return typeof d.stepIndex === 'number' ? { type: 'jumpToStep', stepIndex: d.stepIndex } : null;\n    case 'quizSubmitted':\n      return isStringArrayLike(d.answers) ? { type: 'quizSubmitted', answers: d.answers } : null;\n    case 'openReference':\n      return typeof d.url === 'string' ? { type: 'openReference', url: d.url } : null;\n    case 'jumpToSnippet':\n      return typeof d.stepIndex === 'number' && typeof d.itemIndex === 'number'\n        ? { type: 'jumpToSnippet', stepIndex: d.stepIndex, itemIndex: d.itemIndex }\n        : null;\n    case 'clearAttempt':\n      return typeof d.path === 'string' ? { type: 'clearAttempt', path: d.path } : null;\n    case 'copyRegenerateHint':\n      return { type: 'copyRegenerateHint' };\n    case 'resumeWalk':\n      return typeof d.path === 'string' ? { type: 'resumeWalk', path: d.path } : null;\n    case 'revealCurrentStep':\n      return { type: 'revealCurrentStep' };\n    case 'backToList':\n      return { type: 'backToList' };\n    default:\n      return null;\n  }\n}"
+      "anchor": "export function parseWebviewToHostMessage(data: unknown): WebviewToHostMessage | null {\n  if (typeof data !== 'object' || data === null) {\n    return null;\n  }\n  const d = data as Record<string, unknown>;\n\n  switch (d.type) {\n    case 'webviewReady':\n      return { type: 'webviewReady' };\n    case 'selectWalkFile':\n      return typeof d.path === 'string' ? { type: 'selectWalkFile', path: d.path } : null;\n    case 'nextStep':\n      return { type: 'nextStep' };\n    case 'prevStep':\n      return { type: 'prevStep' };\n    case 'jumpToStep':\n      return typeof d.stepIndex === 'number' ? { type: 'jumpToStep', stepIndex: d.stepIndex } : null;\n    case 'quizSubmitted':\n      return isStringArrayLike(d.answers) ? { type: 'quizSubmitted', answers: d.answers } : null;\n    case 'openReference':\n      return typeof d.url === 'string' ? { type: 'openReference', url: d.url } : null;\n    case 'jumpToSnippet':\n      return typeof d.stepIndex === 'number' && typeof d.itemIndex === 'number'\n        ? { type: 'jumpToSnippet', stepIndex: d.stepIndex, itemIndex: d.itemIndex }\n        : null;\n    case 'clearAttempt':\n      return typeof d.path === 'string' ? { type: 'clearAttempt', path: d.path } : null;\n    case 'copyRegenerateHint':\n      return { type: 'copyRegenerateHint' };\n    case 'askAgent': {\n      const destination = d.destination;\n      if (destination !== 'chat' && destination !== 'clipboard') return null;\n      const selection = d.selection;\n      if (selection !== undefined && typeof selection !== 'string') return null;\n      return { type: 'askAgent', destination, selection };\n    }\n    case 'resumeWalk':\n      return typeof d.path === 'string' ? { type: 'resumeWalk', path: d.path } : null;\n    case 'revealCurrentStep':\n      return { type: 'revealCurrentStep' };\n    case 'backToList':\n      return { type: 'backToList' };\n    default:\n      return null;\n  }\n}"
     },
     {
       "title": "第 11 步:載入一份導讀時,host 做了哪五件事",
       "file": "src/viewProvider.ts",
-      "startLine": 235,
-      "endLine": 271,
+      "startLine": 296,
+      "endLine": 332,
       "narration": "`loadWalk()` 是整個 host 端最密集的一段。讀者點一份導讀,依序發生:\n\n1. **讀檔 + 驗證**——失敗就送 `loadError`,把所有錯誤用 `; ` 串起來給讀者看,流程到此為止\n2. **比對 ref 與 HEAD**——算出 `refDrifted`(第 12 步)\n3. **建錨驗證報告**——`buildAnchorReport()` 逐步檢查每個錨點是否還對得上(第 14、15 步)\n4. **決定起始步驟**——這裡是 `resume` 選項的分水嶺\n5. **一次送齊 `walkLoaded`**,然後(視情況)跳轉編輯器\n\n第 4、5 點的細節值得停一下。決定起始步驟的是這一行:\n\n`this.stepIndex = Math.min(Math.max(progress?.stepIndex ?? 0, 0), maxIndex);`\n\n它同時處理三件事:沒有進度就從 0 開始、進度不可能是負的、**進度不可能超過現有步數**。最後一項是真實會發生的情況——導讀重新產生後步驟變少,舊進度就會越界。用 clamp 一次擋掉,不需要特判。\n\n最後 `if (!options.resume)` 才跳轉編輯器。**接續閱讀不該擅自打開檔案**——讀者可能正在看別的東西,恢復閱讀位置是面板自己的事,不該動編輯器。這條規則在第 23 步的面板重建路徑上再次出現。",
       "terms": [
         {
@@ -296,9 +296,9 @@
           "kind": "snippet",
           "label": "handleMessage:webview 送來的每種訊息各自對應一個處理",
           "file": "src/viewProvider.ts",
-          "startLine": 83,
-          "endLine": 131,
-          "anchor": "  private async handleMessage(raw: unknown): Promise<void> {\n    const msg = parseWebviewToHostMessage(raw);\n    if (!msg) return;\n\n    switch (msg.type) {\n      case 'webviewReady':\n        await this.sendTheme();\n        await this.sendFileList();\n        await this.sendRestoreIfActive();\n        break;\n      case 'selectWalkFile':\n        await this.loadWalk(msg.path);\n        break;\n      case 'resumeWalk':\n        await this.loadWalk(msg.path, { resume: true });\n        break;\n      case 'revealCurrentStep':\n        await this.jumpToCurrentStep();\n        break;\n      case 'nextStep':\n        await this.moveStep(1);\n        break;\n      case 'prevStep':\n        await this.moveStep(-1);\n        break;\n      case 'jumpToStep':\n        await this.setStep(msg.stepIndex);\n        break;\n      case 'quizSubmitted':\n        await this.handleQuizSubmitted(msg.answers);\n        break;\n      case 'openReference':\n        await vscode.env.openExternal(vscode.Uri.parse(msg.url));\n        break;\n      case 'jumpToSnippet':\n        await this.handleJumpToSnippet(msg.stepIndex, msg.itemIndex);\n        break;\n      case 'clearAttempt':\n        await this.handleClearAttempt(msg.path);\n        break;\n      case 'copyRegenerateHint':\n        await this.handleCopyRegenerateHint();\n        break;\n      case 'backToList':\n        this.clearActiveWalk();\n        await this.sendFileList();\n        break;\n    }\n  }"
+          "startLine": 90,
+          "endLine": 141,
+          "anchor": "  private async handleMessage(raw: unknown): Promise<void> {\n    const msg = parseWebviewToHostMessage(raw);\n    if (!msg) return;\n\n    switch (msg.type) {\n      case 'webviewReady':\n        await this.sendTheme();\n        await this.sendFileList();\n        await this.sendRestoreIfActive();\n        break;\n      case 'selectWalkFile':\n        await this.loadWalk(msg.path);\n        break;\n      case 'resumeWalk':\n        await this.loadWalk(msg.path, { resume: true });\n        break;\n      case 'revealCurrentStep':\n        await this.jumpToCurrentStep();\n        break;\n      case 'nextStep':\n        await this.moveStep(1);\n        break;\n      case 'prevStep':\n        await this.moveStep(-1);\n        break;\n      case 'jumpToStep':\n        await this.setStep(msg.stepIndex);\n        break;\n      case 'quizSubmitted':\n        await this.handleQuizSubmitted(msg.answers);\n        break;\n      case 'openReference':\n        await vscode.env.openExternal(vscode.Uri.parse(msg.url));\n        break;\n      case 'jumpToSnippet':\n        await this.handleJumpToSnippet(msg.stepIndex, msg.itemIndex);\n        break;\n      case 'clearAttempt':\n        await this.handleClearAttempt(msg.path);\n        break;\n      case 'copyRegenerateHint':\n        await this.handleCopyRegenerateHint();\n        break;\n      case 'askAgent':\n        await this.handleAskAgent(msg.destination, msg.selection);\n        break;\n      case 'backToList':\n        this.clearActiveWalk();\n        await this.sendFileList();\n        break;\n    }\n  }"
         },
         {
           "kind": "tip",
@@ -385,8 +385,8 @@
     {
       "title": "第 15 步:失準之後怎麼辦——重生引導",
       "file": "ui/render/walking.ts",
-      "startLine": 32,
-      "endLine": 49,
+      "startLine": 47,
+      "endLine": 64,
       "narration": "偵測到失準只解決一半問題。讀者接下來會問:那我該怎麼辦?\n\n這就是 `regenerateHint` 的用途。它是 `.codewalk.json` 的一個選填欄位,由**產生器自述**「要怎麼重新產生這份導讀」——可能是一行 CLI 指令、一段 prompt、或一個內部工具的連結。\n\n關鍵在於:**播放器只顯示與複製,完全不解讀內容**。它不知道那串字是什麼意思,也不會去執行。這守住了 MVP 的分界線——播放器不碰產生邏輯,但可以幫讀者把產生的方法遞過去。\n\n這是一個小而重要的架構姿態:當你不想讓 A 依賴 B,又希望使用者能從 A 走到 B,「讓資料自己攜帶說明、由人接手執行」往往比「A 直接呼叫 B」更好——後者會把兩者永久綁死。\n\n下方 snippet 裡的 `renderStepStaleBlock()` 是另一半:失準的那一步會插入一個區塊,顯示 anchor 存的**舊內容**,並提供一個「開啟現行檔案」按鈕讓讀者自己比對。舊內容仍然顯示,是因為它至少說明了作者當初在講什麼。",
       "terms": [
         {
@@ -399,8 +399,8 @@
           "kind": "snippet",
           "label": "renderStepStaleBlock:失準時顯示 anchor 舊內容 + 開啟現行檔案",
           "file": "ui/render/walking.ts",
-          "startLine": 52,
-          "endLine": 76,
+          "startLine": 67,
+          "endLine": 91,
           "anchor": "function renderStepStaleBlock(\n  step: CodewalkStep,\n  status: Extract<AnchorStatus, { kind: 'stale' }>,\n  onOpenStaleFile: () => void,\n): HTMLElement {\n  const container = el('div', 'codewalk-snippet codewalk-snippet--stale');\n  const canOpen = status.reason !== 'fileMissing';\n  const header = el(canOpen ? 'button' : 'div', 'codewalk-snippet-header');\n  header.appendChild(icon('warning'));\n  const headerText = el('span', 'codewalk-snippet-header-text');\n  headerText.appendChild(\n    el('span', 'codewalk-snippet-label', canOpen ? t('stale.openCurrentFile') : t('stale.fileNotFound')),\n  );\n  headerText.appendChild(el('span', 'codewalk-snippet-file-ref', step.file));\n  header.appendChild(headerText);\n  if (canOpen && header instanceof HTMLButtonElement) {\n    header.addEventListener('click', onOpenStaleFile);\n  }\n  container.appendChild(header);\n  container.appendChild(renderStaleLabel());\n  if (step.anchor && step.anchor.trim().length > 0) {\n    container.appendChild(renderSnippetCode(step.anchor, detectLanguage(step.file), step.startLine));\n  }\n  return container;\n}"
         },
         {
@@ -527,8 +527,8 @@
     {
       "title": "第 21 步:跨進 webview——一個沒有框架的渲染迴圈",
       "file": "ui/main.ts",
-      "startLine": 127,
-      "endLine": 188,
+      "startLine": 140,
+      "endLine": 203,
       "narration": "從這裡開始是 webview,**不能碰任何 vscode API**,只有 DOM 與 `postMessage`。整個 UI 沒有 React、沒有 Vue,渲染邏輯就是這個 `render()`:清空 `#app`,依 `current.screen` 呼叫對應的 render 函式,把回傳的 DOM 樹掛上去。\n\n`root.innerHTML = ''` 這種全樹重繪,在真正的應用裡通常是效能災難。這裡可行是因為面板同時只顯示一步,DOM 節點少。**用最笨的方法直到它真的變慢**,是 MVP 階段正確的取捨。\n\n但全樹重繪也帶來三個必須自己補的問題,程式碼裡對應三個模組層級的變數:\n\n- **`lastWalkingStepIndex`**——若進場動畫直接掛在容器上,連「展開一個術語」這種重繪都會整頁重播動畫。記住上次畫的步數,只有真的換步才播\n- **`menuFocusPath`**——重繪會銷毀舊 DOM 連同焦點,鍵盤操作者會被彈回文件最前面。記住剛互動過的那一列,重繪後把焦點還回去\n- **`pendingScrollRestore`**——還原捲動位置得等新畫面畫出來才能設定,用這個變數把意圖從訊息處理帶到 render 之後\n\n這三個變數就是「不用框架」的實際代價:框架幫你處理的 DOM 保存與焦點管理,現在得自己記帳。",
       "terms": [
         {
@@ -541,9 +541,9 @@
           "kind": "snippet",
           "label": "鍵盤事件直接在 webview 內監聽,不走 VS Code 指令系統",
           "file": "ui/main.ts",
-          "startLine": 404,
-          "endLine": 431,
-          "anchor": "window.addEventListener('keydown', (event: KeyboardEvent) => {\n  if (current.screen === 'fileList') {\n    if (event.key === 'Escape' && current.openMenuPath !== null) {\n      menuFocusPath = current.openMenuPath;\n      current = closeAttemptMenu(current);\n      render();\n    }\n    return;\n  }\n  if (current.screen === 'walking') {\n    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {\n      event.preventDefault();\n      onNextStep();\n    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {\n      event.preventDefault();\n      onPrevStep();\n    } else if (event.key === 'Escape') {\n      event.preventDefault();\n      onBackToList();\n    } else if (event.key === 'Home' || event.key === 'r' || event.key === 'R') {\n      // 主鍵是 Home,不是字母鍵——中文輸入法作用中時,字母鍵的 keydown 可能被\n      // 輸入法攔截去組字,事件到不了這裡(實測 R 在中文輸入法環境下完全無反應,\n      // 方向鍵/Escape 因為不是字母鍵而不受影響)。保留 r/R 給英文鍵盤環境當備用鍵。\n      event.preventDefault();\n      onRevealCurrentStep();\n    }\n  }\n});"
+          "startLine": 439,
+          "endLine": 471,
+          "anchor": "window.addEventListener('keydown', (event: KeyboardEvent) => {\n  if (current.screen === 'fileList') {\n    if (event.key === 'Escape' && current.openMenuPath !== null) {\n      menuFocusPath = current.openMenuPath;\n      current = closeAttemptMenu(current);\n      render();\n    }\n    return;\n  }\n  if (current.screen === 'walking') {\n    // 任一修飾鍵按下時不攔截,交還給面板自身處理——Shift+方向鍵是逐字選取、\n    // Cmd/Alt+方向鍵是跳行首行尾與逐詞移動,全都是文字選取與游標移動操作,\n    // 逐一列舉按鍵組合會漏(walk-player capability「步驟導覽」MODIFIED\n    // requirement,design.md 決策 11)。\n    if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;\n    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {\n      event.preventDefault();\n      onNextStep();\n    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {\n      event.preventDefault();\n      onPrevStep();\n    } else if (event.key === 'Escape') {\n      event.preventDefault();\n      onBackToList();\n    } else if (event.key === 'Home' || event.key === 'r' || event.key === 'R') {\n      // 主鍵是 Home,不是字母鍵——中文輸入法作用中時,字母鍵的 keydown 可能被\n      // 輸入法攔截去組字,事件到不了這裡(實測 R 在中文輸入法環境下完全無反應,\n      // 方向鍵/Escape 因為不是字母鍵而不受影響)。保留 r/R 給英文鍵盤環境當備用鍵。\n      event.preventDefault();\n      onRevealCurrentStep();\n    }\n  }\n});"
         },
         {
           "kind": "pitfall",
@@ -551,7 +551,7 @@
           "reality": "不行。host 用「`currentWalk` 是否還在」判斷該不該回灌 `walkRestored`。若回列表時送 `webviewReady`,host 會以為 webview 只是重建了、仍在同一份導讀,立刻把讀者拉回去。所以 `backToList` 必須是獨立的一種訊息——它同時是「請給我列表」和「我離開這份導讀了」。"
         }
       ],
-      "anchor": "function render(): void {\n  const root = document.getElementById('app');\n  if (!root) return;\n  root.innerHTML = '';\n\n  if (current.screen === 'fileList') {\n    lastWalkingStepIndex = null;\n    root.appendChild(\n      renderFileList(\n        current.files,\n        { openMenuPath: current.openMenuPath, pendingClearPath: current.pendingClearPath },\n        {\n          onSelect: onSelectFile,\n          onToggleMenu: onToggleAttemptMenu,\n          onTriggerClear: onTriggerClearAttempt,\n          onResume: onResumeWalk,\n        },\n      ),\n    );\n    restoreFileListFocus(root, current);\n  } else if (current.screen === 'error') {\n    lastWalkingStepIndex = null;\n    root.appendChild(renderError(current.message, onBackToList));\n  } else if (current.screen === 'walking') {\n    const isStepTransition = lastWalkingStepIndex !== current.stepIndex;\n    lastWalkingStepIndex = current.stepIndex;\n    root.appendChild(\n      renderWalking(\n        current,\n        {\n          onNext: onNextStep,\n          onPrev: onPrevStep,\n          onToggleTerm: onToggleTerm,\n          onEnterQuiz: onEnterQuiz,\n          onOpenReference: onOpenReference,\n          onJumpToSnippet: onJumpToSnippet,\n          onBackToList: onBackToList,\n          onOpenStaleFile: onOpenStaleFile,\n          onCopyRegenerateHint: onCopyRegenerateHint,\n          onRevealCurrentStep: onRevealCurrentStep,\n        },\n        stepJumpError,\n        isStepTransition,\n        snippetPreviews,\n      ),\n    );\n  } else if (current.screen === 'quiz') {\n    lastWalkingStepIndex = null;\n    root.appendChild(renderQuiz(current, { onSelectAnswer, onSubmitQuiz, onCancelQuiz, onOpenReference }));\n  } else if (current.screen === 'quizResult') {\n    lastWalkingStepIndex = null;\n    root.appendChild(\n      renderQuizResult(current, {\n        onRetryQuiz: onRetryQuiz,\n        onRestartWalk: onRestartWalk,\n        onBackToList: onBackToList,\n        onOpenReference: onOpenReference,\n      }),\n    );\n  }\n  persistUiState();\n}"
+      "anchor": "function render(): void {\n  const root = document.getElementById('app');\n  if (!root) return;\n  root.innerHTML = '';\n\n  if (current.screen === 'fileList') {\n    lastWalkingStepIndex = null;\n    root.appendChild(\n      renderFileList(\n        current.files,\n        { openMenuPath: current.openMenuPath, pendingClearPath: current.pendingClearPath },\n        {\n          onSelect: onSelectFile,\n          onToggleMenu: onToggleAttemptMenu,\n          onTriggerClear: onTriggerClearAttempt,\n          onResume: onResumeWalk,\n        },\n      ),\n    );\n    restoreFileListFocus(root, current);\n  } else if (current.screen === 'error') {\n    lastWalkingStepIndex = null;\n    root.appendChild(renderError(current.message, onBackToList));\n  } else if (current.screen === 'walking') {\n    const isStepTransition = lastWalkingStepIndex !== current.stepIndex;\n    lastWalkingStepIndex = current.stepIndex;\n    root.appendChild(\n      renderWalking(\n        current,\n        {\n          onNext: onNextStep,\n          onPrev: onPrevStep,\n          onToggleTerm: onToggleTerm,\n          onEnterQuiz: onEnterQuiz,\n          onOpenReference: onOpenReference,\n          onJumpToSnippet: onJumpToSnippet,\n          onBackToList: onBackToList,\n          onOpenStaleFile: onOpenStaleFile,\n          onCopyRegenerateHint: onCopyRegenerateHint,\n          onRevealCurrentStep: onRevealCurrentStep,\n          onAskAgent: onAskAgent,\n        },\n        stepJumpError,\n        isStepTransition,\n        snippetPreviews,\n        askAgentFeedback,\n      ),\n    );\n  } else if (current.screen === 'quiz') {\n    lastWalkingStepIndex = null;\n    root.appendChild(renderQuiz(current, { onSelectAnswer, onSubmitQuiz, onCancelQuiz, onOpenReference }));\n  } else if (current.screen === 'quizResult') {\n    lastWalkingStepIndex = null;\n    root.appendChild(\n      renderQuizResult(current, {\n        onRetryQuiz: onRetryQuiz,\n        onRestartWalk: onRestartWalk,\n        onBackToList: onBackToList,\n        onOpenReference: onOpenReference,\n      }),\n    );\n  }\n  persistUiState();\n}"
     },
     {
       "title": "第 22 步:markdown 渲染——只取 token,不取 HTML",

@@ -459,13 +459,30 @@ button.codewalk-back-to-list:hover:not(:disabled) {
   opacity: 0.8;
 }
 
-/* 恢復閱讀進度後把編輯器帶回目前步驟的顯式入口——沿用 .codewalk-back-to-list
-   同一套「透明底、hover 疊加半透明」視覺語言,不跟主題按鈕色掛勾(見該處說明)。 */
-.codewalk-reveal-step {
+/* 「回到本步位置」與「問 AI」並列成一組步驟動作(design.md 決策 8)——
+   flex-wrap 讓面板拉到極窄時折行,不橫向溢出(design.md Risks)。 */
+.codewalk-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 0.6rem;
+}
+
+.codewalk-ask-agent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+/* 恢復閱讀進度後把編輯器帶回目前步驟的顯式入口,以及「問 AI」的兩個出口——
+   沿用 .codewalk-back-to-list 同一套「透明底、hover 疊加半透明」視覺語言,
+   不跟主題按鈕色掛勾(見該處說明)。 */
+.codewalk-reveal-step,
+.codewalk-ask-agent-chat,
+.codewalk-ask-agent-copy {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  margin: 0 0 0.6rem;
   padding: 0.2rem 0.5rem;
   font-size: 0.85em;
   color: var(--vscode-descriptionForeground);
@@ -473,7 +490,43 @@ button.codewalk-back-to-list:hover:not(:disabled) {
   border: 1px solid var(--vscode-panel-border);
 }
 
-button.codewalk-reveal-step:hover:not(:disabled) {
+button.codewalk-reveal-step:hover:not(:disabled),
+button.codewalk-ask-agent-chat:hover:not(:disabled),
+button.codewalk-ask-agent-copy:hover:not(:disabled) {
+  background-color: var(--codewalk-hover-overlay, rgba(128, 128, 128, 0.2));
+}
+
+/* 框選文字時就近浮出的入口——與常駐入口是同一組按鈕的加強版位置,不是獨立
+   功能。position: fixed 且掛在 document.body(不在 #app 內),因為 render()
+   每次重繪都會整棵樹替換 #app,掛在裡面會被連帶清空(design.md 決策 9)。
+   水平貼齊容器左緣、只算垂直位置,避開窄面板下追隨游標必然溢出的問題。
+   顯隱刻意不在這裡設 display——一律由 ui/main.ts 用行內 style.display 控制,
+   避免跟瀏覽器內建的 [hidden] 樣式規則衝突(hidden 屬性與作者樣式表同優先度
+   時,作者樣式永遠贏,會讓 hidden 完全失效)。 */
+.codewalk-ask-agent-popup {
+  position: fixed;
+  z-index: 10;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.3rem;
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+  border-radius: 3px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.codewalk-ask-agent-popup button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.85em;
+  color: var(--vscode-descriptionForeground);
+  background: transparent;
+  border: 1px solid var(--vscode-panel-border);
+}
+
+.codewalk-ask-agent-popup button:hover:not(:disabled) {
   background-color: var(--codewalk-hover-overlay, rgba(128, 128, 128, 0.2));
 }
 

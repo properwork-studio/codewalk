@@ -4,12 +4,25 @@
 
 import { t } from '../../shared/i18n';
 import { detectLanguage } from '../../shared/language';
-import { effectiveLineRange, type AnchorStatus, type SnippetPreviewResult } from '../../shared/protocol';
+import {
+  effectiveLineRange,
+  type AnchorStatus,
+  type AskAgentDestination,
+  type SnippetPreviewResult,
+} from '../../shared/protocol';
 import type { CodewalkStep } from '../../shared/schema';
 import { renderMarkdownBlock, renderMarkdownInline } from '../markdown';
 import { isAtLastStep, type WalkingState } from '../state';
 import { el, icon } from './dom';
 import { renderItems, renderSnippetCode, renderStaleLabel } from './items';
+
+/**
+ * `askAgentResult` 的結果整理成畫面要呈現的回饋。`'copied'` 對應 outcome
+ * `'clipboard'`——複製成功時按鈕文字暫時變化,不需要獨立橫幅
+ * (design.md 決策 6)。outcome `'chat'` 不產生回饋:chat 面板自己跳出來
+ * 就是回饋。
+ */
+export type AskAgentFeedback = 'copied' | 'chatUnavailable' | 'failed';
 
 /** 走讀畫面各項互動的回呼;由 `ui/main.ts` 提供,一律轉成送往 host 的訊息。 */
 export interface WalkingHandlers {
@@ -23,6 +36,8 @@ export interface WalkingHandlers {
   onOpenStaleFile: () => void;
   onCopyRegenerateHint: () => void;
   onRevealCurrentStep: () => void;
+  /** 把目前步驟(併入 host 端此刻持有的框選文字,若有)交給 AI 助手。 */
+  onAskAgent: (destination: AskAgentDestination) => void;
 }
 
 /**
@@ -75,6 +90,48 @@ function renderStepStaleBlock(
   return container;
 }
 
+/**
+ * 常駐的「問 AI」入口:與 `codewalk-reveal-step` 並列成一組步驟動作
+ * (design.md 決策 8)。`aria-live` 讓複製成功的文字變化被螢幕閱讀器唸出。
+ */
+function renderAskAgentActions(
+  onAskAgent: (destination: AskAgentDestination) => void,
+  feedback: AskAgentFeedback | null,
+): HTMLElement {
+  const group = el('div', 'codewalk-ask-agent-actions');
+
+  const chatButton = el('button', 'codewalk-ask-agent-chat');
+  chatButton.appendChild(icon('comment-discussion'));
+  chatButton.appendChild(el('span', undefined, t('askAgent.sendToChat')));
+  chatButton.addEventListener('click', () => onAskAgent('chat'));
+  group.appendChild(chatButton);
+
+  const copyButton = el('button', 'codewalk-ask-agent-copy');
+  copyButton.setAttribute('aria-live', 'polite');
+  copyButton.appendChild(icon('copy'));
+  copyButton.appendChild(
+    el('span', undefined, feedback === 'copied' ? t('askAgent.copied') : t('askAgent.copyPrompt')),
+  );
+  copyButton.addEventListener('click', () => onAskAgent('clipboard'));
+  group.appendChild(copyButton);
+
+  return group;
+}
+
+/** Chat 不可用或連剪貼簿都失敗時的警示——沿用既有 `.codewalk-warning` 樣式(design.md Open Question 2)。 */
+function renderAskAgentWarning(feedback: 'chatUnavailable' | 'failed'): HTMLElement {
+  const warning = el('div', 'codewalk-warning');
+  warning.appendChild(icon('warning'));
+  warning.appendChild(
+    el(
+      'span',
+      undefined,
+      feedback === 'chatUnavailable' ? t('askAgent.chatUnavailable') : t('askAgent.failed'),
+    ),
+  );
+  return warning;
+}
+
 function createStepDots(current: number, total: number): HTMLElement {
   const dots = el('div', 'codewalk-step-dots');
   dots.setAttribute('role', 'img');
@@ -99,6 +156,7 @@ function createStepDots(current: number, total: number): HTMLElement {
  * 展開術語這類重繪也播動畫會造成整頁閃爍
  * @param snippetPreviews - 目前步驟的 snippet 內容;切換步驟後、新內容送達前
  * 會是空陣列,此時 snippet 只顯示標題列
+ * @param askAgentFeedback - 最近一次「問 AI」動作的結果,`null` 代表沒有要顯示的回饋
  */
 export function renderWalking(
   state: WalkingState,
@@ -106,6 +164,7 @@ export function renderWalking(
   jumpError: string | null = null,
   animateStepChange = true,
   snippetPreviews: SnippetPreviewResult[] = [],
+  askAgentFeedback: AskAgentFeedback | null = null,
 ): HTMLElement {
   const step = state.walk.steps[state.stepIndex];
   const stepReport = state.anchorReport.steps[state.stepIndex] ?? {
@@ -167,7 +226,19 @@ export function renderWalking(
   // 被攔截去組字(實測結果),Home 不受影響;英文鍵盤環境另外保留 R 當備用鍵。
   revealButton.title = t('walking.revealStepTitle');
   revealButton.addEventListener('click', handlers.onRevealCurrentStep);
-  container.appendChild(revealButton);
+
+  // 「回到本步位置」與「問 AI」同性質——對這一步做點什麼,不是改變閱讀狀態,
+  // 並列成一組步驟動作(design.md 決策 8)。
+  const stepActions = el('div', 'codewalk-step-actions');
+  stepActions.appendChild(revealButton);
+  stepActions.appendChild(
+    renderAskAgentActions(handlers.onAskAgent, askAgentFeedback === 'copied' ? 'copied' : null),
+  );
+  container.appendChild(stepActions);
+
+  if (askAgentFeedback === 'chatUnavailable' || askAgentFeedback === 'failed') {
+    container.appendChild(renderAskAgentWarning(askAgentFeedback));
+  }
 
   if (stepReport.step.kind === 'stale') {
     container.appendChild(renderStepStaleBlock(step, stepReport.step, handlers.onOpenStaleFile));

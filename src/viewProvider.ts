@@ -1,8 +1,15 @@
 import * as vscode from 'vscode';
 import { getLocale, t } from '../shared/i18n';
-import { parseWebviewToHostMessage, type AnchorReport, type HostToWebviewMessage } from '../shared/protocol';
+import {
+  parseWebviewToHostMessage,
+  type AnchorReport,
+  type AskAgentDestination,
+  type AskAgentOutcome,
+  type HostToWebviewMessage,
+} from '../shared/protocol';
 import { scoreQuiz, type CodewalkFile } from '../shared/schema';
 import { buildAnchorReport, effectiveLineRange, emptyAnchorReport, jumpModeFor } from './anchorCheck';
+import { buildAskAgentPrompt } from './askAgentPrompt';
 import { AttemptStore } from './attemptStore';
 import { jumpToStep } from './fileJump';
 import { ProgressStore } from './progressStore';
@@ -35,6 +42,13 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined;
   private currentWalk: CodewalkFile | undefined;
   private currentWalkPath: string | undefined;
+  /**
+   * Chat 面板在這個 VS Code session 裡是否已經被開啟過。第一次冷啟動時,
+   * `workbench.action.chat.open` 的 Promise 常常在 Chat 自己的 webview 真正
+   * 掛載完成前就 resolve,導致 `query` 被吃掉(讀者要點兩次才生效)——見
+   * `handleAskAgent()` 的補送邏輯。
+   */
+  private chatWarmedUp = false;
   private stepIndex = 0;
   private refDrifted = false;
   private anchorReport: AnchorReport | undefined;
@@ -123,6 +137,9 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
       case 'copyRegenerateHint':
         await this.handleCopyRegenerateHint();
         break;
+      case 'askAgent':
+        await this.handleAskAgent(msg.destination, msg.selection);
+        break;
       case 'backToList':
         this.clearActiveWalk();
         await this.sendFileList();
@@ -146,6 +163,70 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
     const hint = this.currentWalk?.regenerateHint;
     if (!hint) return;
     await vscode.env.clipboard.writeText(hint);
+  }
+
+  /**
+   * 把目前步驟(可選地帶框選文字)交給 AI 助手。`chat` 失敗時退回剪貼簿並回報
+   * `chatUnavailable`——webview 不能樂觀顯示「已送出」,那是靜默且誤導的失敗
+   * (design.md 決策 5、6,ask-agent capability「Chat 不可用時退回剪貼簿並明確
+   * 告知」)。
+   */
+  private async handleAskAgent(destination: AskAgentDestination, selection?: string): Promise<void> {
+    if (!this.currentWalk || !this.currentWalkPath) return;
+    const status = this.anchorReport?.steps[this.stepIndex]?.step ?? { kind: 'unanchored' as const };
+    const prompt = buildAskAgentPrompt({
+      walk: this.currentWalk,
+      walkPath: this.currentWalkPath,
+      workspaceRoot: getWorkspaceRoot(),
+      stepIndex: this.stepIndex,
+      stepStatus: status,
+      selection,
+    });
+
+    if (destination === 'clipboard') {
+      await this.writeAskAgentClipboard(prompt, 'clipboard');
+      return;
+    }
+
+    try {
+      // isPartialQuery: true——只填入不代讀者送出。Cursor 本來就不自動送
+      // (即使支援此命令的版本也只填入),設 true 讓兩個編輯器行為一致
+      // (design.md 決策 4)。不預先用 getCommands() 偵測命令是否存在:
+      // 那只答得出「存不存在」,答不出「執行失敗」,try/catch 兩者都涵蓋
+      // (design.md 決策 5)。
+      await vscode.commands.executeCommand('workbench.action.chat.open', {
+        query: prompt,
+        isPartialQuery: true,
+      });
+      if (!this.chatWarmedUp) {
+        this.chatWarmedUp = true;
+        // 冷啟動時 Chat 自己的 webview 常常還沒掛載完成,query 就被吃掉了
+        // (讀者要點兩次才生效,見手動驗證的實測結果)。只在這個 session 的
+        // 第一次補送一次;之後面板已經「熱」了,不再需要這個延遲。冷啟動
+        // 當下面板連可互動的輸入框都還沒掛出來,不會有「補送蓋掉讀者已輸入
+        // 內容」的風險。
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        await vscode.commands.executeCommand('workbench.action.chat.open', {
+          query: prompt,
+          isPartialQuery: true,
+        });
+      }
+      this.post({ type: 'askAgentResult', outcome: 'chat' });
+    } catch {
+      await this.writeAskAgentClipboard(prompt, 'chatUnavailable');
+    }
+  }
+
+  private async writeAskAgentClipboard(
+    prompt: string,
+    outcome: Extract<AskAgentOutcome, 'clipboard' | 'chatUnavailable'>,
+  ): Promise<void> {
+    try {
+      await vscode.env.clipboard.writeText(prompt);
+      this.post({ type: 'askAgentResult', outcome });
+    } catch {
+      this.post({ type: 'askAgentResult', outcome: 'failed' });
+    }
   }
 
   private async handleQuizSubmitted(answers: number[]): Promise<void> {

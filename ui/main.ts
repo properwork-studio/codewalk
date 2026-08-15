@@ -1,6 +1,12 @@
-import { resolveLocale, setLocale } from '../shared/i18n';
-import type { HostToWebviewMessage, SnippetPreviewResult, WebviewToHostMessage } from '../shared/protocol';
+import { resolveLocale, setLocale, t } from '../shared/i18n';
+import type {
+  AskAgentDestination,
+  HostToWebviewMessage,
+  SnippetPreviewResult,
+  WebviewToHostMessage,
+} from '../shared/protocol';
 import { applyEditorTheme, onHighlightReady } from './highlight';
+import { el, icon } from './render/dom';
 import {
   applyPersistedUiState,
   cancelQuiz,
@@ -23,7 +29,14 @@ import {
   type QuizState,
   type WalkingState,
 } from './state';
-import { renderError, renderFileList, renderQuiz, renderQuizResult, renderWalking } from './render';
+import {
+  renderError,
+  renderFileList,
+  renderQuiz,
+  renderQuizResult,
+  renderWalking,
+  type AskAgentFeedback,
+} from './render';
 
 declare function acquireVsCodeApi(): {
   postMessage: (message: WebviewToHostMessage) => void;
@@ -164,10 +177,12 @@ function render(): void {
           onOpenStaleFile: onOpenStaleFile,
           onCopyRegenerateHint: onCopyRegenerateHint,
           onRevealCurrentStep: onRevealCurrentStep,
+          onAskAgent: onAskAgent,
         },
         stepJumpError,
         isStepTransition,
         snippetPreviews,
+        askAgentFeedback,
       ),
     );
   } else if (current.screen === 'quiz') {
@@ -222,6 +237,7 @@ function onNextStep(): void {
   if (current.screen === 'walking') {
     current = nextStep(current);
     stepJumpError = null;
+    clearAskAgentFeedback();
     snippetPreviews = [];
     render();
   }
@@ -232,6 +248,7 @@ function onPrevStep(): void {
   if (current.screen === 'walking') {
     current = prevStep(current);
     stepJumpError = null;
+    clearAskAgentFeedback();
     snippetPreviews = [];
     render();
   }
@@ -343,6 +360,7 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
         stepIndex: msg.stepIndex,
       };
       stepJumpError = null;
+      clearAskAgentFeedback();
       snippetPreviews = msg.snippetPreviews;
       break;
     case 'walkRestored': {
@@ -356,6 +374,7 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
       );
       current = restored;
       stepJumpError = null;
+      clearAskAgentFeedback();
       // snippetPreviews 是 host 依 msg.stepIndex 讀出的內容——只有還原結果
       // 剛好落在同一步時才能沿用,否則寧可先留白,等讀者切步驟時自然補上。
       snippetPreviews =
@@ -367,6 +386,7 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
       if (current.screen === 'walking') {
         current = { ...current, stepIndex: msg.stepIndex };
         stepJumpError = null;
+        clearAskAgentFeedback();
         snippetPreviews = msg.snippetPreviews;
       }
       break;
@@ -375,6 +395,21 @@ window.addEventListener('message', (event: MessageEvent<HostToWebviewMessage>) =
       break;
     case 'stepJumpError':
       stepJumpError = msg.message;
+      break;
+    case 'askAgentResult':
+      clearAskAgentFeedback();
+      if (msg.outcome === 'clipboard') {
+        askAgentFeedback = 'copied';
+        // 「已複製」是暫時性的按鈕文字變化,不是恆常狀態——與 stepJumpError
+        // 這類要等到換步驟才清除的錯誤不同,靠計時器自己收尾。
+        askAgentFeedbackTimer = setTimeout(() => {
+          askAgentFeedback = null;
+          askAgentFeedbackTimer = null;
+          if (current.screen === 'walking') render();
+        }, 1500);
+      } else if (msg.outcome === 'chatUnavailable' || msg.outcome === 'failed') {
+        askAgentFeedback = msg.outcome;
+      }
       break;
     case 'themeChanged':
       // applyEditorTheme() 是非同步(loadTheme 要等 Shiki 內部處理完成),下面的
@@ -411,6 +446,11 @@ window.addEventListener('keydown', (event: KeyboardEvent) => {
     return;
   }
   if (current.screen === 'walking') {
+    // 任一修飾鍵按下時不攔截,交還給面板自身處理——Shift+方向鍵是逐字選取、
+    // Cmd/Alt+方向鍵是跳行首行尾與逐詞移動,全都是文字選取與游標移動操作,
+    // 逐一列舉按鍵組合會漏(walk-player capability「步驟導覽」MODIFIED
+    // requirement,design.md 決策 11)。
+    if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
     if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
       event.preventDefault();
       onNextStep();
@@ -437,6 +477,102 @@ window.addEventListener('click', (event: MouseEvent) => {
   menuFocusPath = current.openMenuPath;
   current = closeAttemptMenu(current);
   render();
+});
+
+// askAgent 相關的暫態——都不進 PersistedUiState(design.md 決策 9)。
+// currentSelection 由 selectionchange 更新,是「host 送出提問時該不該帶框選
+// 文字」的唯一真相來源,常駐入口與就近浮出入口共用同一個值、同一個 onAskAgent。
+let currentSelection: string | undefined;
+let askAgentFeedback: AskAgentFeedback | null = null;
+let askAgentFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
+let askAgentPopup: HTMLElement | null = null;
+
+function clearAskAgentFeedback(): void {
+  askAgentFeedback = null;
+  if (askAgentFeedbackTimer !== null) {
+    clearTimeout(askAgentFeedbackTimer);
+    askAgentFeedbackTimer = null;
+  }
+}
+
+function onAskAgent(destination: AskAgentDestination): void {
+  vscode.postMessage({ type: 'askAgent', destination, selection: currentSelection });
+}
+
+/**
+ * 就近浮出入口——與常駐入口是同一組動作的加強版位置,不是獨立功能,兩者共用
+ * `onAskAgent()`。掛在 `document.body` 而非 `#app` 內,因為 `render()` 每次
+ * 重繪都整棵樹替換 `#app`,掛在裡面會被連帶清空(design.md 決策 9)。
+ */
+function ensureAskAgentPopup(): HTMLElement {
+  if (askAgentPopup) return askAgentPopup;
+  const popup = el('div', 'codewalk-ask-agent-popup');
+  // 用行內 style.display 控制顯隱,不用 hidden 屬性——hidden 是靠瀏覽器內建的
+  // `[hidden] { display: none }` 生效,但 theme.css 對這個 class 自己也設了
+  // display,同優先度下作者樣式表永遠贏過瀏覽器內建樣式,會讓 hidden 屬性
+  // 完全失效(浮出後永遠消不掉)。行內樣式的優先度贏過任何 class 規則,
+  // 徹底避開這個衝突。
+  popup.style.display = 'none';
+
+  const chatButton = el('button');
+  chatButton.type = 'button';
+  chatButton.appendChild(icon('comment-discussion'));
+  chatButton.appendChild(el('span', undefined, t('askAgent.sendToChat')));
+  chatButton.addEventListener('click', () => {
+    onAskAgent('chat');
+    hideAskAgentPopup();
+  });
+  popup.appendChild(chatButton);
+
+  const copyButton = el('button');
+  copyButton.type = 'button';
+  copyButton.appendChild(icon('copy'));
+  copyButton.appendChild(el('span', undefined, t('askAgent.copyPrompt')));
+  copyButton.addEventListener('click', () => {
+    onAskAgent('clipboard');
+    hideAskAgentPopup();
+  });
+  popup.appendChild(copyButton);
+
+  document.body.appendChild(popup);
+  askAgentPopup = popup;
+  return popup;
+}
+
+function hideAskAgentPopup(): void {
+  if (askAgentPopup) askAgentPopup.style.display = 'none';
+}
+
+/**
+ * 垂直跟隨選取結尾、水平貼齊 `#app` 容器左緣——面板很窄,若水平追隨游標,
+ * 靠右選取時必然溢出,得再寫一套 clamp 邏輯(design.md 決策 9)。
+ */
+function positionAskAgentPopup(range: Range): void {
+  const app = document.getElementById('app');
+  if (!app) return;
+  const popup = ensureAskAgentPopup();
+  const rangeRect = range.getBoundingClientRect();
+  const appRect = app.getBoundingClientRect();
+  popup.style.left = `${appRect.left + 8}px`;
+  popup.style.top = `${rangeRect.bottom + 4}px`;
+  popup.style.display = 'flex';
+}
+
+document.addEventListener('selectionchange', () => {
+  if (current.screen !== 'walking') {
+    currentSelection = undefined;
+    hideAskAgentPopup();
+    return;
+  }
+  const selection = document.getSelection();
+  const text = selection && !selection.isCollapsed ? selection.toString().trim() : '';
+  if (!selection || !text) {
+    currentSelection = undefined;
+    hideAskAgentPopup();
+    return;
+  }
+  currentSelection = text;
+  positionAskAgentPopup(selection.getRangeAt(0));
 });
 
 // 捲動位置屬於「webview 自行保留的細節狀態」(design.md 決策 4),沒有對應的

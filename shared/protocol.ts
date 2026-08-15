@@ -96,6 +96,19 @@ export function effectiveLineRange(
   return status.kind === 'shifted' ? { startLine: status.startLine, endLine: status.endLine } : original;
 }
 
+/**
+ * 讀者觸發「把這一步交給 AI」時選擇的出口。兩者產生完全相同的提問內容,
+ * 差別只在送到哪(ask-agent capability「把當前步驟交給 AI 助手的入口」)。
+ */
+export type AskAgentDestination = 'chat' | 'clipboard';
+
+/**
+ * `askAgent` 訊息實際發生的結果,決定 webview 該顯示什麼回饋。`chatUnavailable`
+ * 與 `failed` 是兩種不同的降級:前者已改寫剪貼簿成功,後者連剪貼簿都失敗
+ * (design.md 決策 6)。
+ */
+export type AskAgentOutcome = 'chat' | 'clipboard' | 'chatUnavailable' | 'failed';
+
 /** VS Code 主題 JSON 的 tokenColors 條目;scope 可以是單一字串或字串陣列。 */
 export interface ThemeTokenColorRule {
   scope: string | string[];
@@ -159,7 +172,13 @@ export type HostToWebviewMessage =
       refDrifted: boolean;
       anchorReport: AnchorReport;
       snippetPreviews: SnippetPreviewResult[];
-    };
+    }
+  /**
+   * 對 `askAgent` 的結果回報。**送進 chat 失敗而退回剪貼簿時,webview 不能
+   * 樂觀地顯示「已送出」**——那是靜默且誤導的失敗(design.md 決策 6),
+   * 所以這則訊息一律等 host 端動作完成才送出,不是意圖的鏡射。
+   */
+  | { type: 'askAgentResult'; outcome: AskAgentOutcome };
 
 /**
  * webview → host。一律經 {@link parseWebviewToHostMessage} 驗證後才處理。
@@ -186,6 +205,11 @@ export type WebviewToHostMessage =
   | { type: 'clearAttempt'; path: string }
   /** 把導讀的 regenerateHint 複製到剪貼簿。 */
   | { type: 'copyRegenerateHint' }
+  /**
+   * 把目前步驟(可選地帶框選文字)交給 AI 助手。`selection` 省略代表問整步,
+   * 不另立布林欄位——意圖本來就是同一個,差別只在送到哪(design.md 決策 7)。
+   */
+  | { type: 'askAgent'; destination: AskAgentDestination; selection?: string }
   /** 從列表接續上次的閱讀進度;與 selectWalkFile 的差別是起始步驟與不跳轉編輯器。 */
   | { type: 'resumeWalk'; path: string }
   /** 把編輯器帶回目前步驟的位置(面板按鈕或 Home 鍵)。 */
@@ -240,6 +264,13 @@ export function parseWebviewToHostMessage(data: unknown): WebviewToHostMessage |
       return typeof d.path === 'string' ? { type: 'clearAttempt', path: d.path } : null;
     case 'copyRegenerateHint':
       return { type: 'copyRegenerateHint' };
+    case 'askAgent': {
+      const destination = d.destination;
+      if (destination !== 'chat' && destination !== 'clipboard') return null;
+      const selection = d.selection;
+      if (selection !== undefined && typeof selection !== 'string') return null;
+      return { type: 'askAgent', destination, selection };
+    }
     case 'resumeWalk':
       return typeof d.path === 'string' ? { type: 'resumeWalk', path: d.path } : null;
     case 'revealCurrentStep':

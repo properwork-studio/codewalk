@@ -68,6 +68,19 @@ const zhTW = {
 
   'host.noWorkspace': '未開啟任何 workspace',
   'host.fileNotFound': '找不到檔案:{file}',
+
+  'askAgent.buttonLabel': '問 AI',
+  'askAgent.sendToChat': '送進 Chat',
+  'askAgent.copyPrompt': '複製提問',
+  'askAgent.copied': '已複製',
+  'askAgent.chatUnavailable': '這個編輯器沒有可用的 Chat,已改為複製到剪貼簿',
+  'askAgent.failed': '複製失敗,請稍後再試',
+  'askAgent.promptIntro': '我正在讀這份 CodeWalk 導讀的第 {step} 步「{title}」:',
+  'askAgent.promptLocation': '導讀檔:{path}(steps[{index}])',
+  'askAgent.promptFileRef': '這一步對應:{file}:{startLine}-{endLine}',
+  'askAgent.promptStale': '這段程式碼在導讀產出後已被改動,導讀描述的內容可能與現況不符。',
+  'askAgent.promptSelectionLabel': '我不懂的是:',
+  'askAgent.promptInstruction': '請先讀那份導讀的 steps[{index}] 了解這一步在講什麼,再回答。',
 } as const;
 
 /** 所有可用的文案 key。新增文案時只要加進 zhTW,英文表漏補就會編譯失敗。 */
@@ -133,6 +146,21 @@ const en: Record<TranslationKey, string> = {
 
   'host.noWorkspace': 'No workspace is open',
   'host.fileNotFound': 'File not found: {file}',
+
+  'askAgent.buttonLabel': 'Ask AI',
+  'askAgent.sendToChat': 'Send to Chat',
+  'askAgent.copyPrompt': 'Copy prompt',
+  'askAgent.copied': 'Copied',
+  'askAgent.chatUnavailable': 'This editor has no available Chat — copied to clipboard instead.',
+  'askAgent.failed': 'Copy failed — please try again.',
+  'askAgent.promptIntro': 'I\'m reading step {step} ("{title}") of this CodeWalk walk:',
+  'askAgent.promptLocation': 'Walk file: {path} (steps[{index}])',
+  'askAgent.promptFileRef': 'This step maps to: {file}:{startLine}-{endLine}',
+  'askAgent.promptStale':
+    'This code has changed since the walk was generated — the description below may not match the current code.',
+  'askAgent.promptSelectionLabel': "What I don't understand:",
+  'askAgent.promptInstruction':
+    'Please read steps[{index}] of that walk file to understand this step before answering.',
 };
 
 /** 介面支援的語言。導讀內容本身不受此影響——它的語言由產生器決定。 */

@@ -3,5 +3,5 @@
  * 分界對應 `ui/state.ts` 的四個畫面狀態:fileList / walking / quiz / quizResult。
  */
 export { renderError, renderFileList, type FileListHandlers } from './fileList';
-export { renderWalking, type WalkingHandlers } from './walking';
+export { renderWalking, type AskAgentFeedback, type WalkingHandlers } from './walking';
 export { renderQuiz, renderQuizResult, type QuizHandlers, type QuizResultHandlers } from './quiz';

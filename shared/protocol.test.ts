@@ -96,6 +96,33 @@ describe('parseWebviewToHostMessage', () => {
     expect(parseWebviewToHostMessage({ type: 'backToList' })).toEqual({ type: 'backToList' });
   });
 
+  it('parses an askAgent message without selection', () => {
+    expect(parseWebviewToHostMessage({ type: 'askAgent', destination: 'chat' })).toEqual({
+      type: 'askAgent',
+      destination: 'chat',
+      selection: undefined,
+    });
+  });
+
+  it('parses an askAgent message with selection', () => {
+    expect(
+      parseWebviewToHostMessage({ type: 'askAgent', destination: 'clipboard', selection: 'tenant 解析' }),
+    ).toEqual({
+      type: 'askAgent',
+      destination: 'clipboard',
+      selection: 'tenant 解析',
+    });
+  });
+
+  it('rejects askAgent with an invalid destination', () => {
+    expect(parseWebviewToHostMessage({ type: 'askAgent', destination: 'email' })).toBeNull();
+    expect(parseWebviewToHostMessage({ type: 'askAgent' })).toBeNull();
+  });
+
+  it('rejects askAgent with a non-string selection', () => {
+    expect(parseWebviewToHostMessage({ type: 'askAgent', destination: 'chat', selection: 42 })).toBeNull();
+  });
+
   it('rejects an unknown message type', () => {
     expect(parseWebviewToHostMessage({ type: 'unknown' })).toBeNull();
   });
