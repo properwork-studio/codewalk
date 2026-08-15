@@ -19,7 +19,7 @@ alone.
 
 | Scope | Use it when | Typical size |
 | --- | --- | --- |
-| `whole-codebase` | Onboarding someone new, or mapping a project you inherited | 15–25 steps |
+| `whole-codebase` | A new person's first day — one guided path through the project | 15–25 steps |
 | `git-diff` | Getting a reviewer through a large change before they review it | 5–12 steps |
 | `area: <what>` | One module, feature, or flow you name | 8–15 steps |
 
@@ -34,11 +34,29 @@ Generate a CodeWalk walkthrough for this repository and write it to
 
 SCOPE: whole-codebase
   Replace the line above with exactly one of:
-    whole-codebase          — the project as a whole
+    whole-codebase          — a first-day path through the project
     git-diff                — the current diff (uncommitted, or `git diff main...HEAD`)
     area: <what to cover>   — e.g. "area: the authentication flow"
 
 Before writing anything, run `git rev-parse HEAD` and use that full SHA as `ref`.
+
+## Tools you may have
+
+Check what is available before you start. None of these are required — this
+prompt works without them — but they remove the two failure modes that break
+walks most often: wrong line numbers and retyped anchors.
+
+- **CodeGraph MCP** (`codegraph_explore`) — use it for every step you write.
+  Query the symbol, then take the **line-numbered source** it returns for
+  `startLine`/`endLine` and the **verbatim source** for `anchor`. Never count
+  lines yourself. Its call paths tell you which code reaches which; treat that
+  as input to your ordering, not as the order itself — execution order and
+  teaching order are different things. For `git-diff` scope, its blast-radius
+  summary shows what else the change touches.
+- **DeepWiki MCP** — if this repository is indexed, read it first for the
+  architectural picture, then decide which thread through it is worth walking.
+- **Neither available** — read the files directly, copy anchors rather than
+  retyping them, and verify everything against the checklist at the end.
 
 ## What a walk is
 
@@ -53,10 +71,13 @@ because the middleware runs before the tenant is resolved" is the point.
 
 ## Scope-specific guidance
 
-- **whole-codebase** — order the steps so understanding compounds: entry point
-  first, then the main flow end to end, then the pieces that only make sense
-  once the flow is clear. Do not walk files alphabetically or by directory.
-  Skip anything a reader can infer (config boilerplate, barrel files).
+- **whole-codebase** — this is a **first-day path, not complete documentation**.
+  Order the steps so understanding compounds: entry point first, then the main
+  flow end to end, then the pieces that only make sense once the flow is clear.
+  Do not walk files alphabetically or by directory. Skip anything a reader can
+  infer (config boilerplate, barrel files). Completeness is not the goal, and
+  chasing it makes the walk worse — a reader who wants to *look something up*
+  has other tools. What they cannot get elsewhere is a considered order.
 
 - **git-diff** — the subject is the change, not the codebase. Lead with the
   problem it solves, then walk the change in the order that makes it make sense.
@@ -129,6 +150,11 @@ For `diff`, `diffText` is the hunk body only — no `diff --git`, `---`/`+++`, o
 `@@` headers. Prefix each line with `+`, `-`, or a space, and include at least
 one `+` or `-` line. `oldStartLine` is where the hunk starts in the pre-change
 file; `startLine` is where it starts after.
+
+**Link out rather than restate.** When a reader would need the full structure of
+a module, a `reference` item pointing at an external source — a generated wiki,
+the project's own docs — serves them better than a narration trying to summarise
+it. The walk's job is the path and the reasoning, not complete coverage.
 
 ## Terms
 
