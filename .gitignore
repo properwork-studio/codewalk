@@ -10,3 +10,7 @@ build/
 .claude/
 .codex/
 .agents/
+
+# 文件的衍生檔——markdown 才是真相,HTML/PDF 只是閱讀副本,需要時重新產生
+docs/*.html
+docs/*.pdf
