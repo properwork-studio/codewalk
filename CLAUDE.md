@@ -41,6 +41,8 @@ pnpm package      # vsce 打包 VSIX({起手後補})
 
 **導讀錨定紀律**:改到任何被 `.codewalk/` 導讀引用的程式碼(連只改註解都算)就會讓 anchor 失準,`tests/repoWalks.test.ts` 會紅。跑 `pnpm relocate-anchors` 檢查、`--write` 對齊——它只動 anchor 與行號,不改 narration;敘述本身也過時了才需要依 regenerateHint 重新產生整份導讀。
 
+**文件註解紀律**:匯出的 function、class、型別與每個檔案的頂層都要有 JSDoc(`/** */`,不是 `//`——只有前者 IDE 會 parse 並在 hover 顯示,AI 讀 codebase 產導讀時也吃這一層)。全專案已盤點補齊(commit `53af8de`),**新增檔案或改動簽章時同步更新**,不留過期註解。內容寫「為什麼」與非顯然的前提,不覆述函式名已經說完的事;`shared/schema.ts` 各欄位的 JSDoc **是 `.codewalk.json` 格式合約的一部分**(產生器照著寫導讀),改欄位必連帶改註解。
+
 ## 開發流程
 
 **變更分級**:
