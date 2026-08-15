@@ -6,6 +6,7 @@
 
 - **播放器與產生器分離**:extension 只認 `.codewalk.json` 開放格式,產生邏輯住 harness 的 explain-change(或任何來源)——理由:產生需要 AI+repo 脈絡,播放需要 UI 自由度,混在一起兩頭壞
 - **quiz 互動住 extension**:文件版做不到的互動正是本產品的存在理由之一
+  - **但現階段不升為產品核心主張**(2026-08-15,取代「要不要升」的懸而未決)——quiz 確實是唯一無人佔位的差異化點(競品分析掃了 14 個對象,零個有自測機制),但**個人使用情境下它不該有強制性**,而沒有強制性的東西撐不起「第一句話」。**出場條件:團隊版本**——屆時通過率與分數可以當成驗收 KPI(誰讀過、讀懂沒有),quiz 才從「功能」變成「主張」。在那之前定位不變:**對送審的作者是紀律,對 reviewer 是選配**(見 `docs/future-work.md` 第 4 項),README 第一句維持現狀不動
 - MVP 只做播放;「產生」按鈕(shell out `claude -p`)是二期,出場條件:MVP 自用滿意後
   - **注意「錄製」不等於「產生」**:產生是 AI 讀 diff 自動寫出導讀,錄製是人手動選一段程式碼寫敘述、不涉及 AI。上面那條禁的是產生;錄製是另一個決策,評估見 `docs/future-work.md`(含格式合約的時機問題——若要做錄製,`.codewalk.json` 很可能得加欄位,而使用者數是 0 的現在改它沒有成本)
 - **發佈已定案**(2026-08-07,取代原本「等實際使用需求出現再說」):走 Marketplace 公開發佈,上架欄位已備齊
@@ -20,6 +21,9 @@
 - 格式檔存目標 repo 的 `.codewalk/` 目錄,檔名帶日期(`YYYY-MM-DD-<主題>.codewalk.json`)
 - **衍生快照紀律**:`ref` 釘產出當下 commit;播放時偵測 HEAD ≠ ref 顯示「行號可能漂移」警告;不維護、過期即刪
 - 分層:extension host ⇄ postMessage 協定(單一定義)⇄ webview(禁碰 vscode API)
+- **agent 橋接走 MCP,不走 Language Model Tools**(2026-08-15)——決定性理由是 **Cursor**:它原生支援 MCP,但很可能不吃 VS Code 的 `languageModelTools` 貢獻點(它用自己的 agent,沒有實作 chat participant 生態),而 Cursor 是已經雙推 Open VSX 明確支援的目標。次要理由:MCP 同時涵蓋終端機 agent、CodeGraph/DeepWiki 在同一層對話、PR Review 註記(`docs/future-work.md` 第 4 項)可共用同一條管線
+  - **但「從面板框選一段去問 AI」不靠 MCP,靠 `workbench.action.chat.open`**——這是最容易搞混的地方。MCP 決定的是 *agent 能拉到什麼*,不是 *面板怎麼開口*。開口一律是 VS Code 命令(Cursor 2.3+ 才有,且只填入不自動送出,故一律 `isPartialQuery: true` 讓兩邊行為一致;命令不存在時退回剪貼簿)
+  - **MCP push 是加分不是前提**:`notifications/claude/channel` 是 Claude 專屬的實驗性能力。設計上把 **pull 當基本盤**(agent 呼叫 `codewalk_current_step` 是標準 MCP,永遠可用),push 只省掉讀者一次提問——這樣 channel 若消失是退化不是壞掉
 - schema 單點住 `shared/schema.ts`;格式變更視同破壞性 API 變更走 change
 - **檔案組織已查過,結論如下**(2026-08-07,依賴圖與變更頻率實測)——依賴方向乾淨(`shared/` 只依賴自己、`src/` 與 `ui/` 各自依賴 `shared/`,**無 src↔ui 互依、無循環**),三層架構守住了,所以「檔案看起來散亂」是視覺問題不是結構病,兩者處方不同:
   - **測試維持 co-located**(`foo.ts` 與 `foo.test.ts` 並排),不移到 `tests/` 鏡像目錄——改 A 檔時測試就在旁邊、重新命名時跟著走,是 Vitest/Jest 生態主流;移走要改 19 個測試的 import 成 `../../src/foo`,換來的只有「原始碼目錄看起來乾淨」。`explorer.fileNesting` **實測過但不採用**(2026-08-07,不合偏好已回復)——co-located 的決定不因此動搖:視覺整潔不值得拿結構去換,也不必再繞回去試一次。例外:不對應任何原始檔的測試住 `tests/`(如 `repoWalks.test.ts` 驗的是 `.codewalk/` 資料而非某支程式),搬動時**記得 `tsconfig.json` 的 include 要同步**——`vitest` 走 esbuild 轉譯不做型別檢查,漏掉 include 會讓該目錄安靜地脫離 `pnpm typecheck`

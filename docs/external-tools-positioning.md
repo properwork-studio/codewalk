@@ -253,12 +253,12 @@ CodeGraph 讓產一份導讀少 88% tool call、少 62% token —— 那正是�
 
 ### 需要決定(承接 `competitive-analysis.md` 第五節)
 
-1. **quiz 要不要從「功能之一」提升為產品核心主張?**
-   —— 14 個競品裡唯一無人做的,而且是「課程 vs 百科全書」這個分界唯一的可驗證形式。若要,README 第一句就得改。
+1. ~~**quiz 要不要從「功能之一」提升為產品核心主張?**~~
+   —— **已回答(2026-08-15):現階段不升,等團隊版本。** 理由:quiz 確實是 14 個競品裡唯一無人做的,但個人使用情境下不該有強制性,而沒有強制性的東西撐不起產品第一句話。**支點在團隊版**——通過率與分數屆時可以當驗收 KPI,那才是它從「功能」變成「主張」的時機。已寫進 `openspec/decisions.md`;README 第一句不動。
 
-2. **agent 橋接走 MCP channel 還是 Language Model Tools?**
-   —— 純技術選型,可獨立決定。MCP 跨 agent(Claude Code / Cursor / 任何支援 MCP 的),LM Tools 綁 VS Code 生態但整合最深。整合方案 C 需要前者。
-   —— **新增考量**:CodeGraph 與 DeepWiki 都走 MCP,選 MCP channel 能讓三者在同一層對話。
+2. ~~**agent 橋接走 MCP channel 還是 Language Model Tools?**~~
+   —— **已回答(2026-08-15):走 MCP。** 決定性理由是 Cursor 吃 MCP、很可能不吃 `languageModelTools`。次要理由:終端機 agent 也涵蓋、CodeGraph/DeepWiki 同層、PR Review 註記共用管線(即整合方案 C)。
+   —— **同時釐清了一個容易搞混的點**:「面板框選一段去問 AI」不是靠 MCP,是靠 `workbench.action.chat.open`。MCP 決定 agent 能拉到什麼,不決定面板怎麼開口。完整理由與限制寫在 `openspec/decisions.md` 技術段。
 
 3. ~~要不要放棄 `whole-codebase`?~~ —— **已回答:不放棄,重新定義。** 分界不在範圍大小,在 wiki vs walk。
 

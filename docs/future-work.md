@@ -343,4 +343,7 @@ IntelliJ Platform SDK 是 Kotlin/Java,webview 要走 JCEF 重寫,`shared/` 的 T
 6. **個人筆記** / **錄製實作** —— 看實際使用行為與投入意願
 7. **JetBrains** —— 等使用者要
 
-**還沒決定的兩題**(見 [`external-tools-positioning.md`](./external-tools-positioning.md) 待決事項):quiz 要不要升為產品核心主張、agent 橋接走哪一條。
+**待決事項**(見 [`external-tools-positioning.md`](./external-tools-positioning.md)):
+
+- ~~quiz 要不要升為產品核心主張~~ —— **已決(2026-08-15):現階段不升,等團隊版本**,理由與出場條件寫在 `openspec/decisions.md`
+- agent 橋接走 MCP channel 還是 LM Tools —— 討論中
