@@ -57,7 +57,7 @@ CodeWalk 的價值 = **導讀數量 × 導讀品質 × 播放體驗**。前兩�
 
 > **2026-08-16 更新:兩個方向都已完成。** 「面板 → agent(單步框選追問)」在 `add-ask-agent-from-panel`(2026-08-15)上線,走 `workbench.action.chat.open` + 剪貼簿,不是本節原本設想的 MCP/LM Tools 二選一——`decisions.md` 已定案「面板怎麼開口」與「agent 能拉到什麼」是兩個獨立問題,前者不需要 MCP。「agent → 面板(URI 開啟)」與「面板 → agent(MCP pull:agent 主動查詢讀者目前讀到哪、列出可播放導讀)」在 `add-mcp-bridge`(2026-08-16)上線,技術路徑選 MCP(理由見下方定案段落)。**MCP push(主動推播給 agent)仍列為後續**,目前只做 pull。
 >
-> **agent 開發者怎麼連上這個 MCP server**:extension 啟動時(若有已開啟的 workspace)會在本機起一個 Streamable HTTP server,把 `{port, pid}` 寫進 `{os.tmpdir()}/codewalk-mcp/{sha256(workspaceRoot 前 16 碼)}.json`。讀這份探索檔拿到 port 後即可連線,提供兩個唯讀工具:`codewalk_current_step`(讀者目前在看哪份導讀、第幾步、對應檔案與行號、錨驗證狀態)、`codewalk_list_walks`(目前 workspace 下可播放的導讀清單)。開啟面板則用 `vscode://{publisher}.{name}/open?walk=<workspace 相對路徑>&step=<0-based 索引,選填>`。細節見 `openspec/changes/archive/2026-08-16-add-mcp-bridge/design.md`。
+> **agent 開發者怎麼連上這個 MCP server**:extension 啟動時(若有已開啟的 workspace)會在本機起一個 Streamable HTTP server,把 `{port, pid}` 寫進 `{os.tmpdir()}/codewalk-mcp/{sha256(workspaceRoot 前 16 碼)}.json`。讀這份探索檔拿到 port 後即可連線,提供兩個唯讀工具:`codewalk_current_step`(讀者目前在看哪份導讀、第幾步、對應檔案與行號、錨驗證狀態)、`codewalk_list_walks`(目前 workspace 下可播放的導讀清單)。開啟面板則用 `vscode://{publisher}.{name}/open?walk=<workspace 相對路徑>&step=<0-based 索引,選填>`。細節見 `openspec/changes/archive/2026-08-17-add-mcp-bridge/design.md`。
 
 ### 是什麼
 
