@@ -23,7 +23,8 @@ CodeWalk 的價值 = **導讀數量 × 導讀品質 × 播放體驗**。前兩�
 | 方向 | 工作量 | 價值 | 動格式合約 | 順位 |
 |---|---|---|---|---|
 | ~~競品分析~~ | 半天 | 槓桿型 | 否 | **✅ 已完成(2026-08-09)** |
-| agent 橋接(產生→播放、播放→追問) | 小~中 | 高 | design 時盤點 | **2** |
+| agent 橋接(播放→追問,單步框選) | 小 | 高 | 否(零欄位新增) | **✅ 已完成(2026-08-15,`add-ask-agent-from-panel`)** |
+| agent 橋接(產生→開面板,面板→agent 查詢) | 小~中 | 高 | 否 | **✅ 已完成(2026-08-16,`add-mcp-bridge`)——MCP push 仍列後續** |
 | 產生器的行號與 anchor 正確性 | 小~中 | 高 | 否 | 3 |
 | PR Review 註記 | 中 | 中(方案已改) | 可能 | 4 |
 | 程式碼上的導讀標記 | 小 | 中(需導讀密度) | 否 | 5 |
@@ -53,6 +54,10 @@ CodeWalk 的價值 = **導讀數量 × 導讀品質 × 播放體驗**。前兩�
 ---
 
 ## 2. agent 橋接
+
+> **2026-08-16 更新:兩個方向都已完成。** 「面板 → agent(單步框選追問)」在 `add-ask-agent-from-panel`(2026-08-15)上線,走 `workbench.action.chat.open` + 剪貼簿,不是本節原本設想的 MCP/LM Tools 二選一——`decisions.md` 已定案「面板怎麼開口」與「agent 能拉到什麼」是兩個獨立問題,前者不需要 MCP。「agent → 面板(URI 開啟)」與「面板 → agent(MCP pull:agent 主動查詢讀者目前讀到哪、列出可播放導讀)」在 `add-mcp-bridge`(2026-08-16)上線,技術路徑選 MCP(理由見下方定案段落)。**MCP push(主動推播給 agent)仍列為後續**,目前只做 pull。
+>
+> **agent 開發者怎麼連上這個 MCP server**:extension 啟動時(若有已開啟的 workspace)會在本機起一個 Streamable HTTP server,把 `{port, pid}` 寫進 `{os.tmpdir()}/codewalk-mcp/{sha256(workspaceRoot 前 16 碼)}.json`。讀這份探索檔拿到 port 後即可連線,提供兩個唯讀工具:`codewalk_current_step`(讀者目前在看哪份導讀、第幾步、對應檔案與行號、錨驗證狀態)、`codewalk_list_walks`(目前 workspace 下可播放的導讀清單)。開啟面板則用 `vscode://{publisher}.{name}/open?walk=<workspace 相對路徑>&step=<0-based 索引,選填>`。細節見 `openspec/changes/archive/2026-08-16-add-mcp-bridge/design.md`。
 
 ### 是什麼
 
@@ -89,6 +94,8 @@ Cursor 同一套機制(認自己的 scheme,`--open-url` 一樣可用)。
 | 直接 shell out | CodeWalk AI(`claude -p` → `vscode.lm` → 自帶 key 三層 fallback) | 最直接,但 extension 要自己管 CLI 路徑與 fallback |
 
 **選 MCP channel 還是 LM Tools 仍待決定。** 一個附帶考量:CodeGraph 與 DeepWiki 都走 MCP,選 MCP channel 能讓三者在同一層對話(見 [`external-tools-positioning.md`](./external-tools-positioning.md) 整合方案 C)。
+
+> **2026-08-15 定案**:選 MCP,不選 Language Model Tools。決定性理由是 Cursor 原生支援 MCP 但不吃 VS Code 的 `languageModelTools` 貢獻點。細節見 `openspec/decisions.md`。「面板 → agent」單步追問則不算進這個二選一,它走的是 `workbench.action.chat.open`,見本節開頭 2026-08-16 更新。
 
 無論選哪個,`regenerateHint` 的設計哲學不變 —— 把結構化脈絡準備好交出去,extension 自己不呼叫 AI。
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { join, sep } from 'node:path';
-import { resolveInWorkspace } from './workspacePath';
+import { resolveInWorkspace, toWorkspaceRelativePath } from './workspacePath';
 
 const root = join(sep, 'home', 'reader', 'myrepo');
 
@@ -33,5 +33,27 @@ describe('resolveInWorkspace', () => {
 
   it('先繞出去再繞回來仍然放行(結果確實在 workspace 內)', () => {
     expect(resolveInWorkspace(root, '../myrepo/src/index.ts')).toBe(join(root, 'src', 'index.ts'));
+  });
+});
+
+describe('toWorkspaceRelativePath', () => {
+  it('換成 workspace 相對路徑', () => {
+    const absPath = join(root, '.codewalk', 'tour.codewalk.json');
+    expect(toWorkspaceRelativePath(root, absPath)).toBe('.codewalk/tour.codewalk.json');
+  });
+
+  it('路徑不在 workspace 內時退回絕對路徑', () => {
+    const absPath = join(sep, 'elsewhere', 'tour.codewalk.json');
+    expect(toWorkspaceRelativePath(root, absPath)).toBe(absPath);
+  });
+
+  it('沒有 workspaceRoot 時退回絕對路徑', () => {
+    const absPath = join(root, '.codewalk', 'tour.codewalk.json');
+    expect(toWorkspaceRelativePath(undefined, absPath)).toBe(absPath);
+  });
+
+  it('相對路徑不含反斜線(即使平台的 path.sep 是反斜線)', () => {
+    const absPath = `${root}${sep}.codewalk${sep}tour.codewalk.json`;
+    expect(toWorkspaceRelativePath(root, absPath)).not.toContain('\\');
   });
 });

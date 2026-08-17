@@ -11,6 +11,7 @@ import { scoreQuiz, type CodewalkFile } from '../shared/schema';
 import { buildAnchorReport, effectiveLineRange, emptyAnchorReport, jumpModeFor } from './anchorCheck';
 import { buildAskAgentPrompt } from './askAgentPrompt';
 import { AttemptStore } from './attemptStore';
+import { buildCurrentStepSnapshot, type CurrentStepSnapshot } from './currentStepSnapshot';
 import { jumpToStep } from './fileJump';
 import { ProgressStore } from './progressStore';
 import { getWorkspaceHead, isRefDrifted } from './refDrift';
@@ -18,6 +19,7 @@ import { readSnippetPreviews } from './snippetPreview';
 import { currentThemeKind, resolveEditorTheme } from './themeSource';
 import { listWalkFiles, loadCodewalkFile } from './walkLoader';
 import { buildWalkRestoredMessage } from './webviewReadyPlan';
+import { resolveInWorkspace } from './workspacePath';
 
 function getWorkspaceRoot(): string | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -49,6 +51,14 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
    * `handleAskAgent()` 的補送邏輯。
    */
   private chatWarmedUp = false;
+  /**
+   * URI handler 觸發開啟、但面板這個 session 尚未建立過 webview 時,先把請求
+   * 存在這裡;等 `webviewReady` 真的送達再消費(design.md 決策 8)——`post()`
+   * 沒有佇列,建立前送出的訊息會直接遺失。
+   */
+  private pendingOpenRequest: { path: string; stepIndex?: number } | undefined;
+  /** 同上,但用於 URI handler 判定為錯誤(沒有 workspace、路徑逸出)的情況。 */
+  private pendingOpenError: string | undefined;
   private stepIndex = 0;
   private refDrifted = false;
   private anchorReport: AnchorReport | undefined;
@@ -94,6 +104,62 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
     await this.jumpToCurrentStep();
   }
 
+  /**
+   * URI handler(`vscode://.../open?walk=...&step=...`)的處理常式。`relativePath`
+   * 是外部程序傳進來的字串,一律經 `resolveInWorkspace()` 解析並擋 `..` 逸出——
+   * 這不是 `.codewalk.json` 內部欄位,不能比照內部資料信任(design.md 決策 7)。
+   *
+   * 面板一律要被帶到前景——不論後面走哪個分支都要讓讀者看到面板,而不是留在
+   * 原本在看的地方猜「剛剛那個 URI 是不是壞了」。錯誤情況(沒有 workspace、
+   * 路徑逸出)改用 `loadError`(全螢幕錯誤畫面)取代 `vscode.window.showErrorMessage`
+   * (容易被忽略的 toast),與既有「導讀格式錯誤」共用同一條、讀者已經熟悉的
+   * 錯誤呈現方式。
+   *
+   * 面板這個 session 已經建立過 webview 時直接處理;否則存進 `pendingOpenRequest`
+   * / `pendingOpenError`,等 `webviewReady` 送達再消費(決策 8)。
+   */
+  public async openWalkFromUri(relativePath: string, stepIndex?: number): Promise<void> {
+    const root = getWorkspaceRoot();
+    if (!root) {
+      this.reportOpenUriError(t('host.noWorkspace'));
+      return;
+    }
+    const absPath = resolveInWorkspace(root, relativePath);
+    if (!absPath) {
+      this.reportOpenUriError(t('host.invalidWalkPath', { path: relativePath }));
+      return;
+    }
+    if (this.view) {
+      await this.loadWalk(absPath);
+      if (stepIndex !== undefined) await this.setStep(stepIndex);
+    } else {
+      this.pendingOpenRequest = { path: absPath, stepIndex };
+    }
+    void vscode.commands.executeCommand(`${WalkPlayerViewProvider.viewId}.focus`);
+  }
+
+  /** 把 URI handler 的錯誤送進面板的錯誤畫面;面板還沒建立時延後到 `webviewReady`。 */
+  private reportOpenUriError(message: string): void {
+    if (this.view) {
+      this.post({ type: 'loadError', message });
+    } else {
+      this.pendingOpenError = message;
+    }
+    void vscode.commands.executeCommand(`${WalkPlayerViewProvider.viewId}.focus`);
+  }
+
+  /** MCP 工具 `codewalk_current_step` 的資料來源;只是組參數,沒有自己的邏輯(design.md 決策 5)。 */
+  public getCurrentStepSnapshot(): CurrentStepSnapshot {
+    const status = this.anchorReport?.steps[this.stepIndex]?.step ?? { kind: 'unanchored' as const };
+    return buildCurrentStepSnapshot({
+      walk: this.currentWalk,
+      walkPath: this.currentWalkPath,
+      workspaceRoot: getWorkspaceRoot(),
+      stepIndex: this.stepIndex,
+      stepStatus: status,
+    });
+  }
+
   private async handleMessage(raw: unknown): Promise<void> {
     const msg = parseWebviewToHostMessage(raw);
     if (!msg) return;
@@ -101,8 +167,19 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
     switch (msg.type) {
       case 'webviewReady':
         await this.sendTheme();
-        await this.sendFileList();
-        await this.sendRestoreIfActive();
+        if (this.pendingOpenRequest) {
+          const { path, stepIndex } = this.pendingOpenRequest;
+          this.pendingOpenRequest = undefined;
+          await this.loadWalk(path);
+          if (stepIndex !== undefined) await this.setStep(stepIndex);
+        } else if (this.pendingOpenError) {
+          const message = this.pendingOpenError;
+          this.pendingOpenError = undefined;
+          this.post({ type: 'loadError', message });
+        } else {
+          await this.sendFileList();
+          await this.sendRestoreIfActive();
+        }
         break;
       case 'selectWalkFile':
         await this.loadWalk(msg.path);
@@ -314,7 +391,18 @@ export class WalkPlayerViewProvider implements vscode.WebviewViewProvider {
    * 5、6,walk-player capability「Quiz 作答紀錄的留存」MODIFIED requirement)。
    */
   private async loadWalk(path: string, options: { resume?: boolean } = {}): Promise<void> {
-    const result = await loadCodewalkFile(path);
+    let result: Awaited<ReturnType<typeof loadCodewalkFile>>;
+    try {
+      result = await loadCodewalkFile(path);
+    } catch {
+      // 檔案不存在或無法讀取時 loadCodewalkFile() 直接拋出(walkLoader.ts 的
+      // @throws 說明)——只有 JSON 格式錯誤才會走 { valid: false } 的優雅路徑。
+      // URI handler 帶進來的路徑是外部程序給的字串,指向不存在的檔案是完全
+      // 合理會發生的情況,不能讓它變成沒人接的 rejection(ask-agent capability
+      // 「不可用時明確告知」的同一個精神)。
+      this.post({ type: 'loadError', message: t('host.fileNotFound', { file: path }) });
+      return;
+    }
     if (!result.valid) {
       this.post({ type: 'loadError', message: result.errors.join('; ') });
       return;

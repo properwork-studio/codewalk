@@ -68,6 +68,10 @@ const zhTW = {
 
   'host.noWorkspace': '未開啟任何 workspace',
   'host.fileNotFound': '找不到檔案:{file}',
+  'host.invalidWalkPath': '無效的導讀路徑:{path}',
+
+  'mcp.anotherWindowServing':
+    '這個專案已經有另一個 VS Code 視窗在提供 CodeWalk 的 MCP 服務,本視窗不會另外啟動。',
 
   'askAgent.buttonLabel': '問 AI',
   'askAgent.sendToChat': '送進 Chat',
@@ -146,6 +150,10 @@ const en: Record<TranslationKey, string> = {
 
   'host.noWorkspace': 'No workspace is open',
   'host.fileNotFound': 'File not found: {file}',
+  'host.invalidWalkPath': 'Invalid walk path: {path}',
+
+  'mcp.anotherWindowServing':
+    'Another VS Code window is already serving CodeWalk MCP for this project — this window will not start its own.',
 
   'askAgent.buttonLabel': 'Ask AI',
   'askAgent.sendToChat': 'Send to Chat',

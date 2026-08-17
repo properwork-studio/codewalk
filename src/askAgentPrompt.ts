@@ -4,27 +4,10 @@
  * vscode API 不好測(design.md 決策 3)。
  */
 
-import { relative, sep } from 'node:path';
 import { t } from '../shared/i18n';
 import { effectiveLineRange, type AnchorStatus } from '../shared/protocol';
 import type { CodewalkFile } from '../shared/schema';
-
-/**
- * 把導讀檔的絕對路徑換成 prompt 裡要顯示的位置。能算出 workspace 相對路徑就用
- * 相對路徑,否則(不在 workspace 內、或沒有已開啟的 workspace)退回絕對路徑——
- * agent 有檔案系統存取,絕對路徑一樣讀得到(design.md 決策 12,ask-agent
- * capability「導讀檔位於專案之外」)。
- *
- * @remarks
- * 一律正規化為正斜線:`path.relative()` 在 Windows 上回傳反斜線,而導讀檔內的
- * `file` 欄位本來就是正斜線,混用會讓 prompt 看起來像兩個不同的專案。
- */
-function toPromptPath(walkPath: string, workspaceRoot: string | undefined): string {
-  if (!workspaceRoot) return walkPath;
-  const rel = relative(workspaceRoot, walkPath);
-  if (rel.startsWith('..')) return walkPath;
-  return rel.split(sep).join('/');
-}
+import { toWorkspaceRelativePath } from './workspacePath';
 
 /**
  * 組出交給 AI 助手的提問內容。
@@ -49,7 +32,7 @@ export function buildAskAgentPrompt(input: {
   selection?: string;
 }): string {
   const step = input.walk.steps[input.stepIndex];
-  const location = toPromptPath(input.walkPath, input.workspaceRoot);
+  const location = toWorkspaceRelativePath(input.workspaceRoot, input.walkPath);
   const { startLine, endLine } = effectiveLineRange(step, input.stepStatus);
 
   const lines = [
