@@ -50,6 +50,41 @@ Keyboard shortcuts only work while the CodeWalk panel has focus — click anywhe
 - **Quiz mode** — take a quiz after finishing the walk to check whether you actually understood it. Every option explains why it's right or wrong, and a failing score suggests rereading the walk or retaking the quiz
 - **Staleness detection** — a walk describes the code as it was at some point in time, and as the project keeps moving, it will eventually drift out of sync. CodeWalk checks each step: if the code merely shifted, it follows along automatically; if the content actually changed, it flags the step as stale and includes a one-click-copy way to regenerate the walk
 - **Resume where you left off** — close and reopen VS Code, and the walk list still shows your last position
+- **Built for reading alongside an agent** — select text in the panel to send it, with the step's context attached, to your editor's chat or your clipboard; walks can be opened by URI; and a read-only local MCP server lets an agent ask where you are. See [Working with agents](#working-with-agents)
+
+## Working with agents
+
+CodeWalk assumes you're reading code with an AI agent nearby, and wires the two together in three directions.
+
+**Ask about what you're reading.** Select any text in the panel — narration or code — and two buttons appear. One opens your editor's chat with a prompt already filled in, but not sent, so you can edit it first. The other copies the same prompt for a terminal agent. Either way the prompt carries your selection plus the current step's title, narration, and `file:line`, so you never have to re-explain where you are. If your editor has no chat command — older Cursor builds, for instance — it falls back to the clipboard.
+
+**Open a walk by URI.** Whatever produced a walk can open it for you:
+
+```bash
+code --open-url "vscode://properworkstudio.codewalk-reader/open?walk=.codewalk/2026-01-30-auth-flow.codewalk.json&step=3"
+```
+
+`walk` is repo-relative; `step` is an optional 0-based index. On Cursor, swap both halves: `cursor --open-url` and a `cursor://` scheme. The panel opens even if it hasn't been opened yet this session.
+
+**Let an agent see where you are.** With a workspace open, CodeWalk runs a local read-only MCP server and records its port in `{tmpdir}/codewalk-mcp/{first 16 hex chars of sha256(workspace path)}.json`. Point an agent at that port and it gets two tools:
+
+| Tool | Returns |
+| --- | --- |
+| `codewalk_current_step` | The walk you're on, the step's index and title, its `file` and effective line range, and whether the anchor still matches |
+| `codewalk_list_walks` | Every playable walk in the workspace, with paths and titles |
+
+Both are read-only — an agent can see your position, not move it. If the same workspace is open in two windows, only one of them serves; the other says so rather than silently taking over.
+
+## Using it for code review
+
+A walk committed onto a PR branch hands the reviewer a guided path through the diff instead of a wall of changed files.
+
+1. Before opening the PR, generate a walk for the branch's diff — [Authoring walks](docs/authoring-walks.md) has a `git-diff` scope for exactly this
+2. Commit `.codewalk/<date>-<topic>.codewalk.json` onto the PR branch
+3. Say so in the PR description: *"walk through this with CodeWalk first"*
+4. The reviewer checks out the branch, opens the panel, and arrow-keys through the change with your narration alongside it
+
+Take your own quiz before you send it out: if you can't pass it, the change probably isn't ready for review. For the reviewer it stays optional — review is about going faster, and a mandatory quiz works against that.
 
 ## `.codewalk.json` format
 

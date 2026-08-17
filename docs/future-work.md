@@ -170,9 +170,9 @@ CodeGraph 的細節與風險見 [`external-tools-positioning.md`](./external-too
 
 **L3 的否定不影響 L2。** 初版寫的「PR Review 拆解後多半不需要新功能」下得太快。
 
-### L1 的具體流程(要寫進兩份 README)
+### L1 的具體流程(✅ 2026-08-17 已寫進兩份 README 的「用在 code review」一節)
 
-現在 README 只有開頭一句 "getting a reviewer up to speed on a large diff",沒告訴人怎麼做:
+原本 README 只有開頭一句 "getting a reviewer up to speed on a large diff",沒告訴人怎麼做:
 
 1. 作者開 PR 前,對這個分支的 diff 產一份導讀
 2. 把 `.codewalk/YYYY-MM-DD-<主題>.codewalk.json` 一起 commit 進 PR 分支
@@ -334,7 +334,7 @@ IntelliJ Platform SDK 是 Kotlin/Java,webview 要走 JCEF 重寫,`shared/` 的 T
 
 **先順手清掉(≤1 小時,不佔排序)**
 
-- PR Review L1 的四步流程寫進兩份 README(見第 4 項)—— **仍未做**
+- ~~PR Review L1 的四步流程寫進兩份 README(見第 4 項)~~ —— 已完成(2026-08-17),兩份 README 新增「用在 code review」一節,同時補上 0.2.0 的 agent 橋接章節
 - ~~JSDoc 紀律寫進 CLAUDE.md~~ —— 已完成(2026-08-09),harness 範本的多語言版本另案討論
 - ~~產生用的 prompt 加上 CodeGraph / DeepWiki 條件式指引~~ —— 已完成(2026-08-13),兩份 `authoring-walks` 皆已更新
 - ~~`whole-codebase` scope 重新定義為「第一天的路徑」~~ —— 已完成(2026-08-13)

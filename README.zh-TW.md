@@ -50,6 +50,41 @@ CodeWalk 會讀 repo 裡的導讀檔，一步一步帶著走：自動跳到對�
 - **Quiz 自測**——走完導讀可以接著作 Quiz 檢視自己是否有真的理解。每個選項都寫了為什麼對、為什麼錯，沒過會建議你重讀一遍或重做一遍 Quiz
 - **失準偵測**——導讀寫的是某個時間點的程式碼，隨著專案持續進行，遲早可能會對不上。CodeWalk 會逐步核對：程式碼只是位移就自動跟上新行號，內容真的改了才標示失準，並附上重新產生本導讀的方式，一鍵複製
 - **記住讀到哪**——關掉 VS Code 再開，列表上還能接續上次的進度
+- **為「邊讀邊問 agent」而設計**——在面板裡框選一段文字，就能連同這一步的脈絡一起送進編輯器的 chat 或剪貼簿；導讀可以用 URI 直接開啟；還有一個唯讀的本機 MCP server 讓 agent 查你讀到哪。詳見[「跟 agent 一起用」](#跟-agent-一起用)
+
+## 跟 agent 一起用
+
+CodeWalk 假設你讀 code 的時候旁邊就有一個 AI agent，並把兩者接在一起，共三個方向。
+
+**針對正在讀的東西發問。** 在面板裡框選任何文字（敘述或程式碼都可以），會浮出兩顆按鈕。一顆把組好的 prompt 填進編輯器的 chat——只填入、不自動送出，你可以先改再送；另一顆把同一段 prompt 複製到剪貼簿給終端機的 agent 用。兩者的 prompt 都會帶上你框選的內容，加上目前這一步的標題、敘述與 `file:line`，所以你不必再重新交代自己讀到哪。編輯器沒有對應的 chat 指令時（例如較舊版的 Cursor），會自動退回剪貼簿。
+
+**用 URI 直接開啟導讀。** 產生導讀的那一方可以順手幫你開起來：
+
+```bash
+code --open-url "vscode://properworkstudio.codewalk-reader/open?walk=.codewalk/2026-01-30-auth-flow.codewalk.json&step=3"
+```
+
+`walk` 是 repo 相對路徑，`step` 選填、0-based。Cursor 的話兩邊都要換：指令用 `cursor --open-url`、scheme 用 `cursor://`。這個 session 從沒開過面板也沒關係，面板會自己被叫起來。
+
+**讓 agent 看得到你讀到哪。** 有開啟 workspace 時，CodeWalk 會起一個唯讀的本機 MCP server，並把 port 記在 `{tmpdir}/codewalk-mcp/{workspace 路徑的 sha256 前 16 碼}.json`。讓 agent 連上那個 port，就有兩個工具可用：
+
+| 工具                    | 回傳                                                                     |
+| ----------------------- | ------------------------------------------------------------------------ |
+| `codewalk_current_step` | 你正在看哪份導讀、第幾步與該步標題、對應的 `file` 與有效行號範圍、以及 anchor 是否仍相符 |
+| `codewalk_list_walks`   | 這個 workspace 底下所有可播放的導讀，含路徑與標題                        |
+
+兩個都是唯讀的——agent 看得到你的位置，但動不了它。同一個 workspace 被兩個視窗開著時，只有其中一個會提供服務，另一個會明講，而不是默默把它蓋掉。
+
+## 用在 code review
+
+把導讀 commit 進 PR 分支，等於交給 reviewer 一條走過這份 diff 的路，而不是一整片改動過的檔案。
+
+1. 開 PR 之前，先為這個分支的 diff 產一份導讀——[產生導讀的指引](docs/authoring-walks.zh-TW.md)有 `git-diff` 這個範圍，就是為此而設
+2. 把 `.codewalk/<日期>-<主題>.codewalk.json` 一起 commit 進 PR 分支
+3. 在 PR 描述裡寫一句：*「先用 CodeWalk 走一遍」*
+4. reviewer checkout 那個分支、打開面板，按方向鍵讓你的敘述陪著他走完這次變更
+
+送審之前自己先作答 quiz：過不了，代表這個變更八成還不該送審。對 reviewer 則維持選配——review 的訴求是更快，強制作答跟這個目標打架。
 
 ## `.codewalk.json` 格式
 
