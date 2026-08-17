@@ -188,13 +188,39 @@ Quiz 不是裝飾——它是讀者確認自己到底有沒有看懂的方式，
 - [ ] 沒有任何 narration 只是把程式碼再唸一次
 - [ ] 每一題 quiz 都需要讀過導讀才答得出來
 - [ ] 每個選項都有解釋
+
+## 產完順手打開它
+
+如果你能執行 shell 指令，檔案寫完後直接把導讀開起來——CodeWalk 就是為此註冊了
+一個 URI handler：
+
+```bash
+code --open-url "vscode://properworkstudio.codewalk-reader/open?walk=<你剛寫出的路徑>"
+```
+
+Cursor 的話兩邊都要換：指令用 `cursor --open-url`，scheme 用 `cursor://`。想直接
+停在特定步驟就補上 `&step=<0-based 索引>`。`walk` 是 repo 相對路徑，就是你剛寫出
+的那個路徑。
+
+指令不存在或執行失敗時，把它印出來讓讀者自己跑，然後繼續往下走。開面板只是順手
+的便利——它不是產生導讀的一部分，這裡失敗不代表導讀有問題。
 ````
 
 ## 產生之後
 
-打開 CodeWalk 面板選那份導讀。如果檔案不符合 schema，面板會顯示確切的問題並附上
-JSON 路徑（例如 `steps[2].narration must be a non-empty string`）——把那段貼回去
-請 AI 修就好。
+打開 CodeWalk 面板選那份導讀，或者直接跳過去：
+
+```bash
+code --open-url "vscode://properworkstudio.codewalk-reader/open?walk=.codewalk/2026-01-30-auth-flow.codewalk.json"
+```
+
+Cursor 的話兩邊都要換：指令用 `cursor --open-url`，scheme 用 `cursor://`。`code`
+不在 PATH 上時，`open`（macOS）與 `xdg-open`（Linux）一樣能把網址交給編輯器。補上
+`&step=<0-based 索引>` 可以直接停在指定步驟。這個 session 從沒開過面板也沒關係，
+面板會自己被叫起來。
+
+如果檔案不符合 schema，面板會顯示確切的問題並附上 JSON 路徑（例如
+`steps[2].narration must be a non-empty string`）——把那段貼回去請 AI 修就好。
 
 如果一產生就整片標成失準，代表 anchor 對不上檔案。這幾乎一定是 anchor 被重打過
 而不是複製的，或是行號差一行。

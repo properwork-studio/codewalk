@@ -207,14 +207,41 @@ Check each of these against the file you produced:
 - [ ] No narration merely restates what the code plainly says
 - [ ] Every quiz question requires having read the walk
 - [ ] Every option has an explanation
+
+## Open it when you're done
+
+If you can run shell commands, open the walk once the file is written — CodeWalk
+registers a URI handler for exactly this:
+
+```bash
+code --open-url "vscode://properworkstudio.codewalk-reader/open?walk=<the path you just wrote>"
+```
+
+On Cursor, swap both halves: `cursor --open-url` and a `cursor://` scheme.
+Append `&step=<0-based index>` to land on a specific step instead of the first.
+`walk` is repo-relative, so it is the same path you just wrote.
+
+If the command is unavailable or fails, print it for the reader to run and move
+on. Opening the panel is a convenience — it is not part of generating the walk,
+and a failure here does not mean the walk is broken.
 ````
 
 ## Once it's generated
 
-Open the CodeWalk panel and pick the walk. If the file doesn't match the schema,
-the panel shows exactly what's wrong, keyed by JSON path (for example
-`steps[2].narration must be a non-empty string`) — paste that back to your AI
-and ask it to fix it.
+Open the CodeWalk panel and pick the walk — or jump straight to it:
+
+```bash
+code --open-url "vscode://properworkstudio.codewalk-reader/open?walk=.codewalk/2026-01-30-auth-flow.codewalk.json"
+```
+
+On Cursor, swap both halves: `cursor --open-url` and a `cursor://` scheme. If the
+`code` CLI isn't on your PATH, `open` (macOS) and `xdg-open` (Linux) hand the URL
+to your editor just as well. Append `&step=<0-based index>` to land on a specific
+step. The panel opens even when it has never been opened this session.
+
+If the file doesn't match the schema, the panel shows exactly what's wrong, keyed
+by JSON path (for example `steps[2].narration must be a non-empty string`) —
+paste that back to your AI and ask it to fix it.
 
 If steps are flagged as stale immediately after generating, the anchors don't
 match the file. That is almost always retyped rather than copied anchor text, or
