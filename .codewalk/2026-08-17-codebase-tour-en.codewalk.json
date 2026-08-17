@@ -1,8 +1,8 @@
 {
-  "title": "CodeWalk end-to-end walk: from the JSON contract to the side panel",
-  "ref": "e8ed6c3b9adebc6102a2633cae0b383c85d8a61e",
-  "regenerateHint": "Walk through CodeWalk's src/, shared/, and ui/ layers again, produce an English walk aligned to the current HEAD, output it to .codewalk/, and fill in the anchor field for every step and snippet.",
-  "passThreshold": 4,
+  "title": "CodeWalk end-to-end walk: from the JSON contract to the side panel, and on to the agent bridge",
+  "ref": "7dec7aba62328da242692c7a72b00019c4e4a27a",
+  "regenerateHint": "Walk through CodeWalk's src/, shared/, and ui/ layers again (including the URI handler and MCP server), produce an English walk aligned to the current HEAD, output it to .codewalk/, and fill in the anchor field for every step and snippet; or run /explain-change in this repo with scope: whole-codebase.",
+  "passThreshold": 6,
   "steps": [
     {
       "title": "Step 1: The big picture — what this project actually does",
@@ -29,7 +29,7 @@
       "file": "package.json",
       "startLine": 34,
       "endLine": 52,
-      "narration": "The CodeWalk icon in the Activity Bar and the panel it opens — **not a single line of code creates them**. They're entirely declared through `package.json`'s `contributes` field. VS Code reads this manifest and knows what to draw.\n\nTwo things are declared here:\n\n- `viewsContainers.activitybar`: opens a container called `codewalk` in the Activity Bar, using `resources/icon.svg` as its icon\n- `views.codewalk`: places a view inside that container with id `codewalk.playerView` and `type: \"webview\"`\n\nThat id shows up again shortly — `WalkPlayerViewProvider.viewId` in `viewProvider.ts` must be **character-for-character identical** to the string here, or VS Code can't find the matching provider and the panel stays blank. It's a string contract with no type-level protection — you just have to remember it.\n\nThe `activationEvents` array above is empty on purpose: since VS Code 1.74, activation timing can be inferred automatically from `contributes` — declaring a view already means \"activate me when this view is opened,\" so there's no need to hand-write an `onView:` event.",
+      "narration": "The CodeWalk icon in the Activity Bar and the panel it opens — **not a single line of code creates them**. They're entirely declared through `package.json`'s `contributes` field. VS Code reads this manifest and knows what to draw.\n\nTwo things are declared here:\n\n- `viewsContainers.activitybar`: opens a container called `codewalk` in the Activity Bar, using `resources/icon.svg` as its icon\n- `views.codewalk`: places a view inside that container with id `codewalk.playerView` and `type: \"webview\"`\n\nThat id shows up again shortly — `WalkPlayerViewProvider.viewId` in `viewProvider.ts` must be **character-for-character identical** to the string here, or VS Code can't find the matching provider and the panel stays blank. It's a string contract with no type-level protection — you just have to remember it.\n\nThe `activationEvents` array above is currently `[\"onUri\"]`, not empty — and that line has a story behind it. Since VS Code 1.74, activation timing can be inferred automatically from `contributes` (`views`, `commands`) — declaring a view already means \"activate me when this view is opened,\" so there's no need to hand-write an `onView:` event. But that inference only sees declarations inside `contributes`. It doesn't cover the `vscode.window.registerUriHandler()` call you'll see in step 30 — that's a dynamic call inside `activate()`, with no corresponding declaration to infer from. Without an explicit `onUri`, if the extension hasn't been activated by any other path yet this session, the first `vscode://` URI that arrives has nowhere to go. This is a real bug hit during manual verification — step 30 has the full debugging story.",
       "terms": [
         {
           "term": "contributes",
@@ -53,6 +53,11 @@
           "kind": "pitfall",
           "misconception": "The panel's id is just an internal name — it can be anything, since the code maps it on its own anyway.",
           "reality": "The string `codewalk.playerView` appears in both `package.json` and `src/viewProvider.ts`, and the two must match exactly. TypeScript can't see values inside JSON, so a typo won't fail compilation — it only shows up at runtime as a permanently blank panel, with no error message."
+        },
+        {
+          "kind": "pitfall",
+          "misconception": "As long as activationEvents is left empty, VS Code will automatically infer every activation timing it needs — nothing to manage.",
+          "reality": "Automatic inference only sees declarations inside `contributes` (`views`, `commands`, `menus`, etc). Anything registered dynamically inside `activate()` — like `registerUriHandler` — falls outside that inference. Missing the matching activationEvents entry means that feature is completely unresponsive the first time it's triggered, with no error message to go on — very hard to diagnose."
         }
       ],
       "anchor": "    \"onboarding\",\n    \"code tour\",\n    \"walkthrough\",\n    \"code reading\"\n  ],\n  \"icon\": \"resources/icon-128.png\",\n  \"main\": \"./dist/extension.js\",\n  \"activationEvents\": [\"onUri\"],\n  \"contributes\": {\n    \"viewsContainers\": {\n      \"activitybar\": [\n        {\n          \"id\": \"codewalk\",\n          \"title\": \"CodeWalk\",\n          \"icon\": \"resources/icon.svg\"\n        }\n      ]\n    },\n    \"views\": {"
@@ -644,6 +649,203 @@
         }
       ],
       "anchor": "export function renderItems(\n  items: CodewalkItem[],\n  snippetPreviews: SnippetPreviewResult[],\n  itemAnchorStatuses: AnchorStepReport['items'],\n  handlers: ItemHandlers,\n): HTMLElement {\n  const container = el('div', 'codewalk-items');\n  items.forEach((item, itemIndex) => {\n    switch (item.kind) {\n      case 'tip':\n        container.appendChild(renderAnnotation('tip', 'lightbulb', item.text, handlers.onOpenReference));\n        break;\n      case 'todo':\n        container.appendChild(\n          renderAnnotation('todo', 'circle-large-outline', item.text, handlers.onOpenReference),\n        );\n        break;\n      case 'pitfall':\n        container.appendChild(renderPitfall(item.misconception, item.reality, handlers.onOpenReference));\n        break;\n      case 'reference':\n        container.appendChild(renderReference(item.label, item.url, handlers.onOpenReference));\n        break;\n      case 'snippet': {\n        const status = itemAnchorStatuses.find((s) => s.itemIndex === itemIndex)?.status ?? {\n          kind: 'unanchored',\n        };\n        container.appendChild(\n          renderSnippet(item, itemIndex, snippetPreviews, status, handlers.onJumpToSnippet),\n        );\n        break;\n      }\n      case 'diff':\n        container.appendChild(renderDiff(item, itemIndex, handlers.onJumpToSnippet));\n        break;\n    }\n  });\n  return container;\n}"
+    },
+    {
+      "title": "Step 25: The panel stops being one-way — the shape of the askAgent message",
+      "file": "shared/protocol.ts",
+      "startLine": 99,
+      "endLine": 110,
+      "narration": "Up to this point, everything the panel does is **one-directional**: it sends the reader to code, collects the reader's answers — but nothing hands a question from the reader over to an AI. `add-ask-agent-from-panel` fills in that other half.\n\nThe new webview → host message has exactly one shape:\n\n`{ type: 'askAgent', destination: 'chat' | 'clipboard', selection?: string }`\n\n`destination` decides where it goes; omitting `selection` means \"ask about the whole step.\" This is deliberately **not** split into two message kinds (`askAgentToChat` / `askAgentToClipboard`) — the payloads would be identical, and splitting them would just give `parseWebviewToHostMessage()` two character-for-character duplicate branches. The intent is already the same thing (hand this step over); the only difference is where it goes.\n\nThe `askAgentResult` message sent back is worth a closer look: it's a factual report the host sends **after the action actually completes**, not an optimistic display the moment the webview's button is clicked. The next step shows why that distinction matters.",
+      "terms": [],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "askAgentResult: sent only once the host's action actually completes",
+          "file": "shared/protocol.ts",
+          "startLine": 176,
+          "endLine": 181,
+          "anchor": "  /**\n   * 對 `askAgent` 的結果回報。**送進 chat 失敗而退回剪貼簿時,webview 不能\n   * 樂觀地顯示「已送出」**——那是靜默且誤導的失敗(design.md 決策 6),\n   * 所以這則訊息一律等 host 端動作完成才送出,不是意圖的鏡射。\n   */\n  | { type: 'askAgentResult'; outcome: AskAgentOutcome };"
+        },
+        {
+          "kind": "snippet",
+          "label": "askAgent: one message carries destination, not split into two",
+          "file": "shared/protocol.ts",
+          "startLine": 208,
+          "endLine": 212,
+          "anchor": "  /**\n   * 把目前步驟(可選地帶框選文字)交給 AI 助手。`selection` 省略代表問整步,\n   * 不另立布林欄位——意圖本來就是同一個,差別只在送到哪(design.md 決策 7)。\n   */\n  | { type: 'askAgent'; destination: AskAgentDestination; selection?: string }"
+        }
+      ],
+      "anchor": "/**\n * 讀者觸發「把這一步交給 AI」時選擇的出口。兩者產生完全相同的提問內容,\n * 差別只在送到哪(ask-agent capability「把當前步驟交給 AI 助手的入口」)。\n */\nexport type AskAgentDestination = 'chat' | 'clipboard';\n\n/**\n * `askAgent` 訊息實際發生的結果,決定 webview 該顯示什麼回饋。`chatUnavailable`\n * 與 `failed` 是兩種不同的降級:前者已改寫剪貼簿成功,後者連剪貼簿都失敗\n * (design.md 決策 6)。\n */\nexport type AskAgentOutcome = 'chat' | 'clipboard' | 'chatUnavailable' | 'failed';"
+    },
+    {
+      "title": "Step 26: Building the question handed to the AI — a pointer, not the full narration",
+      "file": "src/askAgentPrompt.ts",
+      "startLine": 12,
+      "endLine": 55,
+      "narration": "`buildAskAgentPrompt()` is the only piece of logic in this feature worth unit testing — a pure function, since `viewProvider` touches the `vscode` API and is hard to test, so this is pulled out on its own.\n\nThe content it builds deliberately **doesn't include the full step narration** — only a pointer (walk file path + step index) for the agent to read itself. This decision is backed by measured numbers: across this repo's two self-referencing walks, narration length has a median between 545 and 1305 characters — including it all would make the chat input need to scroll before you could even see it all, and the next step shows that the whole point of `isPartialQuery: true` is to let the reader **see and edit before sending** — stuffing the box full defeats that option entirely.\n\nThe other way around: an agent that follows the pointer and reads it in gets more than what would fit in the prompt anyway — the full narration, `terms`, `items`, and the surrounding steps, not just a truncated fragment.\n\nWhen `stepStatus.kind === 'stale'`, one extra warning line gets appended. Without it, the agent would read the walk's description against the current file and produce a **confidently wrong answer** — worse than not answering at all. `shifted` needs no special mention, since the line numbers have already been converted through `effectiveLineRange()` — the agent gets the current, correct position.",
+      "terms": [],
+      "items": [
+        {
+          "kind": "tip",
+          "text": "The prompt's skeleton follows the **interface language**, not fixed English — `shared/i18n.ts` supplies both Traditional Chinese and English copies (`askAgent.promptIntro` and friends). It's interface copy the reader reads, edits, and sends — not the fixed-English diagnostic output `schema.ts` produces. The embedded step title and selected text naturally stay in whatever language the walk itself was written in — they're never translated."
+        }
+      ],
+      "anchor": "/**\n * 組出交給 AI 助手的提問內容。\n *\n * @param walkPath - 導讀檔的絕對路徑\n * @param workspaceRoot - workspace 根目錄;沒有已開啟的 workspace 時為 `undefined`\n * @param stepStatus - 目前步驟的錨驗證結果,決定行號換算與是否附加失準警示\n * @param selection - 讀者框選的文字;未框選時省略,提問以整步為對象\n *\n * @remarks\n * 刻意不含 `narration` 全文——實測本 repo 兩份導讀 narration 中位數落在\n * 545~1305 字元,全帶會讓 chat 輸入框需要捲動才看得完(design.md 決策 1)。\n * 提問改帶指標(導讀檔路徑 + 步驟索引),讓 agent 自己讀進去,拿到的比塞給它\n * 的更多。\n */\nexport function buildAskAgentPrompt(input: {\n  walk: CodewalkFile;\n  walkPath: string;\n  workspaceRoot: string | undefined;\n  stepIndex: number;\n  stepStatus: AnchorStatus;\n  selection?: string;\n}): string {\n  const step = input.walk.steps[input.stepIndex];\n  const location = toWorkspaceRelativePath(input.workspaceRoot, input.walkPath);\n  const { startLine, endLine } = effectiveLineRange(step, input.stepStatus);\n\n  const lines = [\n    t('askAgent.promptIntro', { step: input.stepIndex + 1, title: step.title }),\n    t('askAgent.promptLocation', { path: location, index: input.stepIndex }),\n    t('askAgent.promptFileRef', { file: step.file, startLine, endLine }),\n  ];\n\n  if (input.stepStatus.kind === 'stale') {\n    lines.push(t('askAgent.promptStale'));\n  }\n\n  if (input.selection !== undefined) {\n    lines.push('', t('askAgent.promptSelectionLabel'), input.selection);\n  }\n\n  lines.push('', t('askAgent.promptInstruction', { index: input.stepIndex }));\n\n  return lines.join('\\n');\n}"
+    },
+    {
+      "title": "Step 27: Send to Chat, or copy to the clipboard — failure can't be silent",
+      "file": "src/viewProvider.ts",
+      "startLine": 251,
+      "endLine": 295,
+      "narration": "`handleAskAgent()` is where this feature actually touches the `vscode` API. The `destination: 'clipboard'` path is straightforward — write the clipboard, report the result. The `'chat'` path hides two design choices worth remembering.\n\n**Failure handling first**: the code deliberately does **not** call `vscode.commands.getCommands(true)` up front to check whether `workbench.action.chat.open` exists — that API pulls back thousands of command IDs in one call, not worth it for one button's decision, and it can only answer \"does it exist,\" not \"did it fail to run.\" It uses try/catch instead: success reports `outcome: 'chat'`; failure (the command doesn't exist, or an older Cursor version lacks it) falls back to the clipboard and reports `outcome: 'chatUnavailable'` — **the webview can't optimistically show \"sent\"**, since that would be a silent, misleading failure: the reader clicks the button, nothing happens in chat, and they believe the question went through.\n\n**Then the `chatWarmedUp` block**: manual verification turned up a timing issue — the first time this VS Code session opens the Chat panel, the Promise from `workbench.action.chat.open` often resolves before Chat's own webview has actually finished mounting, so `query` never gets applied — the reader has to click twice before it takes effect. The fix waits an extra 400ms and re-sends once, but only on the provider's first call this session — a pragmatic timing patch, not a real fix, since VS Code has no API that lets an extension know \"Chat's webview is genuinely ready to receive input.\"\n\n`isPartialQuery: true` fills the input without auto-sending, because Cursor doesn't auto-send either (even versions that support this command only fill it in) — setting it `true` keeps both editors behaving the same way, without needing two separate explanations for the divergence.",
+      "terms": [
+        {
+          "term": "cold start",
+          "explanation": "When a resource is used for the first time and asked to act before its initialization has finished, producing behavior that differs from once it's \"warm.\" Here it means the Chat webview's first mount: the Promise from `workbench.action.chat.open` resolves early and `query` never gets picked up — a single extra re-send on the first call is enough to recover it."
+        }
+      ],
+      "items": [
+        {
+          "kind": "pitfall",
+          "misconception": "It's fine for the webview to show \"sent\" even when sending to Chat fails — the content is in the clipboard anyway.",
+          "reality": "That's **the worst kind of failure**: silent and misleading. The reader believes the question made it into chat and won't think to check the clipboard — so `outcome: 'chatUnavailable'` has to be shown by the webview as an explicit notice, not folded into the same no-special-feedback path used for `'chat'`."
+        }
+      ],
+      "anchor": "  private async handleAskAgent(destination: AskAgentDestination, selection?: string): Promise<void> {\n    if (!this.currentWalk || !this.currentWalkPath) return;\n    const status = this.anchorReport?.steps[this.stepIndex]?.step ?? { kind: 'unanchored' as const };\n    const prompt = buildAskAgentPrompt({\n      walk: this.currentWalk,\n      walkPath: this.currentWalkPath,\n      workspaceRoot: getWorkspaceRoot(),\n      stepIndex: this.stepIndex,\n      stepStatus: status,\n      selection,\n    });\n\n    if (destination === 'clipboard') {\n      await this.writeAskAgentClipboard(prompt, 'clipboard');\n      return;\n    }\n\n    try {\n      // isPartialQuery: true——只填入不代讀者送出。Cursor 本來就不自動送\n      // (即使支援此命令的版本也只填入),設 true 讓兩個編輯器行為一致\n      // (design.md 決策 4)。不預先用 getCommands() 偵測命令是否存在:\n      // 那只答得出「存不存在」,答不出「執行失敗」,try/catch 兩者都涵蓋\n      // (design.md 決策 5)。\n      await vscode.commands.executeCommand('workbench.action.chat.open', {\n        query: prompt,\n        isPartialQuery: true,\n      });\n      if (!this.chatWarmedUp) {\n        this.chatWarmedUp = true;\n        // 冷啟動時 Chat 自己的 webview 常常還沒掛載完成,query 就被吃掉了\n        // (讀者要點兩次才生效,見手動驗證的實測結果)。只在這個 session 的\n        // 第一次補送一次;之後面板已經「熱」了,不再需要這個延遲。冷啟動\n        // 當下面板連可互動的輸入框都還沒掛出來,不會有「補送蓋掉讀者已輸入\n        // 內容」的風險。\n        await new Promise((resolve) => setTimeout(resolve, 400));\n        await vscode.commands.executeCommand('workbench.action.chat.open', {\n          query: prompt,\n          isPartialQuery: true,\n        });\n      }\n      this.post({ type: 'askAgentResult', outcome: 'chat' });\n    } catch {\n      await this.writeAskAgentClipboard(prompt, 'chatUnavailable');\n    }\n  }"
+    },
+    {
+      "title": "Step 28: The button that pops up on text selection — how its position is computed, and a visibility trap",
+      "file": "ui/main.ts",
+      "startLine": 546,
+      "endLine": 576,
+      "narration": "The panel has two ask-AI entry points: one docked in every step's action row (next to the \"reveal this step's location\" button), and one that pops up near a text selection — **the two are the same action at a reinforced position, not a separate feature**, sharing one `onAskAgent()`.\n\nThe floating entry point only computes vertical position, not horizontal: it's pinned to the `#app` container's **left edge**, and only follows the selection's `bottom` downward. The panel is roughly 300px wide, and the two buttons side by side are already close to the limit — if it also followed the cursor horizontally, a selection near the right edge would inevitably overflow, requiring a whole extra clamp routine. Pinning to the left edge turns the horizontal position into a constant; the cost is the mouse might have to travel a bit further, but that's exactly what the docked entry point is for — most of the time the reader doesn't need the popup at all.\n\n`ensureAskAgentPopup()` hides a trap worth remembering: visibility **can't** use the `hidden` attribute — it has to use inline `style.display`. The reason is that `hidden` works via the browser's built-in `[hidden] { display: none }` rule, but `theme.css` also sets `display` on the `.codewalk-ask-agent-popup` class — at equal specificity, an author's own stylesheet always beats the browser's built-in one, so `hidden` gets completely overridden (the popup never disappears once shown — exactly the symptom hit during manual verification). Inline styles outrank any class rule, sidestepping the conflict entirely. **Any time an element has `display` set by a CSS class and you also want to toggle it with the `hidden` attribute, you'll hit this exact same problem.**",
+      "terms": [],
+      "items": [
+        {
+          "kind": "pitfall",
+          "misconception": "The `hidden` HTML attribute is the most semantic way to show/hide an element, so it's the obvious choice.",
+          "reality": "The `hidden` attribute is just a built-in browser rule, `[hidden] { display: none }`, at the same specificity as an author's own class selector. If any other CSS also sets `display` on that same element, whichever comes later in the cascade wins — `hidden` may end up doing nothing at all. To guarantee visibility actually toggles, inline `style.display` is the reliable choice."
+        },
+        {
+          "kind": "snippet",
+          "label": "ensureAskAgentPopup / hideAskAgentPopup: mounted on body, not inside #app",
+          "file": "ui/main.ts",
+          "startLine": 507,
+          "endLine": 544,
+          "anchor": "function ensureAskAgentPopup(): HTMLElement {\n  if (askAgentPopup) return askAgentPopup;\n  const popup = el('div', 'codewalk-ask-agent-popup');\n  // 用行內 style.display 控制顯隱,不用 hidden 屬性——hidden 是靠瀏覽器內建的\n  // `[hidden] { display: none }` 生效,但 theme.css 對這個 class 自己也設了\n  // display,同優先度下作者樣式表永遠贏過瀏覽器內建樣式,會讓 hidden 屬性\n  // 完全失效(浮出後永遠消不掉)。行內樣式的優先度贏過任何 class 規則,\n  // 徹底避開這個衝突。\n  popup.style.display = 'none';\n\n  const chatButton = el('button');\n  chatButton.type = 'button';\n  chatButton.appendChild(icon('comment-discussion'));\n  chatButton.appendChild(el('span', undefined, t('askAgent.sendToChat')));\n  chatButton.addEventListener('click', () => {\n    onAskAgent('chat');\n    hideAskAgentPopup();\n  });\n  popup.appendChild(chatButton);\n\n  const copyButton = el('button');\n  copyButton.type = 'button';\n  copyButton.appendChild(icon('copy'));\n  copyButton.appendChild(el('span', undefined, t('askAgent.copyPrompt')));\n  copyButton.addEventListener('click', () => {\n    onAskAgent('clipboard');\n    hideAskAgentPopup();\n  });\n  popup.appendChild(copyButton);\n\n  document.body.appendChild(popup);\n  askAgentPopup = popup;\n  return popup;\n}\n\nfunction hideAskAgentPopup(): void {\n  if (askAgentPopup) askAgentPopup.style.display = 'none';\n}"
+        },
+        {
+          "kind": "snippet",
+          "label": "renderAskAgentActions: the docked entry point shares the same handlers",
+          "file": "ui/render/walking.ts",
+          "startLine": 97,
+          "endLine": 119,
+          "anchor": "function renderAskAgentActions(\n  onAskAgent: (destination: AskAgentDestination) => void,\n  feedback: AskAgentFeedback | null,\n): HTMLElement {\n  const group = el('div', 'codewalk-ask-agent-actions');\n\n  const chatButton = el('button', 'codewalk-ask-agent-chat');\n  chatButton.appendChild(icon('comment-discussion'));\n  chatButton.appendChild(el('span', undefined, t('askAgent.sendToChat')));\n  chatButton.addEventListener('click', () => onAskAgent('chat'));\n  group.appendChild(chatButton);\n\n  const copyButton = el('button', 'codewalk-ask-agent-copy');\n  copyButton.setAttribute('aria-live', 'polite');\n  copyButton.appendChild(icon('copy'));\n  copyButton.appendChild(\n    el('span', undefined, feedback === 'copied' ? t('askAgent.copied') : t('askAgent.copyPrompt')),\n  );\n  copyButton.addEventListener('click', () => onAskAgent('clipboard'));\n  group.appendChild(copyButton);\n\n  return group;\n}"
+        }
+      ],
+      "anchor": "/**\n * 垂直跟隨選取結尾、水平貼齊 `#app` 容器左緣——面板很窄,若水平追隨游標,\n * 靠右選取時必然溢出,得再寫一套 clamp 邏輯(design.md 決策 9)。\n */\nfunction positionAskAgentPopup(range: Range): void {\n  const app = document.getElementById('app');\n  if (!app) return;\n  const popup = ensureAskAgentPopup();\n  const rangeRect = range.getBoundingClientRect();\n  const appRect = app.getBoundingClientRect();\n  popup.style.left = `${appRect.left + 8}px`;\n  popup.style.top = `${rangeRect.bottom + 4}px`;\n  popup.style.display = 'flex';\n}\n\ndocument.addEventListener('selectionchange', () => {\n  if (current.screen !== 'walking') {\n    currentSelection = undefined;\n    hideAskAgentPopup();\n    return;\n  }\n  const selection = document.getSelection();\n  const text = selection && !selection.isCollapsed ? selection.toString().trim() : '';\n  if (!selection || !text) {\n    currentSelection = undefined;\n    hideAskAgentPopup();\n    return;\n  }\n  currentSelection = text;\n  positionAskAgentPopup(selection.getRangeAt(0));\n});"
+    },
+    {
+      "title": "Step 29: How an agent opens the panel after generating a walk — parsing the URI",
+      "file": "src/uriHandler.ts",
+      "startLine": 10,
+      "endLine": 27,
+      "narration": "`add-mcp-bridge` fills in the other direction: after an agent finishes generating a walk, it can open the panel itself and jump to a specific step, without making the reader hunt for the file and click the panel open manually. The entry point is a URI:\n\n`vscode://{publisher}.{name}/open?walk=<workspace-relative path>&step=<0-based index, optional>`\n\n`parseOpenUri()` only handles the URI's own syntax parsing, deliberately avoiding the `vscode` API so this logic can be unit tested independently, the same as `askAgentPrompt.ts`. Three details worth noting:\n\n- When `uri.path !== '/open'` or the `walk` parameter is missing, it returns `null` and lets the caller quietly ignore it — not every URI that arrives is valid\n- `step` is optional: omitting it means start at step one; supplying something that isn't a valid non-negative integer (a typo, a negative number) falls back to \"treat it as if it were omitted\" rather than an error that blocks opening the walk entirely — **open what you can; a broken step index shouldn't prevent the walk from opening at all**\n- `step` is **0-based**, matching the `.codewalk.json` `steps[N]` array index — and the same index convention step 26's `askAgentPrompt.ts` uses — an agent reading the JSON can drop the index straight into the URL with no conversion\n\nThe actual path-safety check — blocking `..` traversal, resolving into an absolute path inside the workspace — doesn't happen here; that's next step's `openWalkFromUri()`. This file only splits the string apart.",
+      "terms": [],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "createUriHandler: the object registered with registerUriHandler",
+          "file": "src/uriHandler.ts",
+          "startLine": 29,
+          "endLine": 38,
+          "anchor": "/** 註冊給 `vscode.window.registerUriHandler` 的 handler 物件。 */\nexport function createUriHandler(provider: WalkPlayerViewProvider): { handleUri(uri: OpenUriLike): void } {\n  return {\n    handleUri(uri: OpenUriLike): void {\n      const parsed = parseOpenUri(uri);\n      if (!parsed) return;\n      void provider.openWalkFromUri(parsed.walk, parsed.stepIndex);\n    },\n  };\n}"
+        }
+      ],
+      "anchor": "/** `vscode.Uri` 中這支函式實際用到的部分——用結構型別而非 import `vscode`,讓解析邏輯不依賴 vscode 模組。 */\nexport interface OpenUriLike {\n  path: string;\n  query: string;\n}\n\n/** 解析出的 `open` 請求;`uri.path` 不是 `/open` 或缺少 `walk` 參數時為 `null`。 */\nexport function parseOpenUri(uri: OpenUriLike): { walk: string; stepIndex?: number } | null {\n  if (uri.path !== '/open') return null;\n  const params = new URLSearchParams(uri.query);\n  const walk = params.get('walk');\n  if (!walk) return null;\n  const stepParam = params.get('step');\n  if (stepParam === null) return { walk };\n  const stepIndex = Number(stepParam);\n  if (!Number.isInteger(stepIndex) || stepIndex < 0) return { walk };\n  return { walk, stepIndex };\n}"
+    },
+    {
+      "title": "Step 30: The panel might not exist yet when the URI arrives — and a real bug about activation timing",
+      "file": "src/viewProvider.ts",
+      "startLine": 107,
+      "endLine": 139,
+      "narration": "`openWalkFromUri()` is where a URI actually does something once it arrives, and it has to handle a variant of a problem step 11 already covered: **the panel may not have been built yet this session**.\n\nOn the path-handling side, `relativePath` is a string coming from an external process (an agent) — **not** an internal `.codewalk.json` field — so it can't be trusted the way internal data is. It always goes through `resolveInWorkspace()` to resolve and block `..` traversal — the same function from step 1, reused rather than reimplemented with a naive `join()`, which comes with its existing path-traversal protection for free.\n\nOn the error-handling side, when there's no workspace or the path escapes it, it uses `loadError` (the full-screen error view shared with a broken walk file) instead of `vscode.window.showErrorMessage` — the latter is an easily-missed toast. **Whichever branch runs, the panel must be brought to the foreground** so the reader can actually see what happened, instead of staying wherever they were, wondering whether that URI just did something.\n\nWhen the panel hasn't been built yet, the open request is stashed in `pendingOpenRequest`, consumed once the `webviewReady` branch from step 11 fires — this competes for the same timing slot as the existing \"resume last progress\" behavior, so a URI-triggered open **replaces** rather than layers on top of that resume behavior; the reader isn't pulled back to whatever they were last reading.\n\n**But there's the most expensive bug of this whole change hiding here**, worth recording in full, because what it teaches isn't about this code — it's about `package.json`: during manual verification, the first time a URI was triggered, the panel did absolutely nothing — not even an error message — but \"manually open the CodeWalk panel first, then trigger the URI\" worked perfectly. Step 2 already gave the answer: VS Code can only infer implicit activation events from `contributes`; `registerUriHandler` is a dynamic call, so it can't be inferred, and without an explicit `\"onUri\"` in `activationEvents`, if the extension hasn't been activated by any other path this session, the first URI simply has nowhere to go. The time-consuming part wasn't finding that answer — it was the detours taken to get there: F5 combined with `launch.json` kept opening a blank window with no workspace, and a third-party tool called `vscode-custom-css` was eating CLI arguments. The diagnosis started in entirely the wrong direction, suspecting the sidebar's focus logic, and three fix attempts were written and confirmed useless before the real root cause was found — at which point those three attempts were reverted back down to the simplest possible single `.focus()` call.",
+      "terms": [],
+      "items": [
+        {
+          "kind": "pitfall",
+          "misconception": "If the panel doesn't respond the first time a URI fires, the focus / reveal code must be broken.",
+          "reality": "The root cause was actually `package.json`'s `activationEvents`, not any line of TypeScript. If the extension was never activated in the first place, none of the focus / reveal logic downstream ever runs — diagnosis should start by confirming `activate()` was actually called, not by rewriting UI logic (see step 2)."
+        }
+      ],
+      "anchor": "  /**\n   * URI handler(`vscode://.../open?walk=...&step=...`)的處理常式。`relativePath`\n   * 是外部程序傳進來的字串,一律經 `resolveInWorkspace()` 解析並擋 `..` 逸出——\n   * 這不是 `.codewalk.json` 內部欄位,不能比照內部資料信任(design.md 決策 7)。\n   *\n   * 面板一律要被帶到前景——不論後面走哪個分支都要讓讀者看到面板,而不是留在\n   * 原本在看的地方猜「剛剛那個 URI 是不是壞了」。錯誤情況(沒有 workspace、\n   * 路徑逸出)改用 `loadError`(全螢幕錯誤畫面)取代 `vscode.window.showErrorMessage`\n   * (容易被忽略的 toast),與既有「導讀格式錯誤」共用同一條、讀者已經熟悉的\n   * 錯誤呈現方式。\n   *\n   * 面板這個 session 已經建立過 webview 時直接處理;否則存進 `pendingOpenRequest`\n   * / `pendingOpenError`,等 `webviewReady` 送達再消費(決策 8)。\n   */\n  public async openWalkFromUri(relativePath: string, stepIndex?: number): Promise<void> {\n    const root = getWorkspaceRoot();\n    if (!root) {\n      this.reportOpenUriError(t('host.noWorkspace'));\n      return;\n    }\n    const absPath = resolveInWorkspace(root, relativePath);\n    if (!absPath) {\n      this.reportOpenUriError(t('host.invalidWalkPath', { path: relativePath }));\n      return;\n    }\n    if (this.view) {\n      await this.loadWalk(absPath);\n      if (stepIndex !== undefined) await this.setStep(stepIndex);\n    } else {\n      this.pendingOpenRequest = { path: absPath, stepIndex };\n    }\n    void vscode.commands.executeCommand(`${WalkPlayerViewProvider.viewId}.focus`);\n  }"
+    },
+    {
+      "title": "Step 31: An MCP server embedded in the extension — two read-only tools and dual-window coordination",
+      "file": "src/mcpServer.ts",
+      "startLine": 77,
+      "endLine": 120,
+      "narration": "The URI handler solves \"open the panel\"; the MCP server solves \"query its state\" — an agent that wants to know which walk the reader is on, and which step, no longer has to ask the reader to describe it.\n\n**The transport is Streamable HTTP embedded in the extension, not stdio spawned by the agent.** The reason is direct: the reader's reading state lives in the memory of the running extension host. A process spawned by the agent is a brand-new, independent process with no shared memory — getting the live state would require another layer of cross-process communication, which is just reinventing HTTP. It uses the official `@modelcontextprotocol/sdk`; the server calls `listen(0)` itself so the OS assigns a free port, and holds a direct reference to `WalkPlayerViewProvider`.\n\n**Multi-window coordination doesn't implement a real lock.** When the same workspace is open in two windows at once, the newer window first reads the discovery file (next step), then fires a short-timeout `GET /health` at the recorded port: if it's alive, that means another window is already serving this workspace — don't start, don't overwrite, just notify the reader once via `showInformationMessage` (not a silent no-op); if there's no response (timeout, connection refused, or the file simply doesn't exist), treat it as a stale record or a first launch, and overwrite and start normally. A file lock or heartbeat mechanism could be more rigorous, but the odds of two windows starting at nearly the same instant are vanishingly small — the complexity that would buy isn't proportionate. This is a deliberately accepted edge case, not an oversight.\n\nBoth tools are read-only: `codewalk_current_step` calls `provider.getCurrentStepSnapshot()` directly (next step goes deeper), and `codewalk_list_walks` wraps the existing `listWalkFiles()`. The MCP tool handlers themselves carry no business logic — they just package existing state into MCP's response shape, following the same principle as `askAgentPrompt.ts` in step 26: never recompute state that already has one single source of truth.",
+      "terms": [
+        {
+          "term": "MCP (Model Context Protocol)",
+          "explanation": "A protocol that lets AI agents call external tools and query external data in a standardized way. CodeWalk only uses its most basic capability here — read-only tool queries — not its other features (resources, bidirectional push). It was chosen over VS Code's own `languageModelTools` contribution point because Cursor supports MCP natively, but doesn't consume VS Code-specific contribution points."
+        },
+        {
+          "term": "discovery file",
+          "explanation": "A common technique for letting independent processes find each other without a central registry: whichever one starts first writes its own connection info (here, port and pid) to a file both sides can compute the same path for, and anyone arriving later reads that file to find it."
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "createMcpServer: two read-only tools, no business logic in the handlers",
+          "file": "src/mcpServer.ts",
+          "startLine": 46,
+          "endLine": 75,
+          "anchor": "function createMcpServer(provider: WalkPlayerViewProvider, workspaceRoot: string): McpServer {\n  const server = new McpServer({ name: 'codewalk-reader', version: '1.0.0' });\n\n  server.registerTool(\n    'codewalk_current_step',\n    {\n      title: 'CodeWalk current step',\n      description: '取得讀者目前在 CodeWalk 面板瀏覽到哪一份導讀、第幾步(唯讀,不改變面板狀態)。',\n    },\n    async () => {\n      const snapshot = provider.getCurrentStepSnapshot();\n      return { content: [{ type: 'text', text: JSON.stringify(snapshot) }] };\n    },\n  );\n\n  server.registerTool(\n    'codewalk_list_walks',\n    {\n      title: 'CodeWalk list walks',\n      description: '列出目前 workspace 下可播放的導讀(路徑與標題)。',\n    },\n    async () => {\n      const files = await listWalkFiles(workspaceRoot);\n      const result = buildAgentWalkList(files, workspaceRoot);\n      return { content: [{ type: 'text', text: JSON.stringify(result) }] };\n    },\n  );\n\n  return server;\n}"
+        },
+        {
+          "kind": "snippet",
+          "label": "computeDiscoveryFilePath: one discovery file per workspace",
+          "file": "src/mcpDiscovery.ts",
+          "startLine": 16,
+          "endLine": 25,
+          "anchor": "/**\n * 算出某個 workspace 對應的探索檔絕對路徑。同一個 `workspaceRoot` 一律得到\n * 同一個路徑,不同 workspace 天生不會撞到同一份檔案。\n *\n * @param tmpDir - `os.tmpdir()` 的回傳值,呼叫端傳入以便測試不依賴實際檔案系統\n */\nexport function computeDiscoveryFilePath(tmpDir: string, workspaceRoot: string): string {\n  const hash = createHash('sha256').update(workspaceRoot).digest('hex').slice(0, 16);\n  return join(tmpDir, 'codewalk-mcp', `${hash}.json`);\n}"
+        },
+        {
+          "kind": "tip",
+          "text": "The health-check timeout is only 300ms — this network round trip is wrapped in a fire-and-forget call (next step shows how `extension.ts` invokes it), so it never blocks `activate()` itself, and the reader never perceives the delay."
+        }
+      ],
+      "anchor": "/**\n * 啟動 MCP server。呼叫端(`extension.ts`)必須以 fire-and-forget 呼叫,啟動\n * 失敗不該擋住 extension 的其他功能(design.md 決策 9)。\n *\n * @remarks\n * 先對探索檔記錄的 port(若存在)做一次 health check——活著就判定另一個視窗\n * 已在服務這個 workspace,不啟動也不覆蓋,只通知讀者一次;沒反應則視為殭屍\n * 記錄或首次啟動,正常覆蓋(design.md 決策 4)。\n */\nexport async function startMcpServer(provider: WalkPlayerViewProvider, workspaceRoot: string): Promise<void> {\n  const discoveryFilePath = computeDiscoveryFilePath(tmpdir(), workspaceRoot);\n  const existing = await readDiscoveryInfo(discoveryFilePath);\n  if (existing && (await isServerAlive(existing.port))) {\n    vscode.window.showInformationMessage(t('mcp.anotherWindowServing'));\n    return;\n  }\n\n  const mcpServer = createMcpServer(provider, workspaceRoot);\n  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });\n  await mcpServer.connect(transport);\n\n  const server = createServer((req, res) => {\n    if (req.method === 'GET' && req.url === '/health') {\n      res.writeHead(200).end('ok');\n      return;\n    }\n    void transport.handleRequest(req, res);\n  });\n\n  await new Promise<void>((resolve, reject) => {\n    server.once('error', reject);\n    server.listen(0, '127.0.0.1', resolve);\n  });\n\n  const address = server.address();\n  const port = typeof address === 'object' && address ? address.port : 0;\n\n  await mkdir(dirname(discoveryFilePath), { recursive: true });\n  const info: McpDiscoveryInfo = { port, pid: process.pid };\n  await writeFile(discoveryFilePath, JSON.stringify(info));\n\n  httpServer = server;\n  ownDiscoveryFilePath = discoveryFilePath;\n}"
+    },
+    {
+      "title": "Step 32: The pure functions behind the MCP tools — no recomputation, just assembling existing state",
+      "file": "src/currentStepSnapshot.ts",
+      "startLine": 26,
+      "endLine": 61,
+      "narration": "`codewalk_current_step`'s return shape is deliberately designed so that having no active walk is a **legitimate state, not an error** — `{ active: false }` — callers don't need try/catch to handle \"the reader isn't currently looking at a walk,\" which is a perfectly normal situation.\n\n`buildCurrentStepSnapshot()` carries no business logic of its own: line numbers always go through the existing `effectiveLineRange()`, and paths always go through the existing `toWorkspaceRelativePath()` (the function that first showed up in step 1) — this is its third use: the panel's display, `askAgentPrompt.ts`, and now MCP. The anchor status is reported unchanged as `anchorStatus: input.stepStatus.kind`, and a stale step is reported honestly as `'stale'` rather than hidden — the same spirit as the stale warning line in step 26's prompt: better to let the agent know this can't be trusted than to hand it stale data and get a confidently wrong answer back.\n\n`buildAgentWalkList()` is the second example of the same pattern: it wraps `listWalkFiles()`, picking out only the fields an agent needs — `path` (converted to a relative path) and `title` — without re-scanning `.codewalk/`.\n\nTogether, these two functions demonstrate a posture that keeps recurring throughout this walk: **a new feature should reuse an existing single source of truth wherever possible, rather than standing up a parallel calculation just for its new entry point.** MCP, the panel's display, and the `askAgent` prompt — three entirely different use cases — share the same line-number conversion, the same path conversion, and the same anchor status.\n\nAnd that's where this walk ends: the panel went from \"the reader reads alone\" to \"an agent and the reader share the same reading progress\" — a third thing worth remembering, beyond the two things step 1 opened with. That's the whole walk. Hit the button below to check your understanding with the quiz.",
+      "terms": [],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "CurrentStepSnapshot: active: false is a legitimate state, not an error",
+          "file": "src/currentStepSnapshot.ts",
+          "startLine": 11,
+          "endLine": 24,
+          "anchor": "/** `codewalk_current_step` 的回傳形狀。沒有作用中導讀時是合法狀態,不是錯誤(design.md 決策 5)。 */\nexport type CurrentStepSnapshot =\n  | { active: false }\n  | {\n      active: true;\n      walkPath: string;\n      walkTitle: string;\n      stepIndex: number;\n      stepTitle: string;\n      file: string;\n      startLine: number;\n      endLine: number;\n      anchorStatus: AnchorStatus['kind'];\n    };"
+        },
+        {
+          "kind": "snippet",
+          "label": "buildAgentWalkList: the second example of the same pattern",
+          "file": "src/agentWalkList.ts",
+          "startLine": 18,
+          "endLine": 28,
+          "anchor": "export function buildAgentWalkList(\n  files: WalkFileSummary[],\n  workspaceRoot: string | undefined,\n): AgentWalkListResult {\n  return {\n    walks: files.map((file) => ({\n      path: toWorkspaceRelativePath(workspaceRoot, file.path),\n      title: file.title,\n    })),\n  };\n}"
+        }
+      ],
+      "anchor": "/**\n * 組出 `codewalk_current_step` 的回傳內容。\n *\n * @param walk - 目前作用中的導讀;沒有作用中導讀時為 `undefined`\n * @param walkPath - 導讀檔的絕對路徑;與 `walk` 同時存在或同時缺席\n * @param stepStatus - 目前步驟的錨驗證結果,決定行號換算與回報的狀態\n *\n * @remarks\n * 行號一律走既有 `effectiveLineRange()`,路徑一律走既有 `toWorkspaceRelativePath()`\n * ——與面板顯示、`askAgentPrompt.ts` 用同一套邏輯,不重算(design.md 決策 5)。\n * 失準的步驟如實回報 `anchorStatus: 'stale'`,不隱藏(ask-agent capability\n * 「失準的步驟必須在提問中標明」的同一個精神,套用到查詢介面)。\n */\nexport function buildCurrentStepSnapshot(input: {\n  walk: CodewalkFile | undefined;\n  walkPath: string | undefined;\n  workspaceRoot: string | undefined;\n  stepIndex: number;\n  stepStatus: AnchorStatus;\n}): CurrentStepSnapshot {\n  if (!input.walk || !input.walkPath) return { active: false };\n  const step = input.walk.steps[input.stepIndex];\n  const { startLine, endLine } = effectiveLineRange(step, input.stepStatus);\n\n  return {\n    active: true,\n    walkPath: toWorkspaceRelativePath(input.workspaceRoot, input.walkPath),\n    walkTitle: input.walk.title,\n    stepIndex: input.stepIndex,\n    stepTitle: step.title,\n    file: step.file,\n    startLine,\n    endLine,\n    anchorStatus: input.stepStatus.kind,\n  };\n}"
     }
   ],
   "quiz": [
@@ -725,6 +927,54 @@
         "Right: `highlightSnippetLines()` finds the language unregistered and returns plain-text tokens without erroring. This kind of silent failure looks exactly like \"this one just happens not to be colored,\" so only a test can guard against it.",
         "Wrong: Shiki never gets called at all — `isLanguageSupported()` blocks it before `codeToTokens()` is ever invoked.",
         "Wrong: `detectLanguage()` returns `'text'` (an explicit default) when nothing matches, not `undefined`. That's part of the same degradation posture: never hand upstream a value that would blow it up."
+      ]
+    },
+    {
+      "question": "Why doesn't the question src/askAgentPrompt.ts builds include the full step narration, instead only giving the walk file path plus step index?",
+      "options": [
+        "The narration might contain sensitive content, so it's better not to send it directly",
+        "Stuffing it full would make the chat input need to scroll, and the whole point of isPartialQuery is to let the reader see and edit it; an agent that reads the pointer also gets more (the full narration, terms, items, surrounding steps) than what would fit in the prompt anyway",
+        "The narration field supports markdown, which would be parsed incorrectly if pasted directly into chat",
+        "The host has no way to read the narration's full content, so it can only pass a path"
+      ],
+      "correctIndex": 1,
+      "optionExplanations": [
+        "Wrong: narration is prose written by the walk's own author, not sensitive data — that's not a reason to exclude it.",
+        "Right: the design doc records a measured narration median between 545 and 1305 characters — including it all would make the input need scrolling, defeating isPartialQuery's whole point of letting the reader see and edit; and an agent with filesystem access gets far more by following the pointer than what would fit in the prompt.",
+        "Wrong: markdown syntax renders fine as plain text in a chat input box — that's not an issue.",
+        "Wrong: the host holds the complete CodewalkFile object and can read the narration's full content — it simply chooses not to put it in the prompt."
+      ]
+    },
+    {
+      "question": "When the same workspace is open in two windows at once, what coordination strategy does startMcpServer() use? Why not implement a real lock (file lock, heartbeat)?",
+      "options": [
+        "A short-timeout health check against the port recorded in the discovery file — alive means don't start, just notify the reader; no response means overwrite it as a stale record. A real lock's complexity wouldn't be proportionate for this MVP situation",
+        "An OS-level file lock (flock) ensures only one process can write the discovery file at a time",
+        "The first window keeps sending heartbeats to update the discovery file; the later window polls and waits for a timeout before starting",
+        "Both windows just start directly, relying on the user noticing a port conflict and manually closing one"
+      ],
+      "correctIndex": 0,
+      "optionExplanations": [
+        "Right: design.md decision 4 explicitly says no lock contention — a real lock mechanism (file lock, heartbeat, retry negotiation) would add complexity disproportionate to the vanishingly small odds of two windows starting at nearly the same instant, which the MVP stage accepts as-is.",
+        "Wrong: this is exactly what decision 4 explicitly rejects, citing disproportionate complexity.",
+        "Wrong: a heartbeat mechanism needs background polling, adding standing overhead — the design doc explicitly rules it out too.",
+        "Wrong: a dynamic port (listen(0)) never collides by design — there's no \"port conflict\" scenario that would need user intervention."
+      ]
+    },
+    {
+      "question": "Why does package.json's activationEvents need to explicitly list \"onUri\", instead of letting VS Code infer it automatically from contributes?",
+      "options": [
+        "registerUriHandler is called dynamically inside activate(); contributes has no corresponding declaration to infer from — if the extension hasn't been activated by any other path this session, the first URI that arrives has nowhere to go at all",
+        "onUri is an event VS Code mandates every extension declare, regardless of whether it uses a URI handler",
+        "activationEvents is only a performance hint; omitting it doesn't affect functionality, it just makes startup a bit slower",
+        "The contributes declarations for views/commands already cover URI activation timing, so writing onUri is redundant and has no real effect"
+      ],
+      "correctIndex": 0,
+      "optionExplanations": [
+        "Right: VS Code can only infer implicit activation events from declarations inside contributes (views, commands); registerUriHandler is called dynamically in code, with no corresponding declaration to infer from. Manual verification found the panel completely unresponsive to the first URI trigger when it hadn't been opened yet — this is exactly the root cause.",
+        "Wrong: activationEvents is declared per-extension based on what that extension actually uses — there's no such thing as a mandatory event.",
+        "Wrong: missing it isn't slower, it's that this activation path never fires at all — a functional difference, not a performance one.",
+        "Wrong: views/commands infer onView:/onCommand: events, which don't cover URI activation — a completely separate activation path."
       ]
     }
   ]

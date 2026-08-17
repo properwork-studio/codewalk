@@ -1,8 +1,8 @@
 {
-  "title": "CodeWalk 全專案導讀:從 JSON 合約到側邊面板的一條龍",
-  "ref": "e8ed6c3b9adebc6102a2633cae0b383c85d8a61e",
-  "regenerateHint": "請重新走過 CodeWalk 的 src/、shared/、ui/ 三層,產生一份對齊目前 HEAD 的全專案導讀,輸出到 .codewalk/ 並為每個 step 與 snippet 填入 anchor 欄位。",
-  "passThreshold": 4,
+  "title": "CodeWalk 全專案導讀:從 JSON 合約到側邊面板,再到 agent 橋接的一條龍",
+  "ref": "7dec7aba62328da242692c7a72b00019c4e4a27a",
+  "regenerateHint": "請重新走過 CodeWalk 的 src/、shared/、ui/ 三層(含 URI handler 與 MCP server),產生一份對齊目前 HEAD 的全專案導讀,輸出到 .codewalk/ 並為每個 step 與 snippet 填入 anchor 欄位;也可在本 repo 執行 /explain-change,範圍:whole-codebase。",
+  "passThreshold": 6,
   "steps": [
     {
       "title": "第 1 步:先看全貌——這個專案到底在做什麼",
@@ -29,7 +29,7 @@
       "file": "package.json",
       "startLine": 34,
       "endLine": 52,
-      "narration": "左側活動列上的 CodeWalk 圖示、點開後的那個面板,**沒有任何一行程式碼負責建立它們**——全部由 `package.json` 的 `contributes` 宣告。VS Code 讀這份 manifest 就知道要畫什麼。\n\n這裡宣告了兩件事:\n\n- `viewsContainers.activitybar`:在活動列開一個叫 `codewalk` 的容器,用 `resources/icon.svg` 當圖示\n- `views.codewalk`:容器裡放一個 id 為 `codewalk.playerView`、`type: \"webview\"` 的 view\n\n那個 id 待會會再出現一次——`viewProvider.ts` 裡的 `WalkPlayerViewProvider.viewId` 必須跟這裡的字串**逐字相同**,否則 VS Code 找不到對應的 provider,面板會是空白的。這是一個沒有型別保護的字串契約,只能靠人記住。\n\nmanifest 上方的 `activationEvents` 是空陣列,這是刻意的:VS Code 1.74 起會從 `contributes` 自動推斷啟動時機,宣告了 view 就等於宣告了「這個 view 被開啟時啟動我」,不必再手寫 `onView:` 事件。",
+      "narration": "左側活動列上的 CodeWalk 圖示、點開後的那個面板,**沒有任何一行程式碼負責建立它們**——全部由 `package.json` 的 `contributes` 宣告。VS Code 讀這份 manifest 就知道要畫什麼。\n\n這裡宣告了兩件事:\n\n- `viewsContainers.activitybar`:在活動列開一個叫 `codewalk` 的容器,用 `resources/icon.svg` 當圖示\n- `views.codewalk`:容器裡放一個 id 為 `codewalk.playerView`、`type: \"webview\"` 的 view\n\n那個 id 待會會再出現一次——`viewProvider.ts` 裡的 `WalkPlayerViewProvider.viewId` 必須跟這裡的字串**逐字相同**,否則 VS Code 找不到對應的 provider,面板會是空白的。這是一個沒有型別保護的字串契約,只能靠人記住。\n\nmanifest 上方的 `activationEvents` 目前是 `[\"onUri\"]`,不是空陣列——這行本身就是一個故事。VS Code 1.74 起會從 `contributes`(`views`、`commands`)自動推斷啟動時機,宣告了 view 就等於宣告了「這個 view 被開啟時啟動我」,不必手寫 `onView:` 事件。但這個推斷只看得到 `contributes` 裡的宣告,涵蓋不到第 30 步會看到的 `vscode.window.registerUriHandler()`——那是在 `activate()` 內動態呼叫的,`contributes` 沒有對應的宣告可以推論。少了明確的 `onUri`,extension 這個 session 還沒被別的途徑啟動過時,第一次抵達的 `vscode://` URI 會完全無處可去。這是手動驗證時真的踩到的 bug,第 30 步會講完整的偵錯過程。",
       "terms": [
         {
           "term": "contributes",
@@ -53,6 +53,11 @@
           "kind": "pitfall",
           "misconception": "面板的 id 只是個內部名稱,取什麼都行,反正程式碼裡自己對應。",
           "reality": "`codewalk.playerView` 這個字串同時出現在 `package.json` 與 `src/viewProvider.ts`,兩邊必須完全相同。TypeScript 看不到 JSON 裡的值,打錯不會編譯失敗——只會在執行時得到一個永遠空白的面板,而且沒有錯誤訊息。"
+        },
+        {
+          "kind": "pitfall",
+          "misconception": "activationEvents 只要留空,VS Code 就會自動幫我推論好所有需要的啟動時機,不用自己管。",
+          "reality": "自動推斷只吃得到 `contributes` 裡的宣告(`views`、`commands`、`menus` 等)。任何在 `activate()` 內才動態註冊的東西——像 `registerUriHandler`——都不在推斷範圍內,漏寫對應的 activationEvents 會讓那個功能第一次觸發時完全無回應,而且沒有任何錯誤訊息可以看,非常難排查。"
         }
       ],
       "anchor": "    \"onboarding\",\n    \"code tour\",\n    \"walkthrough\",\n    \"code reading\"\n  ],\n  \"icon\": \"resources/icon-128.png\",\n  \"main\": \"./dist/extension.js\",\n  \"activationEvents\": [\"onUri\"],\n  \"contributes\": {\n    \"viewsContainers\": {\n      \"activitybar\": [\n        {\n          \"id\": \"codewalk\",\n          \"title\": \"CodeWalk\",\n          \"icon\": \"resources/icon.svg\"\n        }\n      ]\n    },\n    \"views\": {"
@@ -644,6 +649,203 @@
         }
       ],
       "anchor": "export function renderItems(\n  items: CodewalkItem[],\n  snippetPreviews: SnippetPreviewResult[],\n  itemAnchorStatuses: AnchorStepReport['items'],\n  handlers: ItemHandlers,\n): HTMLElement {\n  const container = el('div', 'codewalk-items');\n  items.forEach((item, itemIndex) => {\n    switch (item.kind) {\n      case 'tip':\n        container.appendChild(renderAnnotation('tip', 'lightbulb', item.text, handlers.onOpenReference));\n        break;\n      case 'todo':\n        container.appendChild(\n          renderAnnotation('todo', 'circle-large-outline', item.text, handlers.onOpenReference),\n        );\n        break;\n      case 'pitfall':\n        container.appendChild(renderPitfall(item.misconception, item.reality, handlers.onOpenReference));\n        break;\n      case 'reference':\n        container.appendChild(renderReference(item.label, item.url, handlers.onOpenReference));\n        break;\n      case 'snippet': {\n        const status = itemAnchorStatuses.find((s) => s.itemIndex === itemIndex)?.status ?? {\n          kind: 'unanchored',\n        };\n        container.appendChild(\n          renderSnippet(item, itemIndex, snippetPreviews, status, handlers.onJumpToSnippet),\n        );\n        break;\n      }\n      case 'diff':\n        container.appendChild(renderDiff(item, itemIndex, handlers.onJumpToSnippet));\n        break;\n    }\n  });\n  return container;\n}"
+    },
+    {
+      "title": "第 25 步:面板不再只能單向送——askAgent 訊息的形狀",
+      "file": "shared/protocol.ts",
+      "startLine": 99,
+      "endLine": 110,
+      "narration": "到這裡為止,面板做的每一件事都是**單向**的:把讀者送到程式碼、把讀者的答案收進去,但沒有一個動作是「把讀者手上的問題交給 AI」。`add-ask-agent-from-panel` 這個 change 補上這一半。\n\n新增的 webview → host 訊息只有一種形狀:\n\n`{ type: 'askAgent', destination: 'chat' | 'clipboard', selection?: string }`\n\n`destination` 決定送到哪,`selection` 省略代表「問整步」。這裡刻意**不**拆成 `askAgentToChat` / `askAgentToClipboard` 兩則訊息——兩者的 payload 完全相同,拆開只會讓 `parseWebviewToHostMessage()` 多出兩個逐字重複的分支。意圖本來就是同一個(把這一步交出去),差別只在送到哪。\n\n回頭送的 `askAgentResult` 訊息更值得注意:它是 host 端**動作完成後**才送出的事實回報,不是 webview 按下按鈕當下的樂觀顯示。下一步會看到為什麼這個差別很重要。",
+      "terms": [],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "askAgentResult:host 動作完成才送出,不是意圖的鏡射",
+          "file": "shared/protocol.ts",
+          "startLine": 176,
+          "endLine": 181,
+          "anchor": "  /**\n   * 對 `askAgent` 的結果回報。**送進 chat 失敗而退回剪貼簿時,webview 不能\n   * 樂觀地顯示「已送出」**——那是靜默且誤導的失敗(design.md 決策 6),\n   * 所以這則訊息一律等 host 端動作完成才送出,不是意圖的鏡射。\n   */\n  | { type: 'askAgentResult'; outcome: AskAgentOutcome };"
+        },
+        {
+          "kind": "snippet",
+          "label": "askAgent:單一訊息帶 destination,不拆兩則",
+          "file": "shared/protocol.ts",
+          "startLine": 208,
+          "endLine": 212,
+          "anchor": "  /**\n   * 把目前步驟(可選地帶框選文字)交給 AI 助手。`selection` 省略代表問整步,\n   * 不另立布林欄位——意圖本來就是同一個,差別只在送到哪(design.md 決策 7)。\n   */\n  | { type: 'askAgent'; destination: AskAgentDestination; selection?: string }"
+        }
+      ],
+      "anchor": "/**\n * 讀者觸發「把這一步交給 AI」時選擇的出口。兩者產生完全相同的提問內容,\n * 差別只在送到哪(ask-agent capability「把當前步驟交給 AI 助手的入口」)。\n */\nexport type AskAgentDestination = 'chat' | 'clipboard';\n\n/**\n * `askAgent` 訊息實際發生的結果,決定 webview 該顯示什麼回饋。`chatUnavailable`\n * 與 `failed` 是兩種不同的降級:前者已改寫剪貼簿成功,後者連剪貼簿都失敗\n * (design.md 決策 6)。\n */\nexport type AskAgentOutcome = 'chat' | 'clipboard' | 'chatUnavailable' | 'failed';"
+    },
+    {
+      "title": "第 26 步:交給 AI 的提問怎麼組——只帶指標,不帶整段敘述",
+      "file": "src/askAgentPrompt.ts",
+      "startLine": 12,
+      "endLine": 55,
+      "narration": "`buildAskAgentPrompt()` 是這個功能唯一值得單元測試的邏輯——純函式,`viewProvider` 碰 `vscode` API 不好測,所以抽出來單獨放。\n\n組出來的內容刻意**不含整步的 narration 全文**,只給「導讀檔路徑 + 步驟索引」當指標,讓 agent 自己讀進去。這個決定背後有實測數字撐腰:本 repo 兩份自帶導讀的 narration,中位數落在 545~1305 字元之間——全帶會讓 chat 的輸入框需要捲動才看得完,而下一步會看到 `isPartialQuery: true` 整個設計的用意就是**讓讀者看得到、能修改再送出**,塞滿等於白設這個選項。\n\n反過來看,agent 拿著路徑讀進去,得到的比塞進 prompt 的更多——整段 narration、`terms`、`items`、前後步全在,不只是被截斷的片段。\n\n`stepStatus.kind === 'stale'` 時會多加一行警語。沒有這行,agent 會照著導讀的敘述去讀現在的檔案,得出一個**很有自信的錯答案**——這比答不出來更糟。`shifted` 不需要特別說明,因為行號已經過 `effectiveLineRange()` 換算,agent 拿到的就是現在的正確位置。",
+      "terms": [],
+      "items": [
+        {
+          "kind": "tip",
+          "text": "prompt 骨架用**介面語言**、不固定英文,由 `shared/i18n.ts` 提供繁英兩份(`askAgent.promptIntro` 等 key)——它是讀者要讀、要改、要按送出的介面文案,不是 `schema.ts` 那種固定英文的診斷輸出。嵌進去的步驟標題、選取文字自然保持導讀本身的語言,不翻譯。"
+        }
+      ],
+      "anchor": "/**\n * 組出交給 AI 助手的提問內容。\n *\n * @param walkPath - 導讀檔的絕對路徑\n * @param workspaceRoot - workspace 根目錄;沒有已開啟的 workspace 時為 `undefined`\n * @param stepStatus - 目前步驟的錨驗證結果,決定行號換算與是否附加失準警示\n * @param selection - 讀者框選的文字;未框選時省略,提問以整步為對象\n *\n * @remarks\n * 刻意不含 `narration` 全文——實測本 repo 兩份導讀 narration 中位數落在\n * 545~1305 字元,全帶會讓 chat 輸入框需要捲動才看得完(design.md 決策 1)。\n * 提問改帶指標(導讀檔路徑 + 步驟索引),讓 agent 自己讀進去,拿到的比塞給它\n * 的更多。\n */\nexport function buildAskAgentPrompt(input: {\n  walk: CodewalkFile;\n  walkPath: string;\n  workspaceRoot: string | undefined;\n  stepIndex: number;\n  stepStatus: AnchorStatus;\n  selection?: string;\n}): string {\n  const step = input.walk.steps[input.stepIndex];\n  const location = toWorkspaceRelativePath(input.workspaceRoot, input.walkPath);\n  const { startLine, endLine } = effectiveLineRange(step, input.stepStatus);\n\n  const lines = [\n    t('askAgent.promptIntro', { step: input.stepIndex + 1, title: step.title }),\n    t('askAgent.promptLocation', { path: location, index: input.stepIndex }),\n    t('askAgent.promptFileRef', { file: step.file, startLine, endLine }),\n  ];\n\n  if (input.stepStatus.kind === 'stale') {\n    lines.push(t('askAgent.promptStale'));\n  }\n\n  if (input.selection !== undefined) {\n    lines.push('', t('askAgent.promptSelectionLabel'), input.selection);\n  }\n\n  lines.push('', t('askAgent.promptInstruction', { index: input.stepIndex }));\n\n  return lines.join('\\n');\n}"
+    },
+    {
+      "title": "第 27 步:送進 Chat 還是複製到剪貼簿——失敗不能靜默",
+      "file": "src/viewProvider.ts",
+      "startLine": 251,
+      "endLine": 295,
+      "narration": "`handleAskAgent()` 是這個功能真正碰 `vscode` API 的地方。`destination: 'clipboard'` 的路徑很直接——寫剪貼簿、回報結果。`'chat'` 的路徑則藏著兩個值得記住的設計。\n\n**先看失敗處理**:程式碼**不**預先呼叫 `vscode.commands.getCommands(true)` 去確認 `workbench.action.chat.open` 存不存在——那個 API 一次要撈回數千筆命令 ID,為一顆按鈕的判斷不划算,而且它只答得出「存不存在」,答不出「執行失敗」。改用 try/catch:成功就回報 `outcome: 'chat'`,失敗(命令不存在、或 Cursor 較舊版本沒有這個命令)就退回剪貼簿,回報 `outcome: 'chatUnavailable'`——**不能讓 webview 樂觀地顯示「已送出」**,那是靜默且誤導的失敗:讀者按了按鈕、chat 什麼都沒發生,卻以為問題已經送出去了。\n\n**再看 `chatWarmedUp` 那段**:手動驗證時發現一個時序問題——這個 VS Code session 第一次開啟 Chat 面板時,`workbench.action.chat.open` 的 Promise 常在 Chat 自己的 webview 真正掛載完成前就 resolve,`query` 因此沒被套用,讀者要點兩次才生效。修法是只在 provider 生命週期的第一次呼叫額外等待 400ms 後補送一次——這是時序上的務實補救,不是根治,因為 VS Code 沒有 API 能讓 extension 得知「Chat webview 真的準備好接收輸入」。\n\n`isPartialQuery: true` 只填入不自動送出,是因為 Cursor 本來就不自動送(即使支援這個命令的版本也只填入)——設 `true` 讓兩個編輯器行為一致,不必為此分歧寫兩套說明。",
+      "terms": [
+        {
+          "term": "冷啟動(cold start)",
+          "explanation": "同一個資源第一次被使用時,初始化還沒完成就被要求動作,導致行為跟「熱」起來之後不一致。這裡指 Chat webview 第一次掛載時,`workbench.action.chat.open` 的 Promise 提早 resolve,`query` 因此沒被接住——只在第一次額外補送一次即可補回。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "pitfall",
+          "misconception": "Chat 送進失敗時,webview 直接顯示「已送出」也沒差,反正剪貼簿裡已經有內容了。",
+          "reality": "那是**最糟的一種失敗**:靜默且誤導。讀者以為問題已經進了 chat,不會再想起要去剪貼簿貼上——所以 `outcome: 'chatUnavailable'` 必須被 webview 明確顯示成一則提示,而不是複用 `'chat'` 那種不特別提示的樂觀畫面。"
+        }
+      ],
+      "anchor": "  private async handleAskAgent(destination: AskAgentDestination, selection?: string): Promise<void> {\n    if (!this.currentWalk || !this.currentWalkPath) return;\n    const status = this.anchorReport?.steps[this.stepIndex]?.step ?? { kind: 'unanchored' as const };\n    const prompt = buildAskAgentPrompt({\n      walk: this.currentWalk,\n      walkPath: this.currentWalkPath,\n      workspaceRoot: getWorkspaceRoot(),\n      stepIndex: this.stepIndex,\n      stepStatus: status,\n      selection,\n    });\n\n    if (destination === 'clipboard') {\n      await this.writeAskAgentClipboard(prompt, 'clipboard');\n      return;\n    }\n\n    try {\n      // isPartialQuery: true——只填入不代讀者送出。Cursor 本來就不自動送\n      // (即使支援此命令的版本也只填入),設 true 讓兩個編輯器行為一致\n      // (design.md 決策 4)。不預先用 getCommands() 偵測命令是否存在:\n      // 那只答得出「存不存在」,答不出「執行失敗」,try/catch 兩者都涵蓋\n      // (design.md 決策 5)。\n      await vscode.commands.executeCommand('workbench.action.chat.open', {\n        query: prompt,\n        isPartialQuery: true,\n      });\n      if (!this.chatWarmedUp) {\n        this.chatWarmedUp = true;\n        // 冷啟動時 Chat 自己的 webview 常常還沒掛載完成,query 就被吃掉了\n        // (讀者要點兩次才生效,見手動驗證的實測結果)。只在這個 session 的\n        // 第一次補送一次;之後面板已經「熱」了,不再需要這個延遲。冷啟動\n        // 當下面板連可互動的輸入框都還沒掛出來,不會有「補送蓋掉讀者已輸入\n        // 內容」的風險。\n        await new Promise((resolve) => setTimeout(resolve, 400));\n        await vscode.commands.executeCommand('workbench.action.chat.open', {\n          query: prompt,\n          isPartialQuery: true,\n        });\n      }\n      this.post({ type: 'askAgentResult', outcome: 'chat' });\n    } catch {\n      await this.writeAskAgentClipboard(prompt, 'chatUnavailable');\n    }\n  }"
+    },
+    {
+      "title": "第 28 步:框選文字時浮出的按鈕——位置怎麼算、顯隱有一個坑",
+      "file": "ui/main.ts",
+      "startLine": 546,
+      "endLine": 576,
+      "narration": "面板有兩個問 AI 的入口:一個常駐在每個步驟的動作列(緊鄰「回到本步位置」按鈕),一個是框選文字時就近浮出的按鈕——**兩者是同一組動作的加強版位置,不是獨立功能**,共用同一個 `onAskAgent()`。\n\n浮出入口的定位策略只算垂直、不算水平:貼齊 `#app` 容器**左緣**,只跟著選取結尾的 `bottom` 往下移。面板大約只有 300px 寬,兩顆按鈕橫排已經接近極限——如果水平也追隨游標,靠右選取時必然溢出,得再寫一套 clamp 邏輯。貼齊左緣把水平位置變成常數,換來的代價是滑鼠可能要多移動一點,但那正是常駐入口存在的意義:大部分情況讀者根本不需要浮出層。\n\n`ensureAskAgentPopup()` 裡藏著一個值得記住的坑:顯隱**不能**用 `hidden` 屬性,得用行內 `style.display`。原因是 `hidden` 靠瀏覽器內建的 `[hidden] { display: none }` 生效,但 `theme.css` 對 `.codewalk-ask-agent-popup` 這個 class 自己也設了 `display`——同優先度下,作者樣式表永遠贏過瀏覽器內建樣式,會讓 `hidden` 完全失效(浮出後永遠消不掉,手動驗證時實測正是這個症狀)。行內樣式的優先度贏過任何 class 規則,徹底避開這個衝突。**任何時候一個元素同時被 CSS class 設定 `display` 又想用 `hidden` 屬性切換顯隱,都會踩到同一個問題。**",
+      "terms": [],
+      "items": [
+        {
+          "kind": "pitfall",
+          "misconception": "元素的顯示/隱藏用 HTML 的 `hidden` 屬性最語意化,理所當然拿來用。",
+          "reality": "`hidden` 屬性只是瀏覽器內建了一條 `[hidden] { display: none }` 的樣式規則,優先度跟作者自己寫的 class 選擇器相同——若同一個元素被別的 CSS 也設了 `display`,cascade 順序在後的贏,`hidden` 可能完全不生效。要保證顯隱一定生效,行內 `style.display` 的優先度才是穩妥的選擇。"
+        },
+        {
+          "kind": "snippet",
+          "label": "ensureAskAgentPopup / hideAskAgentPopup:掛在 body 而非 #app 內",
+          "file": "ui/main.ts",
+          "startLine": 507,
+          "endLine": 544,
+          "anchor": "function ensureAskAgentPopup(): HTMLElement {\n  if (askAgentPopup) return askAgentPopup;\n  const popup = el('div', 'codewalk-ask-agent-popup');\n  // 用行內 style.display 控制顯隱,不用 hidden 屬性——hidden 是靠瀏覽器內建的\n  // `[hidden] { display: none }` 生效,但 theme.css 對這個 class 自己也設了\n  // display,同優先度下作者樣式表永遠贏過瀏覽器內建樣式,會讓 hidden 屬性\n  // 完全失效(浮出後永遠消不掉)。行內樣式的優先度贏過任何 class 規則,\n  // 徹底避開這個衝突。\n  popup.style.display = 'none';\n\n  const chatButton = el('button');\n  chatButton.type = 'button';\n  chatButton.appendChild(icon('comment-discussion'));\n  chatButton.appendChild(el('span', undefined, t('askAgent.sendToChat')));\n  chatButton.addEventListener('click', () => {\n    onAskAgent('chat');\n    hideAskAgentPopup();\n  });\n  popup.appendChild(chatButton);\n\n  const copyButton = el('button');\n  copyButton.type = 'button';\n  copyButton.appendChild(icon('copy'));\n  copyButton.appendChild(el('span', undefined, t('askAgent.copyPrompt')));\n  copyButton.addEventListener('click', () => {\n    onAskAgent('clipboard');\n    hideAskAgentPopup();\n  });\n  popup.appendChild(copyButton);\n\n  document.body.appendChild(popup);\n  askAgentPopup = popup;\n  return popup;\n}\n\nfunction hideAskAgentPopup(): void {\n  if (askAgentPopup) askAgentPopup.style.display = 'none';\n}"
+        },
+        {
+          "kind": "snippet",
+          "label": "renderAskAgentActions:常駐入口與浮出入口共用同一組 handler",
+          "file": "ui/render/walking.ts",
+          "startLine": 97,
+          "endLine": 119,
+          "anchor": "function renderAskAgentActions(\n  onAskAgent: (destination: AskAgentDestination) => void,\n  feedback: AskAgentFeedback | null,\n): HTMLElement {\n  const group = el('div', 'codewalk-ask-agent-actions');\n\n  const chatButton = el('button', 'codewalk-ask-agent-chat');\n  chatButton.appendChild(icon('comment-discussion'));\n  chatButton.appendChild(el('span', undefined, t('askAgent.sendToChat')));\n  chatButton.addEventListener('click', () => onAskAgent('chat'));\n  group.appendChild(chatButton);\n\n  const copyButton = el('button', 'codewalk-ask-agent-copy');\n  copyButton.setAttribute('aria-live', 'polite');\n  copyButton.appendChild(icon('copy'));\n  copyButton.appendChild(\n    el('span', undefined, feedback === 'copied' ? t('askAgent.copied') : t('askAgent.copyPrompt')),\n  );\n  copyButton.addEventListener('click', () => onAskAgent('clipboard'));\n  group.appendChild(copyButton);\n\n  return group;\n}"
+        }
+      ],
+      "anchor": "/**\n * 垂直跟隨選取結尾、水平貼齊 `#app` 容器左緣——面板很窄,若水平追隨游標,\n * 靠右選取時必然溢出,得再寫一套 clamp 邏輯(design.md 決策 9)。\n */\nfunction positionAskAgentPopup(range: Range): void {\n  const app = document.getElementById('app');\n  if (!app) return;\n  const popup = ensureAskAgentPopup();\n  const rangeRect = range.getBoundingClientRect();\n  const appRect = app.getBoundingClientRect();\n  popup.style.left = `${appRect.left + 8}px`;\n  popup.style.top = `${rangeRect.bottom + 4}px`;\n  popup.style.display = 'flex';\n}\n\ndocument.addEventListener('selectionchange', () => {\n  if (current.screen !== 'walking') {\n    currentSelection = undefined;\n    hideAskAgentPopup();\n    return;\n  }\n  const selection = document.getSelection();\n  const text = selection && !selection.isCollapsed ? selection.toString().trim() : '';\n  if (!selection || !text) {\n    currentSelection = undefined;\n    hideAskAgentPopup();\n    return;\n  }\n  currentSelection = text;\n  positionAskAgentPopup(selection.getRangeAt(0));\n});"
+    },
+    {
+      "title": "第 29 步:agent 產完導讀後怎麼把面板打開——URI 解析",
+      "file": "src/uriHandler.ts",
+      "startLine": 10,
+      "endLine": 27,
+      "narration": "`add-mcp-bridge` 補的是另一個方向:agent 產完導讀後,自己把面板打開並跳到指定步驟,不必勞煩讀者手動找檔案、點開面板。入口是一個 URI:\n\n`vscode://{publisher}.{name}/open?walk=<workspace 相對路徑>&step=<0-based 索引,選填>`\n\n`parseOpenUri()` 只做 URI 本身的語法解析,刻意不碰 `vscode` API,讓這段邏輯可以像 `askAgentPrompt.ts` 一樣獨立單元測試。三個細節:\n\n- `uri.path !== '/open'` 或缺少 `walk` 參數時回傳 `null`,讓呼叫端安靜忽略——不是每個抵達的 URI 都合法\n- `step` 是選填的:沒帶就代表從第一步開始;帶了但不是合法的非負整數(打錯、負數),就退回「當作沒帶」而不是報錯擋住整個開啟動作——**能開就先開,步驟索引壞掉不該連導讀都打不開**\n- `step` 的基準是 **0-based**,跟 `.codewalk.json` 的 `steps[N]` 陣列索引一致,也跟第 26 步 `askAgentPrompt.ts` 用的索引基準相同——agent 讀 JSON 拿到的索引可以直接塞進 URL,不必換算\n\n真正的路徑安全檢查——擋 `..` 逸出、解析成 workspace 內的絕對路徑——不在這裡做,交給下一步的 `openWalkFromUri()`。這裡只負責把字串拆開。",
+      "terms": [],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "createUriHandler:註冊給 registerUriHandler 的物件",
+          "file": "src/uriHandler.ts",
+          "startLine": 29,
+          "endLine": 38,
+          "anchor": "/** 註冊給 `vscode.window.registerUriHandler` 的 handler 物件。 */\nexport function createUriHandler(provider: WalkPlayerViewProvider): { handleUri(uri: OpenUriLike): void } {\n  return {\n    handleUri(uri: OpenUriLike): void {\n      const parsed = parseOpenUri(uri);\n      if (!parsed) return;\n      void provider.openWalkFromUri(parsed.walk, parsed.stepIndex);\n    },\n  };\n}"
+        }
+      ],
+      "anchor": "/** `vscode.Uri` 中這支函式實際用到的部分——用結構型別而非 import `vscode`,讓解析邏輯不依賴 vscode 模組。 */\nexport interface OpenUriLike {\n  path: string;\n  query: string;\n}\n\n/** 解析出的 `open` 請求;`uri.path` 不是 `/open` 或缺少 `walk` 參數時為 `null`。 */\nexport function parseOpenUri(uri: OpenUriLike): { walk: string; stepIndex?: number } | null {\n  if (uri.path !== '/open') return null;\n  const params = new URLSearchParams(uri.query);\n  const walk = params.get('walk');\n  if (!walk) return null;\n  const stepParam = params.get('step');\n  if (stepParam === null) return { walk };\n  const stepIndex = Number(stepParam);\n  if (!Number.isInteger(stepIndex) || stepIndex < 0) return { walk };\n  return { walk, stepIndex };\n}"
+    },
+    {
+      "title": "第 30 步:URI 抵達時面板可能還沒蓋出來——以及一個關於啟動時機的真實 bug",
+      "file": "src/viewProvider.ts",
+      "startLine": 107,
+      "endLine": 139,
+      "narration": "`openWalkFromUri()` 是 URI 抵達後真正做事的地方,而它要處理一個第 11 步已經出現過的老問題的變體:**面板這個 session 可能還沒被建立過**。\n\n路徑處理上,`relativePath` 是外部程序(agent)傳進來的字串,**不是** `.codewalk.json` 內部欄位,所以不能比照內部資料信任——一律經 `resolveInWorkspace()` 解析並擋 `..` 逸出,這是第 1 步提過的既有函式,重用它而非重寫一套素樸的 `join()`,順便繼承了它既有的路徑逸出防護。\n\n錯誤處理上,沒有 workspace 或路徑逸出時,改用 `loadError`(跟導讀格式錯誤共用的全螢幕錯誤畫面)取代 `vscode.window.showErrorMessage`——後者是容易被忽略的 toast。**不論走哪個分支,面板都要被帶到前景**,讀者才看得到到底發生了什麼,而不是留在原本在看的地方猜「剛剛那個 URI 是不是壞了」。\n\n面板還沒建立過時,開啟請求存進 `pendingOpenRequest`,等第 11 步看過的 `webviewReady` 分支送達再消費——這條路跟既有的「接續上次進度」搶同一個時機點,所以 URI 觸發的開啟**取代**而非疊加原本的接續行為,讀者不會被拉回上次瀏覽的內容。\n\n**但這裡藏著這次變更裡最貴的一個 bug**,值得完整記一次,因為它教訓的不是這段程式碼,是 `package.json`:手動驗證時,第一次觸發 URI,面板完全沒反應,連錯誤訊息都沒有——但「先手動點開 CodeWalk 面板、再觸發 URI」就完全正常。第 2 步已經先講過答案:VS Code 只能從 `contributes` 推斷隱含的啟動事件,`registerUriHandler` 是動態呼叫,推斷不到,`activationEvents` 沒有明確加 `\"onUri\"` 的話,extension 這個 session 沒被別的途徑啟動過時,第一次的 URI 就無處可去。真正花時間的不是想出這個答案,是找到它之前繞的路——F5 搭配 `launch.json` 一直開出沒有 workspace 的空白視窗、`vscode-custom-css` 這類第三方工具讓 CLI 引數被吃掉。診斷方向一開始完全錯了,懷疑到側邊欄的 focus 邏輯,寫了三版修法都無效,直到找到真正的根因,那三版才被還原成最簡單的單次 `.focus()` 呼叫。",
+      "terms": [],
+      "items": [
+        {
+          "kind": "pitfall",
+          "misconception": "面板第一次觸發 URI 沒反應,一定是 focus / reveal 面板的程式碼寫錯了。",
+          "reality": "根因其實在 `package.json` 的 `activationEvents`,不在任何一行 TypeScript。extension 若根本沒被啟動,後面所有 focus / reveal 邏輯都不會執行到——診斷時該先確認 `activate()` 真的被呼叫了,而不是急著改 UI 邏輯(見第 2 步)。"
+        }
+      ],
+      "anchor": "  /**\n   * URI handler(`vscode://.../open?walk=...&step=...`)的處理常式。`relativePath`\n   * 是外部程序傳進來的字串,一律經 `resolveInWorkspace()` 解析並擋 `..` 逸出——\n   * 這不是 `.codewalk.json` 內部欄位,不能比照內部資料信任(design.md 決策 7)。\n   *\n   * 面板一律要被帶到前景——不論後面走哪個分支都要讓讀者看到面板,而不是留在\n   * 原本在看的地方猜「剛剛那個 URI 是不是壞了」。錯誤情況(沒有 workspace、\n   * 路徑逸出)改用 `loadError`(全螢幕錯誤畫面)取代 `vscode.window.showErrorMessage`\n   * (容易被忽略的 toast),與既有「導讀格式錯誤」共用同一條、讀者已經熟悉的\n   * 錯誤呈現方式。\n   *\n   * 面板這個 session 已經建立過 webview 時直接處理;否則存進 `pendingOpenRequest`\n   * / `pendingOpenError`,等 `webviewReady` 送達再消費(決策 8)。\n   */\n  public async openWalkFromUri(relativePath: string, stepIndex?: number): Promise<void> {\n    const root = getWorkspaceRoot();\n    if (!root) {\n      this.reportOpenUriError(t('host.noWorkspace'));\n      return;\n    }\n    const absPath = resolveInWorkspace(root, relativePath);\n    if (!absPath) {\n      this.reportOpenUriError(t('host.invalidWalkPath', { path: relativePath }));\n      return;\n    }\n    if (this.view) {\n      await this.loadWalk(absPath);\n      if (stepIndex !== undefined) await this.setStep(stepIndex);\n    } else {\n      this.pendingOpenRequest = { path: absPath, stepIndex };\n    }\n    void vscode.commands.executeCommand(`${WalkPlayerViewProvider.viewId}.focus`);\n  }"
+    },
+    {
+      "title": "第 31 步:embedded 在 extension 裡的 MCP server——兩個唯讀工具與雙開協調",
+      "file": "src/mcpServer.ts",
+      "startLine": 77,
+      "endLine": 120,
+      "narration": "URI handler 解決「開面板」,MCP server 解決「查狀態」——agent 想知道讀者目前讀到哪一份導讀、第幾步,不必再靠讀者口述。\n\n**傳輸層選 extension 內嵌的 Streamable HTTP,不是 agent 端自己 spawn 的 stdio。** 理由很直接:讀者的閱讀狀態活在正在跑的 extension host 記憶體裡,agent 端 spawn 的 process 是全新、獨立的,跟它沒有共用記憶體,得再繞一層跨 process 溝通才拿得到即時狀態——等於自己重新發明 HTTP。用官方 `@modelcontextprotocol/sdk`,server 自己 `listen(0)` 讓 OS 分配一個空閒 port,直接持有 `WalkPlayerViewProvider` 的參照。\n\n**多視窗協調不做真正的鎖。** 同一個 workspace 被兩個視窗同時開啟時,新視窗先讀探索檔(見下一步)、對記錄的 port 打一次短逾時的 `GET /health`:活著就判定另一個視窗已經在服務,不啟動也不覆蓋,只用 `showInformationMessage` 通知讀者一次(不是靜默放棄);沒反應(逾時、連線被拒、或檔案根本不存在)就視為殭屍記錄或首次啟動,直接覆蓋、正常啟動。檔案鎖或心跳機制能做得更嚴謹,但兩個視窗幾乎同時啟動的機率極窄,換來的複雜度不成比例——這是刻意接受的邊角案例,不是遺漏。\n\n兩個工具都是唯讀:`codewalk_current_step` 直接呼叫 `provider.getCurrentStepSnapshot()`(下一步細看),`codewalk_list_walks` 包一層既有的 `listWalkFiles()`。MCP tool handler 本身沒有業務邏輯,只是把既有狀態包成 MCP 的回傳格式——跟第 26 步 `askAgentPrompt.ts` 的抽法是同一個原則:能重算的狀態不重算,一律讀既有的單一真相來源。",
+      "terms": [
+        {
+          "term": "MCP(Model Context Protocol)",
+          "explanation": "一套讓 AI agent 用標準化方式呼叫外部工具、查詢外部資料的協定。CodeWalk 這裡只用最基本的「唯讀工具查詢」能力(tools),不用它的其他功能(resources、雙向推送)。選它而非 VS Code 自己的 `languageModelTools` 貢獻點,是因為 Cursor 原生支援 MCP,但不吃 VS Code 專屬的貢獻點。"
+        },
+        {
+          "term": "探索檔(discovery file)",
+          "explanation": "沒有中央註冊機制時,讓多個獨立 process 找到彼此的慣用手法——第一個啟動的一方把自己的連線資訊(這裡是 port 與 pid)寫進一個雙方都算得出路徑的檔案,後來者讀這個檔案就能找到它。"
+        }
+      ],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "createMcpServer:兩個唯讀工具,handler 沒有自己的業務邏輯",
+          "file": "src/mcpServer.ts",
+          "startLine": 46,
+          "endLine": 75,
+          "anchor": "function createMcpServer(provider: WalkPlayerViewProvider, workspaceRoot: string): McpServer {\n  const server = new McpServer({ name: 'codewalk-reader', version: '1.0.0' });\n\n  server.registerTool(\n    'codewalk_current_step',\n    {\n      title: 'CodeWalk current step',\n      description: '取得讀者目前在 CodeWalk 面板瀏覽到哪一份導讀、第幾步(唯讀,不改變面板狀態)。',\n    },\n    async () => {\n      const snapshot = provider.getCurrentStepSnapshot();\n      return { content: [{ type: 'text', text: JSON.stringify(snapshot) }] };\n    },\n  );\n\n  server.registerTool(\n    'codewalk_list_walks',\n    {\n      title: 'CodeWalk list walks',\n      description: '列出目前 workspace 下可播放的導讀(路徑與標題)。',\n    },\n    async () => {\n      const files = await listWalkFiles(workspaceRoot);\n      const result = buildAgentWalkList(files, workspaceRoot);\n      return { content: [{ type: 'text', text: JSON.stringify(result) }] };\n    },\n  );\n\n  return server;\n}"
+        },
+        {
+          "kind": "snippet",
+          "label": "computeDiscoveryFilePath:每個 workspace 一份探索檔",
+          "file": "src/mcpDiscovery.ts",
+          "startLine": 16,
+          "endLine": 25,
+          "anchor": "/**\n * 算出某個 workspace 對應的探索檔絕對路徑。同一個 `workspaceRoot` 一律得到\n * 同一個路徑,不同 workspace 天生不會撞到同一份檔案。\n *\n * @param tmpDir - `os.tmpdir()` 的回傳值,呼叫端傳入以便測試不依賴實際檔案系統\n */\nexport function computeDiscoveryFilePath(tmpDir: string, workspaceRoot: string): string {\n  const hash = createHash('sha256').update(workspaceRoot).digest('hex').slice(0, 16);\n  return join(tmpDir, 'codewalk-mcp', `${hash}.json`);\n}"
+        },
+        {
+          "kind": "tip",
+          "text": "health check 的逾時只設 300ms——這段網路往返包在 fire-and-forget 裡(下一步會看到 `extension.ts` 怎麼呼叫它),不阻塞 `activate()` 本身,讀者感知不到這個延遲。"
+        }
+      ],
+      "anchor": "/**\n * 啟動 MCP server。呼叫端(`extension.ts`)必須以 fire-and-forget 呼叫,啟動\n * 失敗不該擋住 extension 的其他功能(design.md 決策 9)。\n *\n * @remarks\n * 先對探索檔記錄的 port(若存在)做一次 health check——活著就判定另一個視窗\n * 已在服務這個 workspace,不啟動也不覆蓋,只通知讀者一次;沒反應則視為殭屍\n * 記錄或首次啟動,正常覆蓋(design.md 決策 4)。\n */\nexport async function startMcpServer(provider: WalkPlayerViewProvider, workspaceRoot: string): Promise<void> {\n  const discoveryFilePath = computeDiscoveryFilePath(tmpdir(), workspaceRoot);\n  const existing = await readDiscoveryInfo(discoveryFilePath);\n  if (existing && (await isServerAlive(existing.port))) {\n    vscode.window.showInformationMessage(t('mcp.anotherWindowServing'));\n    return;\n  }\n\n  const mcpServer = createMcpServer(provider, workspaceRoot);\n  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });\n  await mcpServer.connect(transport);\n\n  const server = createServer((req, res) => {\n    if (req.method === 'GET' && req.url === '/health') {\n      res.writeHead(200).end('ok');\n      return;\n    }\n    void transport.handleRequest(req, res);\n  });\n\n  await new Promise<void>((resolve, reject) => {\n    server.once('error', reject);\n    server.listen(0, '127.0.0.1', resolve);\n  });\n\n  const address = server.address();\n  const port = typeof address === 'object' && address ? address.port : 0;\n\n  await mkdir(dirname(discoveryFilePath), { recursive: true });\n  const info: McpDiscoveryInfo = { port, pid: process.pid };\n  await writeFile(discoveryFilePath, JSON.stringify(info));\n\n  httpServer = server;\n  ownDiscoveryFilePath = discoveryFilePath;\n}"
+    },
+    {
+      "title": "第 32 步:MCP 工具背後的純函式——不重算,只是組裝既有狀態",
+      "file": "src/currentStepSnapshot.ts",
+      "startLine": 26,
+      "endLine": 61,
+      "narration": "`codewalk_current_step` 的回傳形狀刻意設計成**沒有作用中導讀是合法狀態,不是錯誤**——`{ active: false }`,呼叫端不必用 try/catch 處理「讀者現在沒在看導讀」這種完全正常的情況。\n\n`buildCurrentStepSnapshot()` 沒有自己的業務邏輯,行號一律走既有 `effectiveLineRange()`,路徑一律走既有 `toWorkspaceRelativePath()`(第 1 步就出現過的那個函式)——這是它第三次被用到:面板顯示、`askAgentPrompt.ts`、現在加上 MCP。錨定狀態原封不動回報 `anchorStatus: input.stepStatus.kind`,失準的步驟如實標成 `'stale'`,不隱藏——跟第 26 步 prompt 裡的 stale 警語是同一個精神:寧可讓 agent 知道這裡不可靠,也不要讓它拿著過期資訊給出一個自信的錯答案。\n\n`buildAgentWalkList()` 是同一個模式的第二個例子:包一層 `listWalkFiles()`,只挑 agent 用得到的 `path`(換算成相對路徑)跟 `title`,不重新掃描 `.codewalk/`。\n\n這兩個函式合起來示範了這份導讀反覆出現的一個姿態:**新功能盡量重用既有的單一真相來源,而不是為了新入口另開一份平行的計算邏輯。** MCP、面板顯示、`askAgent` prompt——三個完全不同的使用情境,共用同一套行號換算、同一套路徑換算、同一份錨定狀態。\n\n到這裡,面板從「讀者自己讀」變成「agent 與讀者共享同一份閱讀進度」的雙向關係——這正是這份導讀最開頭第 1 步提到的兩件事之外,值得記住的第三件事。走完了。按下方按鈕進 quiz 驗收一下。",
+      "terms": [],
+      "items": [
+        {
+          "kind": "snippet",
+          "label": "CurrentStepSnapshot:active: false 是合法狀態,不是錯誤",
+          "file": "src/currentStepSnapshot.ts",
+          "startLine": 11,
+          "endLine": 24,
+          "anchor": "/** `codewalk_current_step` 的回傳形狀。沒有作用中導讀時是合法狀態,不是錯誤(design.md 決策 5)。 */\nexport type CurrentStepSnapshot =\n  | { active: false }\n  | {\n      active: true;\n      walkPath: string;\n      walkTitle: string;\n      stepIndex: number;\n      stepTitle: string;\n      file: string;\n      startLine: number;\n      endLine: number;\n      anchorStatus: AnchorStatus['kind'];\n    };"
+        },
+        {
+          "kind": "snippet",
+          "label": "buildAgentWalkList:同一個模式的第二個例子",
+          "file": "src/agentWalkList.ts",
+          "startLine": 18,
+          "endLine": 28,
+          "anchor": "export function buildAgentWalkList(\n  files: WalkFileSummary[],\n  workspaceRoot: string | undefined,\n): AgentWalkListResult {\n  return {\n    walks: files.map((file) => ({\n      path: toWorkspaceRelativePath(workspaceRoot, file.path),\n      title: file.title,\n    })),\n  };\n}"
+        }
+      ],
+      "anchor": "/**\n * 組出 `codewalk_current_step` 的回傳內容。\n *\n * @param walk - 目前作用中的導讀;沒有作用中導讀時為 `undefined`\n * @param walkPath - 導讀檔的絕對路徑;與 `walk` 同時存在或同時缺席\n * @param stepStatus - 目前步驟的錨驗證結果,決定行號換算與回報的狀態\n *\n * @remarks\n * 行號一律走既有 `effectiveLineRange()`,路徑一律走既有 `toWorkspaceRelativePath()`\n * ——與面板顯示、`askAgentPrompt.ts` 用同一套邏輯,不重算(design.md 決策 5)。\n * 失準的步驟如實回報 `anchorStatus: 'stale'`,不隱藏(ask-agent capability\n * 「失準的步驟必須在提問中標明」的同一個精神,套用到查詢介面)。\n */\nexport function buildCurrentStepSnapshot(input: {\n  walk: CodewalkFile | undefined;\n  walkPath: string | undefined;\n  workspaceRoot: string | undefined;\n  stepIndex: number;\n  stepStatus: AnchorStatus;\n}): CurrentStepSnapshot {\n  if (!input.walk || !input.walkPath) return { active: false };\n  const step = input.walk.steps[input.stepIndex];\n  const { startLine, endLine } = effectiveLineRange(step, input.stepStatus);\n\n  return {\n    active: true,\n    walkPath: toWorkspaceRelativePath(input.workspaceRoot, input.walkPath),\n    walkTitle: input.walk.title,\n    stepIndex: input.stepIndex,\n    stepTitle: step.title,\n    file: step.file,\n    startLine,\n    endLine,\n    anchorStatus: input.stepStatus.kind,\n  };\n}"
     }
   ],
   "quiz": [
@@ -725,6 +927,54 @@
         "對:`highlightSnippetLines()` 發現語言未註冊就回傳純文字 token,不報錯。這種安靜失敗看起來只像「這段剛好沒上色」,所以只能靠測試守門。",
         "錯:Shiki 不會被呼叫到——`isLanguageSupported()` 在呼叫 `codeToTokens()` 之前就先擋掉了。",
         "錯:`detectLanguage()` 查不到會回傳 `'text'`(明確的預設值),不是 `undefined`。這也是降級姿態的一部分:不吐出會讓上游炸掉的值。"
+      ]
+    },
+    {
+      "question": "src/askAgentPrompt.ts 組出的提問內容,為什麼不直接把整步的 narration 塞進去,而是只給導讀檔路徑加步驟索引?",
+      "options": [
+        "narration 可能包含敏感內容,不方便直接送出",
+        "塞滿會讓 chat 輸入框需要捲動,而 isPartialQuery 的設計目的正是讓讀者看得到、能修改;而且 agent 讀路徑拿到的內容(整段 narration、terms、items、前後步)比塞進去的更多",
+        "narration 欄位支援 markdown,直接貼進 chat 會被錯誤解析",
+        "host 端沒有能力讀取 narration 的完整內容,只能傳路徑"
+      ],
+      "correctIndex": 1,
+      "optionExplanations": [
+        "錯:narration 是導讀作者自己寫的說明文字,不是機密資料,這不是排除它的理由。",
+        "對:設計文件記錄實測 narration 中位數落在 545~1305 字元,全帶會讓輸入框要捲動——這違背 isPartialQuery 讓讀者「看得到、能修改」的用意;而且 agent 有檔案系統存取,照路徑讀進去拿到的內容遠比塞進 prompt 的完整。",
+        "錯:markdown 語法在純文字的 chat 輸入框裡本來就能正常顯示,不是問題。",
+        "錯:host 端持有完整的 CodewalkFile 物件,narration 的內容完全讀得到,只是選擇不放進 prompt。"
+      ]
+    },
+    {
+      "question": "同一個 workspace 被兩個視窗同時開啟時,startMcpServer() 選擇的協調方式是什麼?為什麼不做真正的鎖(檔案鎖、心跳)?",
+      "options": [
+        "對探索檔記錄的 port 做一次短逾時的 health check,活著就不啟動、通知讀者;沒反應就覆蓋當成殭屍記錄——真正的鎖機制換來的複雜度,在這個 MVP 情境不成比例",
+        "用作業系統的檔案鎖(flock)確保同一時間只有一個 process 能寫入探索檔",
+        "先啟動的視窗持續送心跳更新探索檔,後啟動的視窗輪詢等待逾時才啟動",
+        "兩個視窗都直接啟動,靠使用者自己發現埠號衝突後手動關掉一個"
+      ],
+      "correctIndex": 0,
+      "optionExplanations": [
+        "對:design.md 決策 4 明講「不做搶鎖」——真正的鎖機制(檔案鎖、心跳、重試協商)需要的複雜度,跟兩個視窗幾乎同時啟動這種極窄機率的邊角案例不成比例,MVP 階段接受它。",
+        "錯:這正是決策 4 明確捨棄的做法,理由是複雜度不成比例。",
+        "錯:心跳機制需要背景輪詢,增加常駐開銷,設計文件裡也明確排除。",
+        "錯:動態 port(listen(0))天生不會撞號,不存在「埠號衝突」這種情境需要使用者介入。"
+      ]
+    },
+    {
+      "question": "package.json 的 activationEvents 為什麼要明確列出 \"onUri\",而不是讓 VS Code 自動從 contributes 推論?",
+      "options": [
+        "registerUriHandler 是在 activate() 內動態呼叫的,contributes 沒有對應的宣告可以推論——extension 若這個 session 還沒被別的途徑啟動過,第一次抵達的 URI 會完全無處可去",
+        "onUri 是 VS Code 強制規定所有 extension 都必須宣告的事件,跟有沒有用到 URI handler 無關",
+        "activationEvents 只是效能優化的提示,不寫也不影響功能,只會讓啟動慢一點",
+        "因為 views/commands 的 contributes 宣告已經涵蓋了 URI 的啟動時機,寫 onUri 只是重複、沒有實際作用"
+      ],
+      "correctIndex": 0,
+      "optionExplanations": [
+        "對:VS Code 只能從 contributes 裡的宣告(views、commands)推論隱含的啟動事件;registerUriHandler 是程式碼裡動態呼叫的,沒有對應的宣告可以推論。手動驗證發現,面板沒被開過的第一次 URI 觸發完全沒反應,根因正是這裡。",
+        "錯:activationEvents 是每個 extension 依自己用到的功能各自宣告,不存在「強制規定」。",
+        "錯:少了它不是變慢,是這個啟動路徑根本不會被觸發——這是功能性的差異,不是效能問題。",
+        "錯:views/commands 推論出的是 onView:/onCommand: 事件,涵蓋不到 URI 這個完全獨立的啟動路徑。"
       ]
     }
   ]

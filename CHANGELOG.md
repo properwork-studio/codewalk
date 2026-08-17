@@ -2,6 +2,18 @@
 
 本檔案格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版本號遵循 [語意化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.2.0] - 2026-08-17
+
+### 新增
+
+- **面板內框選追問**：在走讀面板的敘述或程式碼片段內框選一段文字，浮出兩顆按鈕——一顆把組好的 prompt（選取文字 + 當前步驟的標題/敘述/檔案位置 + 導讀標題）送進 VS Code / Cursor 的 chat（只填入不自動送出），一顆複製到剪貼簿供終端機 agent 使用；找不到對應指令時（如舊版 Cursor）自動退回剪貼簿
+- **agent 可透過 URI 直接開啟指定導讀**：註冊 `vscode://properworkstudio.codewalk-reader/open?walk=<workspace 相對路徑>&step=<0-based 索引，選填>`，供產生導讀的流程（如 `explain-change` skill）產完直接開面板並跳到指定步驟
+- **agent 可透過 MCP 查詢讀者的閱讀狀態**：extension 啟動時（有已開啟的 workspace 才會啟動）在本機起一個唯讀的 MCP server，提供 `codewalk_current_step`（讀者目前在看哪份導讀、第幾步、對應檔案與行號、錨驗證狀態）與 `codewalk_list_walks`（目前 workspace 下可播放的導讀清單）兩個工具；同一個 workspace 被多個視窗同時開啟時，以健康檢查判斷由哪個視窗提供服務，避免服務被默默覆蓋卻毫無所覺
+
+### 修正
+
+- 窄面板下，英文文案可能撐破按鈕版面
+
 ## [0.1.1] - 2026-08-09
 
 ### 修正
