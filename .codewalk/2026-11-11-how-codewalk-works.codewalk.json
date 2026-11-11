@@ -1,0 +1,117 @@
+{
+  "title": "CodeWalk 怎麼運作:六站走完",
+  "ref": "a5392469674853ceb0171213966ec289130c2c35",
+  "regenerateHint": "重新產生一份 6 步的繁中短導讀,說明 CodeWalk 怎麼運作——schema、讀取導讀、host 與 webview 的協定、跳轉到程式碼、anchor 檢查、URI handler——對齊目前 HEAD,anchor 逐字複製,附 3 題 quiz。",
+  "steps": [
+    {
+      "title": "一份導讀就是一個指向真實行號的 JSON",
+      "file": "shared/schema.ts",
+      "startLine": 72,
+      "endLine": 84,
+      "narration": "你現在看到的一切,都來自一個 `.codewalk.json` 檔。每一步只寫兩件事:**哪個檔案**、**哪幾行**。不需要外掛 API,也不綁特定產生器,任何 AI 或人都能寫。\n\n這個型別是整個產品唯一的對外合約,所以集中定義在同一處,每個欄位都有文件註解。",
+      "terms": [
+        {
+          "term": "walk(導讀)",
+          "explanation": "一條帶讀程式碼的路線:依序排好的步驟,每步對應一個檔案和行號範圍,最後接一份 quiz。存在 `.codewalk/` 底下跟著 repo 一起 commit,所以會跟著它解說的程式碼走。"
+        }
+      ],
+      "anchor": "/**\n * One stop on the walk. Selecting a step opens `file` in the editor and\n * highlights lines `startLine` through `endLine` (both 1-based and inclusive).\n */\nexport interface CodewalkStep {\n  /** Short field — inline markdown only. See {@link CodewalkStep.narration}. */\n  title: string;\n  /** Path relative to the workspace root, using forward slashes. */\n  file: string;\n  /** First line of the region, 1-based and inclusive. */\n  startLine: number;\n  /** Last line of the region, 1-based and inclusive; must be >= `startLine`. */\n  endLine: number;"
+    },
+    {
+      "title": "extension 在 `.codewalk/` 找出所有導讀",
+      "file": "src/walkLoader.ts",
+      "startLine": 71,
+      "endLine": 84,
+      "narration": "面板打開時,extension host 掃描 `.codewalk/`,平行讀取每個檔案並逐一驗證。\n\n格式壞掉的檔案**照樣列出來**(標題退回檔名),不會默默消失,讀者點進去就看得到哪裡出錯。",
+      "anchor": "export async function listWalkFiles(\n  workspaceRoot: string,\n  getAttempt?: (filePath: string, ref: string) => AttemptSummary | undefined,\n  getProgress?: (filePath: string, ref: string) => WalkProgressSummary | undefined,\n): Promise<WalkFileSummary[]> {\n  const filePaths = await findCodewalkFiles(workspaceRoot);\n  // 並行讀取:Promise.all 保證回傳順序等同 filePaths,與檔案讀完的先後無關\n  return Promise.all(\n    filePaths.map(async (filePath) => {\n      const result = await loadCodewalkFile(filePath);\n      const summary: WalkFileSummary = {\n        path: filePath,\n        title: result.valid ? result.value.title : basename(filePath),\n      };"
+    },
+    {
+      "title": "host 和面板之間只靠訊息溝通",
+      "file": "shared/protocol.ts",
+      "startLine": 136,
+      "endLine": 150,
+      "narration": "側邊面板是一個沙盒網頁,不能開檔,也碰不到編輯器。所以兩邊只能透過這個檔案定義的型別化訊息溝通。\n\n狀態以 host 為準:現在在第幾步由 host 決定,再送出 `stepChanged`,面板只負責畫出來。",
+      "terms": [
+        {
+          "term": "webview",
+          "explanation": "VS Code 嵌在面板裡的隔離網頁。它沒有 VS Code API 可用,只有 `postMessage`。這道邊界就是這套協定存在的原因。"
+        }
+      ],
+      "anchor": "export type HostToWebviewMessage =\n  /** 可選的導讀清單。webview 收到即切到列表畫面(含首次開啟與返回列表)。 */\n  | { type: 'walkFileList'; files: WalkFileSummary[] }\n  /** 讀者選定的導讀已載入完成,webview 切到走讀畫面。 */\n  | {\n      type: 'walkLoaded';\n      walk: CodewalkFile;\n      /** 起始步驟——「接續上次」時為留存的進度,一般選取時為 0。 */\n      stepIndex: number;\n      refDrifted: boolean;\n      anchorReport: AnchorReport;\n      snippetPreviews: SnippetPreviewResult[];\n    }\n  /** 步驟已切換(可能來自面板按鈕、鍵盤,或 VS Code 指令),webview 據此更新畫面。 */\n  | { type: 'stepChanged'; stepIndex: number; snippetPreviews: SnippetPreviewResult[] }"
+    },
+    {
+      "title": "跳到程式碼,但不搶走你的鍵盤",
+      "file": "src/fileJump.ts",
+      "startLine": 50,
+      "endLine": 63,
+      "narration": "這就是剛剛畫面上發生的事:檔案打開,那幾行被選取並捲到中央。\n\n關鍵是 `preserveFocus: true`。少了它,第一次跳轉後焦點就會落到編輯器,方向鍵就沒辦法再切換步驟了。",
+      "anchor": "  const vscode = await import('vscode');\n  const doc = await vscode.workspace.openTextDocument(absPath);\n  // preserveFocus:true — 不搶走 CodeWalk 面板的焦點,讓方向鍵快捷鍵在連續切換\n  // 好幾個 step 時持續有效(否則第一次跳轉後焦點就會留在編輯器,快捷鍵失效)。\n  const editor = await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: true });\n  if (mode === 'openOnly') {\n    return { ok: true };\n  }\n  const startLine = target.startLine - 1;\n  const endLine = Math.min(target.endLine - 1, doc.lineCount - 1);\n  const range = new vscode.Range(startLine, 0, endLine, doc.lineAt(endLine).text.length);\n  editor.selection = new vscode.Selection(range.start, range.end);\n  editor.revealRange(range, vscode.TextEditorRevealType.InCenter);\n  return { ok: true };"
+    },
+    {
+      "title": "程式碼改了,導讀怎麼知道",
+      "file": "src/anchorCheck.ts",
+      "startLine": 63,
+      "endLine": 85,
+      "narration": "程式碼會變,導讀不會自己更新。所以每一步都存了一份 **anchor**,也就是寫導讀當下的原文。\n\n- 同樣的行號、同樣的內容 → 相符\n- 內容在別處恰好出現一次 → 步驟**跟過去**新的行號\n- 找不到,或出現不只一次 → 標成**失準**,絕不亂猜",
+      "terms": [
+        {
+          "term": "anchor(錨點)",
+          "explanation": "寫導讀時,該步驟那幾行程式碼的逐字副本。拿它跟現在的檔案比對,CodeWalk 就分得出「程式碼只是移動了」還是「程式碼真的改了」。"
+        }
+      ],
+      "anchor": "  const normalizedAnchor = normalizeNewlines(anchor);\n  const currentSlice = fileLines.slice(startLine - 1, endLine).join('\\n');\n  if (currentSlice === normalizedAnchor) {\n    return { kind: 'matched' };\n  }\n\n  const whole = fileLines.join('\\n');\n  const offsets = findLineAlignedOffsets(whole, normalizedAnchor);\n  if (offsets.length === 0) {\n    return { kind: 'stale', reason: 'notFound' };\n  }\n  if (offsets.length > 1) {\n    return { kind: 'stale', reason: 'ambiguous' };\n  }\n\n  const newStartLine = lineNumberAtOffset(whole, offsets[0]);\n  const anchorLineCount = normalizedAnchor.split('\\n').length;\n  return {\n    kind: 'shifted',\n    startLine: newStartLine,\n    endLine: newStartLine + anchorLineCount - 1,\n  };\n}"
+    },
+    {
+      "title": "任何 AI agent 都能幫你打開導讀",
+      "file": "src/uriHandler.ts",
+      "startLine": 16,
+      "endLine": 27,
+      "narration": "agent 產完導讀後,用一個 URI 就能直接交到你手上:\n\n`vscode://properworkstudio.codewalk-reader/open?walk=…&step=0`\n\n這段示範就是這樣打開的。接下來是測驗:看完不等於看懂。",
+      "anchor": "/** 解析出的 `open` 請求;`uri.path` 不是 `/open` 或缺少 `walk` 參數時為 `null`。 */\nexport function parseOpenUri(uri: OpenUriLike): { walk: string; stepIndex?: number } | null {\n  if (uri.path !== '/open') return null;\n  const params = new URLSearchParams(uri.query);\n  const walk = params.get('walk');\n  if (!walk) return null;\n  const stepParam = params.get('step');\n  if (stepParam === null) return { walk };\n  const stepIndex = Number(stepParam);\n  if (!Number.isInteger(stepIndex) || stepIndex < 0) return { walk };\n  return { walk, stepIndex };\n}"
+    }
+  ],
+  "quiz": [
+    {
+      "question": "跳轉到程式碼時,為什麼要用 `preserveFocus: true`?",
+      "options": [
+        "讓第一次跳轉之後,方向鍵還能繼續切換步驟",
+        "讓檔案開得比較快",
+        "讓檔案以預覽分頁開啟"
+      ],
+      "correctIndex": 0,
+      "optionExplanations": [
+        "正確:焦點留在 CodeWalk 面板,下一次按方向鍵仍然是「下一步」。",
+        "錯誤:跟速度無關,它只決定鍵盤焦點在誰身上。",
+        "錯誤:預覽分頁由另一個選項 `preview: false` 控制。"
+      ]
+    },
+    {
+      "question": "某一步的程式碼往下移了 20 行,內容沒變。CodeWalk 會怎麼做?",
+      "options": [
+        "把這一步標成失準",
+        "跟著 anchor 移到新的行號",
+        "照樣標示舊的行號"
+      ],
+      "correctIndex": 1,
+      "optionExplanations": [
+        "錯誤:只有內容消失或出現不只一次時才算失準。",
+        "正確:anchor 原文在別處恰好找到一次,步驟就跟著移過去。",
+        "錯誤:這正是 anchor 要避免的錯誤。"
+      ]
+    },
+    {
+      "question": "為什麼側邊面板不能自己開檔?",
+      "options": [
+        "它是沒有 VS Code API 的沙盒 webview,只能請 host 代勞",
+        "從面板開檔太慢",
+        "`.codewalk.json` 格式禁止這麼做"
+      ],
+      "correctIndex": 0,
+      "optionExplanations": [
+        "正確:webview 只有 `postMessage`,所有檔案與編輯器操作都由 host 執行。",
+        "錯誤:不是速度問題,面板根本沒有這個權限。",
+        "錯誤:格式只描述步驟,這是平台本身的邊界。"
+      ]
+    }
+  ]
+}

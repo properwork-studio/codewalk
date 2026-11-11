@@ -2,6 +2,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+**安裝：** [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=properworkstudio.codewalk-reader) · [Open VSX](https://open-vsx.org/extension/properworkstudio/codewalk-reader) (Cursor, Windsurf, VSCodium)
+
 [English](README.md) | 繁體中文
 
 > **附註:** 擴充套件介面會跟隨 VS Code 的顯示語言（中文或英文）。導讀內容（敘述、quiz 題目等）由各份導讀的作者撰寫，原樣呈現，不受此設定影響。
@@ -11,6 +13,8 @@
 CodeWalk 會讀 repo 裡的導讀檔，一步一步帶著走：自動跳到對應的行號並 highlight、附上敘述和術語解釋，走完還能用 quiz 檢查自己有沒有真的看懂。
 
 新人上手、接手不熟的模組、AI寫了一大堆檔案、送PR時讓 reviewer 先摸清一份大 diff——這些場合都用得上。
+
+![示範：CodeWalk 逐步播放一份六步導讀——編輯器跟著跳到各個檔案、展開一則術語解釋，最後進入 quiz](docs/images/demo.gif)
 
 ![CodeWalk 面板停在第 3 步，左側顯示步驟敘述、術語與程式碼片段，右側編輯器同步跳到 shared/schema.ts 並選取對應的行號範圍](docs/images/panel-walking.png)
 

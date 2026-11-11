@@ -2,6 +2,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+**Install:** [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=properworkstudio.codewalk-reader) · [Open VSX](https://open-vsx.org/extension/properworkstudio/codewalk-reader) (Cursor, Windsurf, VSCodium)
+
 English | [繁體中文](README.zh-TW.md)
 
 > **Note:** The extension UI follows your VS Code display language (Traditional Chinese or English). Walk content (narration, quiz questions, etc.) is written by each walk's author and is shown as-is, unaffected by this setting.
@@ -11,6 +13,8 @@ The fastest way to actually understand someone else's code is to have a mentor s
 CodeWalk reads a walkthrough file from your repo and guides you through it step by step: jumping to and highlighting the right lines, adding narration and glossary terms, and finishing with a quiz to check you actually understood it.
 
 Useful for onboarding, picking up an unfamiliar module, sanity-checking a pile of AI-generated files, or getting a reviewer up to speed on a large diff before they review it.
+
+![Demo: CodeWalk stepping through a six-step walk — the editor jumps to each file, a glossary term expands, and the walk ends in a quiz](docs/images/demo.gif)
 
 ![The CodeWalk panel stopped at step 3 — the left side shows the step's narration, terms, and a code snippet, while the editor on the right has jumped to shared/schema.ts with the matching line range selected](docs/images/panel-walking-en.png)
 

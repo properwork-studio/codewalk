@@ -8,7 +8,7 @@
       "title": "第 1 步:先看全貌——這個專案到底在做什麼",
       "file": "README.md",
       "startLine": 1,
-      "endLine": 10,
+      "endLine": 12,
       "narration": "CodeWalk 是一個 VS Code extension:讀取 repo 裡 `.codewalk/` 目錄下的 JSON 檔,在側邊面板帶讀者一步一步走過程式碼。每一步會自動跳轉到對應的檔案行號並高亮,附上敘述、可收合的術語卡、程式碼片段,走完還有 quiz 自測。\n\n**你現在正在用它讀它自己**——這份導讀就是一個 `.codewalk.json`,住在這個 repo 的 `.codewalk/` 底下。\n\n有兩件事值得先記住,它們解釋了後面很多設計:\n\n1. **MVP 階段只做播放器,不做產生器**。JSON 從哪來不是這個 extension 的事——AI 產、手寫、別的工具產都可以。「產生」按鈕是二期。\n2. **`.codewalk.json` 是開放格式**。它不綁任何特定工具,所以格式本身就是這個產品的對外合約——這條在下一步之後會反覆出現。",
       "terms": [
         {
@@ -22,7 +22,7 @@
           "text": "導覽方式:`→` / `↓` 下一步,`←` / `↑` 上一步,`Esc` 回列表,`Home` 回到本步的程式碼位置(面板要先有焦點——點一下面板任意處即可)。"
         }
       ],
-      "anchor": "# CodeWalk\n\n[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)\n\nEnglish | [繁體中文](README.zh-TW.md)\n\n> **Note:** The extension UI follows your VS Code display language (Traditional Chinese or English). Walk content (narration, quiz questions, etc.) is written by each walk's author and is shown as-is, unaffected by this setting.\n\nThe fastest way to actually understand someone else's code is to have a mentor sit next to you and walk you through it. CodeWalk brings that experience into the VS Code side panel.\n"
+      "anchor": "# CodeWalk\n\n[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)\n\n**Install:** [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=properworkstudio.codewalk-reader) · [Open VSX](https://open-vsx.org/extension/properworkstudio/codewalk-reader) (Cursor, Windsurf, VSCodium)\n\nEnglish | [繁體中文](README.zh-TW.md)\n\n> **Note:** The extension UI follows your VS Code display language (Traditional Chinese or English). Walk content (narration, quiz questions, etc.) is written by each walk's author and is shown as-is, unaffected by this setting.\n\nThe fastest way to actually understand someone else's code is to have a mentor sit next to you and walk you through it. CodeWalk brings that experience into the VS Code side panel.\n"
     },
     {
       "title": "第 2 步:extension 怎麼在活動列佔一個位置(答案不是程式碼)",

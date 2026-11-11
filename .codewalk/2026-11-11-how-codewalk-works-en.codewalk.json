@@ -1,0 +1,117 @@
+{
+  "title": "How CodeWalk works, in six stops",
+  "ref": "a5392469674853ceb0171213966ec289130c2c35",
+  "regenerateHint": "Regenerate a short (6-step) English walk of how CodeWalk works — schema, walk loading, the host/webview protocol, jumping to code, anchor checking, and the URI handler — aligned to the current HEAD, with anchors copied verbatim and a 3-question quiz.",
+  "steps": [
+    {
+      "title": "A walk is just JSON that points at real lines",
+      "file": "shared/schema.ts",
+      "startLine": 72,
+      "endLine": 84,
+      "narration": "Everything you are looking at right now comes from one `.codewalk.json` file. Each step names a **file** and a **line range** — that's it. No plugin API, no generator lock-in: any AI or any human can write one.\n\nThis type is the product's only external contract, which is why it lives in a single place and every field carries docs.",
+      "terms": [
+        {
+          "term": "walk",
+          "explanation": "A guided path through code: ordered steps, each tied to a file and line range, plus a closing quiz. Stored as JSON under `.codewalk/` and committed with the repo, so it travels with the code it explains."
+        }
+      ],
+      "anchor": "/**\n * One stop on the walk. Selecting a step opens `file` in the editor and\n * highlights lines `startLine` through `endLine` (both 1-based and inclusive).\n */\nexport interface CodewalkStep {\n  /** Short field — inline markdown only. See {@link CodewalkStep.narration}. */\n  title: string;\n  /** Path relative to the workspace root, using forward slashes. */\n  file: string;\n  /** First line of the region, 1-based and inclusive. */\n  startLine: number;\n  /** Last line of the region, 1-based and inclusive; must be >= `startLine`. */\n  endLine: number;"
+    },
+    {
+      "title": "The extension finds every walk in `.codewalk/`",
+      "file": "src/walkLoader.ts",
+      "startLine": 71,
+      "endLine": 84,
+      "narration": "When the panel opens, the extension host scans `.codewalk/`, reads every file in parallel and validates each one.\n\nA broken file is **still listed** (falling back to its filename) instead of silently disappearing — so the reader can click in and see what's wrong.",
+      "anchor": "export async function listWalkFiles(\n  workspaceRoot: string,\n  getAttempt?: (filePath: string, ref: string) => AttemptSummary | undefined,\n  getProgress?: (filePath: string, ref: string) => WalkProgressSummary | undefined,\n): Promise<WalkFileSummary[]> {\n  const filePaths = await findCodewalkFiles(workspaceRoot);\n  // 並行讀取:Promise.all 保證回傳順序等同 filePaths,與檔案讀完的先後無關\n  return Promise.all(\n    filePaths.map(async (filePath) => {\n      const result = await loadCodewalkFile(filePath);\n      const summary: WalkFileSummary = {\n        path: filePath,\n        title: result.valid ? result.value.title : basename(filePath),\n      };"
+    },
+    {
+      "title": "Host and panel only talk through messages",
+      "file": "shared/protocol.ts",
+      "startLine": 136,
+      "endLine": 150,
+      "narration": "The side panel is a sandboxed web page; it can't open files or touch the editor. So the two halves talk through typed messages defined in this one file.\n\nThe host is the source of truth: it decides which step you're on and sends `stepChanged`; the panel just renders.",
+      "terms": [
+        {
+          "term": "webview",
+          "explanation": "An isolated browser page VS Code embeds in a panel. It has no access to the VS Code API — only `postMessage`. That boundary is why this protocol exists at all."
+        }
+      ],
+      "anchor": "export type HostToWebviewMessage =\n  /** 可選的導讀清單。webview 收到即切到列表畫面(含首次開啟與返回列表)。 */\n  | { type: 'walkFileList'; files: WalkFileSummary[] }\n  /** 讀者選定的導讀已載入完成,webview 切到走讀畫面。 */\n  | {\n      type: 'walkLoaded';\n      walk: CodewalkFile;\n      /** 起始步驟——「接續上次」時為留存的進度,一般選取時為 0。 */\n      stepIndex: number;\n      refDrifted: boolean;\n      anchorReport: AnchorReport;\n      snippetPreviews: SnippetPreviewResult[];\n    }\n  /** 步驟已切換(可能來自面板按鈕、鍵盤,或 VS Code 指令),webview 據此更新畫面。 */\n  | { type: 'stepChanged'; stepIndex: number; snippetPreviews: SnippetPreviewResult[] }"
+    },
+    {
+      "title": "Jumping to code without stealing your keyboard",
+      "file": "src/fileJump.ts",
+      "startLine": 50,
+      "endLine": 63,
+      "narration": "This is what just happened on your screen: the file opened and the lines were selected and centered.\n\nThe key detail is `preserveFocus: true`. Without it, focus would land in the editor after the first jump and the arrow keys would stop moving you through the walk.",
+      "anchor": "  const vscode = await import('vscode');\n  const doc = await vscode.workspace.openTextDocument(absPath);\n  // preserveFocus:true — 不搶走 CodeWalk 面板的焦點,讓方向鍵快捷鍵在連續切換\n  // 好幾個 step 時持續有效(否則第一次跳轉後焦點就會留在編輯器,快捷鍵失效)。\n  const editor = await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: true });\n  if (mode === 'openOnly') {\n    return { ok: true };\n  }\n  const startLine = target.startLine - 1;\n  const endLine = Math.min(target.endLine - 1, doc.lineCount - 1);\n  const range = new vscode.Range(startLine, 0, endLine, doc.lineAt(endLine).text.length);\n  editor.selection = new vscode.Selection(range.start, range.end);\n  editor.revealRange(range, vscode.TextEditorRevealType.InCenter);\n  return { ok: true };"
+    },
+    {
+      "title": "Knowing when the code has moved on",
+      "file": "src/anchorCheck.ts",
+      "startLine": 63,
+      "endLine": 85,
+      "narration": "Code changes; walks don't update themselves. Each step stores an **anchor** — the exact text it was written against.\n\n- Same text at the same lines → matched\n- Same text found once elsewhere → the step **follows it** to the new lines\n- Not found, or found twice → flagged **stale**, never guessed",
+      "terms": [
+        {
+          "term": "anchor",
+          "explanation": "A verbatim copy of the step's source lines at the time the walk was written. Comparing it with the current file is how CodeWalk tells \"the code moved\" from \"the code changed\"."
+        }
+      ],
+      "anchor": "  const normalizedAnchor = normalizeNewlines(anchor);\n  const currentSlice = fileLines.slice(startLine - 1, endLine).join('\\n');\n  if (currentSlice === normalizedAnchor) {\n    return { kind: 'matched' };\n  }\n\n  const whole = fileLines.join('\\n');\n  const offsets = findLineAlignedOffsets(whole, normalizedAnchor);\n  if (offsets.length === 0) {\n    return { kind: 'stale', reason: 'notFound' };\n  }\n  if (offsets.length > 1) {\n    return { kind: 'stale', reason: 'ambiguous' };\n  }\n\n  const newStartLine = lineNumberAtOffset(whole, offsets[0]);\n  const anchorLineCount = normalizedAnchor.split('\\n').length;\n  return {\n    kind: 'shifted',\n    startLine: newStartLine,\n    endLine: newStartLine + anchorLineCount - 1,\n  };\n}"
+    },
+    {
+      "title": "Any AI agent can open a walk for you",
+      "file": "src/uriHandler.ts",
+      "startLine": 16,
+      "endLine": 27,
+      "narration": "An agent that just generated a walk can hand it straight to you with one URI:\n\n`vscode://properworkstudio.codewalk-reader/open?walk=…&step=0`\n\nThat's how this demo was opened. Next: the quiz — reading isn't the same as understanding.",
+      "anchor": "/** 解析出的 `open` 請求;`uri.path` 不是 `/open` 或缺少 `walk` 參數時為 `null`。 */\nexport function parseOpenUri(uri: OpenUriLike): { walk: string; stepIndex?: number } | null {\n  if (uri.path !== '/open') return null;\n  const params = new URLSearchParams(uri.query);\n  const walk = params.get('walk');\n  if (!walk) return null;\n  const stepParam = params.get('step');\n  if (stepParam === null) return { walk };\n  const stepIndex = Number(stepParam);\n  if (!Number.isInteger(stepIndex) || stepIndex < 0) return { walk };\n  return { walk, stepIndex };\n}"
+    }
+  ],
+  "quiz": [
+    {
+      "question": "Why does jumping to code use `preserveFocus: true`?",
+      "options": [
+        "So the arrow keys keep driving the walk after the first jump",
+        "So the file opens faster",
+        "So the file opens in preview mode"
+      ],
+      "correctIndex": 0,
+      "optionExplanations": [
+        "Right: focus stays on the CodeWalk panel, so the next arrow key still means \"next step\".",
+        "Wrong: it has nothing to do with speed — it only decides who holds keyboard focus.",
+        "Wrong: preview mode is controlled by `preview: false`, a separate option."
+      ]
+    },
+    {
+      "question": "A step's code moved 20 lines down but is otherwise unchanged. What does CodeWalk do?",
+      "options": [
+        "Marks the step stale",
+        "Follows the anchor to the new lines",
+        "Highlights the old line numbers anyway"
+      ],
+      "correctIndex": 1,
+      "optionExplanations": [
+        "Wrong: stale is only for text that is gone or appears more than once.",
+        "Right: the anchor text is found exactly once elsewhere, so the step shifts to it.",
+        "Wrong: that is the failure anchors exist to prevent."
+      ]
+    },
+    {
+      "question": "Why can't the side panel open files by itself?",
+      "options": [
+        "It is a sandboxed webview with no VS Code API — it has to ask the host",
+        "Opening files is too slow from the panel",
+        "The `.codewalk.json` format forbids it"
+      ],
+      "correctIndex": 0,
+      "optionExplanations": [
+        "Right: the webview only has `postMessage`; the host does every file and editor operation.",
+        "Wrong: speed is not the reason — the panel has no access at all.",
+        "Wrong: the format only describes steps; this is a platform boundary."
+      ]
+    }
+  ]
+}

@@ -8,7 +8,7 @@
       "title": "Step 1: The big picture — what this project actually does",
       "file": "README.md",
       "startLine": 1,
-      "endLine": 10,
+      "endLine": 12,
       "narration": "CodeWalk is a VS Code extension: it reads JSON files from the `.codewalk/` directory in a repo and guides readers through the code step by step in the side panel. Each step automatically jumps to and highlights the matching file and line range, adds narration, collapsible glossary terms, and code snippets, and finishes with a self-check quiz.\n\n**You're using it to read itself right now** — this walk is a `.codewalk.json` file living under this repo's `.codewalk/` directory.\n\nTwo things are worth remembering up front — they explain a lot of the design choices that follow:\n\n1. **The MVP stage is player-only, no generator**. Where the JSON comes from isn't this extension's concern — AI-generated, hand-written, or produced by any other tool all work. A \"Generate\" button is a phase-two feature.\n2. **`.codewalk.json` is an open format**. It isn't tied to any specific tool, so the format itself is this product's external contract — this point keeps resurfacing from the next step onward.",
       "terms": [
         {
@@ -22,7 +22,7 @@
           "text": "Navigation: `→` / `↓` next step, `←` / `↑` previous step, `Esc` back to the list, `Home` reveal this step's code location (the panel needs focus first — just click anywhere in it)."
         }
       ],
-      "anchor": "# CodeWalk\n\n[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)\n\nEnglish | [繁體中文](README.zh-TW.md)\n\n> **Note:** The extension UI follows your VS Code display language (Traditional Chinese or English). Walk content (narration, quiz questions, etc.) is written by each walk's author and is shown as-is, unaffected by this setting.\n\nThe fastest way to actually understand someone else's code is to have a mentor sit next to you and walk you through it. CodeWalk brings that experience into the VS Code side panel.\n"
+      "anchor": "# CodeWalk\n\n[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)\n\n**Install:** [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=properworkstudio.codewalk-reader) · [Open VSX](https://open-vsx.org/extension/properworkstudio/codewalk-reader) (Cursor, Windsurf, VSCodium)\n\nEnglish | [繁體中文](README.zh-TW.md)\n\n> **Note:** The extension UI follows your VS Code display language (Traditional Chinese or English). Walk content (narration, quiz questions, etc.) is written by each walk's author and is shown as-is, unaffected by this setting.\n\nThe fastest way to actually understand someone else's code is to have a mentor sit next to you and walk you through it. CodeWalk brings that experience into the VS Code side panel.\n"
     },
     {
       "title": "Step 2: How the extension claims a spot in the Activity Bar (the answer isn't code)",
